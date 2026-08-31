@@ -1,0 +1,18 @@
+model_name_or_path: dnotitia/Qwen3-4B
+datasets:
+  - path: dnotitia/magpie-qwen3-4b-thinking-2507
+    split: train
+    columns:
+      - messages
+
+run_name: original-qwen3-4b-think
+
+max_length: 4096
+learning_rate: 1e-6
+
+assistant_only_loss: true
+num_train_epochs: 2
+
+save_strategy: steps
+save_steps: 0.2
+save_total_limit: 5

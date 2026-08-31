@@ -1,0 +1,31 @@
+model_name_or_path: dnotitia/Qwen3-4B-Base
+
+run_name: smollm3-mid
+
+max_length: 32000
+packing: true
+
+assistant_only_loss: true
+num_train_epochs: 1
+
+ddp_timeout: 18000  # Avoid NCCL errors when tokenizing large datasets
+
+# Processing the datasets below requires significant disk space.
+# You need to set an external disk cache using: 
+# ```
+# export HF_DATASETS_CACHE=/home/jovyan/.cache
+# ```
+# Otherwise, you may encounter a "larger consumption of ephemeral-storage" error.
+
+# It takes approximately 150 hours on 8 x H100 GPUs
+datasets:
+  - path: HuggingFaceTB/smoltalk2
+    name: Mid
+    split: Llama_Nemotron_Post_Training_Dataset_reasoning_r1
+    columns:
+      - messages
+  - path: HuggingFaceTB/smoltalk2
+    name: Mid
+    split: OpenThoughts3_1.2M
+    columns:
+      - messages

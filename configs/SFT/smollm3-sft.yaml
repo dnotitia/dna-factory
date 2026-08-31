@@ -1,0 +1,164 @@
+model_name_or_path: dnotitia/Qwen3-4B-Base
+
+run_name: smollm3-sft
+
+max_length: 32000
+packing: true
+
+assistant_only_loss: true
+num_train_epochs: 1
+
+ddp_timeout: 18000  # Avoid NCCL errors when tokenizing large datasets
+
+# It takes approximately 8 hours on 8 x H100 GPUs
+datasets:
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: smoltalk_smollm3_everyday_conversations_no_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: smoltalk_smollm3_systemchats_30k_no_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: tulu_3_sft_personas_instruction_following_no_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: hermes_function_calling_v1_no_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: smoltalk_smollm3_smol_magpie_ultra_no_think[:50%]
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: smoltalk_multilingual_8languages_lang_5_no_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: table_gpt_no_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: OpenHermes_2.5_no_think[:50%]
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: OpenThoughts3_1.2M_no_think_no_think[:40%]
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: Mixture_of_Thoughts_science_no_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: smoltalk_smollm3_explore_instruct_rewriting_no_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: smoltalk_smollm3_smol_rewrite_no_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: smoltalk_smollm3_smol_summarize_no_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: LongAlign_64k_context_lang_annotated_lang_6_no_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: multi_turn_reasoning_if_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: smoltalk_everyday_convs_reasoning_Qwen3_32B_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: smoltalk_systemchats_Qwen3_32B_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: xlam_traces_no_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: smolagents_toolcalling_traces_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: s1k_1.1_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: LongAlign_64k_Qwen3_32B_yarn_131k_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: aya_dataset_Qwen3_32B_think
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: smoltalk_multilingual8_Qwen3_32B_think[:30%]
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: OpenThoughts3_1.2M_think[:2%]
+    columns:
+      - messages
+      - chat_template_kwargs
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: table_gpt_Qwen3_32B_think
+    columns:
+      - messages
+      - chat_template_kwargs

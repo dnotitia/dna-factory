@@ -1,0 +1,26 @@
+# Per-label judge routing over a 3-dataset PUBLIC mixture: each row's `label` selects one judge
+# (persona/rlvr = reference-guided, need `messages` for expected_output; ccp = direct). Public
+# stand-ins — swap in your own data + rubrics. Serve a judge and set JUDGE_* first (see docs/grpo-rewards-full.md).
+#
+#   JUDGE_BASE_URL=http://localhost:8001/v1 python grpo.py --config configs/GRPO/qwen3-0.6B-rlvr-mix3.yaml
+
+model_name_or_path: dnotitia/Qwen3-0.6B
+
+dataset_name: null  # use the mixture below, not the default dataset_name
+datasets:
+  - path: trl-lib/Capybara              # label persona -> persona_judge (reference)
+    split: train
+    label: persona
+  - path: trl-lib/tldr                  # label ccp -> ccp_judge (direct)
+    split: train
+    label: ccp
+  - path: HuggingFaceH4/ultrachat_200k  # label rlvr -> rlvr_judge (reference)
+    split: train_sft
+    label: rlvr
+
+run_name: qwen3-0.6B-rlvr-mix3
+
+reward_funcs:
+  - dna_factory.rewards.persona_judge
+  - dna_factory.rewards.ccp_judge
+  - dna_factory.rewards.rlvr_judge

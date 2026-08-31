@@ -1,0 +1,31 @@
+model_name_or_path: dnotitia/Qwen3-4B
+datasets:
+  - path: dnotitia/dpo_claude3.5-sonnet_15k_v4
+    split: train
+    columns:
+      - chosen
+      - rejected
+  - path: dnotitia/dpo-kmmlu-180k-v3
+    split: train
+    columns:
+      - chosen
+      - rejected
+  - path: dnotitia/dpo-law-counsel-v2
+    split: train
+    columns:
+      - chosen
+      - rejected
+  - path: dnotitia/dpo_ethical_safety_claude35_10k_v2
+    split: train
+    columns:
+      - chosen
+      - rejected
+
+run_name: qwen3-4B-apo
+
+max_length: 2048
+per_device_train_batch_size: 2
+num_train_epochs: 2
+
+# Using APO (Alignment with Preference Optimization) instead of DPO
+loss_type: apo_zero

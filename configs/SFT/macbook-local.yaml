@@ -1,0 +1,18 @@
+# This is a simplified configuration for running locally on a MacBook
+model_name_or_path: dnotitia/Qwen3-0.6B-Base
+
+max_length: 2000
+packing: true
+
+attn_implementation: eager
+assistant_only_loss: true
+
+max_steps: 5
+
+gradient_checkpointing: false
+use_liger_kernel: false
+
+report_to:
+  - trackio
+
+debug_first_n_batches: 3

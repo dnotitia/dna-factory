@@ -1,0 +1,9 @@
+model_name_or_path: dnotitia/Qwen3-1.7B-Base
+dataset_name: HuggingFaceTB/smoltalk
+dataset_config: all
+
+max_length: 32000
+packing: true
+
+assistant_only_loss: true
+num_train_epochs: 1

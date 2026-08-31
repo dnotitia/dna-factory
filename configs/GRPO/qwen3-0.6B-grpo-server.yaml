@@ -1,0 +1,20 @@
+# GRPO with a SEPARATE vLLM server (vllm_mode: server) instead of colocate. Uses the default public
+# dataset (trl-lib/DeepMath-103K) + accuracy_reward — the only thing this demonstrates over
+# qwen3-0.6B-grpo.yaml is the generation backend.
+#
+#   CUDA_VISIBLE_DEVICES=1 trl vllm-serve --model dnotitia/Qwen3-0.6B --port 8000
+#   CUDA_VISIBLE_DEVICES=0 python grpo.py --config configs/GRPO/qwen3-0.6B-grpo-server.yaml
+#
+# Batch constraint: per_device_train_batch_size * num_processes * steps_per_generation must be
+# divisible by num_generations (defaults: 8 * 1 * 1 = 8, 8 % 8 == 0).
+
+run_name: qwen3-0.6B-grpo-server
+
+model_name_or_path: dnotitia/Qwen3-0.6B
+
+use_vllm: true
+vllm_mode: server
+vllm_server_base_url: http://localhost:8000
+
+reward_funcs:
+  - accuracy_reward

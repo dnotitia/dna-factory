@@ -1,0 +1,13 @@
+# DAPO (arXiv:2503.14476): token-level loss (loss_type: dapo), clip-higher (epsilon_high: 0.28),
+# and mask_truncated_completions. Optional: add dna_factory.rewards.soft_overlong_penalty to
+# reward_funcs for the length penalty (see dna_factory/rewards/my_rewards.py).
+
+run_name: qwen3-0.6B-rlvr-dapo
+
+loss_type: dapo  # explicit even though this is the repo default — states the recipe's intent
+epsilon: 0.2
+epsilon_high: 0.28
+mask_truncated_completions: true
+
+reward_funcs:
+  - accuracy_reward

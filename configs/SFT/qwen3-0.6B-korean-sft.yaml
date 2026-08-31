@@ -1,0 +1,8 @@
+model_name_or_path: dnotitia/Qwen3-0.6B-Base
+datasets:
+  - path: dnotitia/Reasoning_R1_Kor_completion_25k_sharegpt_v2
+    split: train
+    columns:
+      - messages
+
+debug_first_n_batches: 10

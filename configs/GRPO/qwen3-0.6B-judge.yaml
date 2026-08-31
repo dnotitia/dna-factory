@@ -1,0 +1,12 @@
+# LLM-as-judge RLVR: grades against the gold `solution` column instead of math_verify.
+#
+#   CUDA_VISIBLE_DEVICES=1 vllm serve <judge-model> --port 8001
+#   JUDGE_BASE_URL=http://localhost:8001/v1 python grpo.py --config configs/GRPO/qwen3-0.6B-judge.yaml
+#
+# JUDGE_* env reference and score contract: see docs/grpo-rewards-full.md (quickstart: docs/grpo-rewards.md).
+# For multi-dataset per-label judge routing, see qwen3-0.6B-rlvr-mix3.yaml.
+
+run_name: qwen3-0.6B-judge
+
+reward_funcs:
+  - dna_factory.rewards.judge_reward_with_reference

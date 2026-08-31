@@ -1,0 +1,19 @@
+compute_environment: LOCAL_MACHINE
+deepspeed_config:
+  # This option is very IMPORTANT for multi-node training
+  deepspeed_multinode_launcher: standard
+  zero3_init_flag: false
+  zero_stage: 1
+  # This value must be carefully checked with your training option
+  gradient_accumulation_steps: auto
+distributed_type: DEEPSPEED
+downcast_bf16: 'no'
+enable_cpu_affinity: false
+main_training_function: main
+mixed_precision: bf16
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false

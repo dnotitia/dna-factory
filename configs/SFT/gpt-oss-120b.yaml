@@ -1,0 +1,16 @@
+model_name_or_path: axolotl-ai-co/gpt-oss-120b-dequantized
+dataset_name: HuggingFaceH4/Multilingual-Thinking
+# dataset_name: dnotitia/dnotitia_persona_qwen3-235b_400_v2
+# dataset_name: dnotitia/persona_kai_001
+
+max_length: 4096
+packing: true
+
+# gpt-oss does not yet support assistant_only_loss in its template
+assistant_only_loss: false
+num_train_epochs: 1
+
+eos_token: 
+
+# Don't save too often
+save_steps: 500

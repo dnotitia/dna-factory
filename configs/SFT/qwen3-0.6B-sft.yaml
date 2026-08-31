@@ -1,0 +1,13 @@
+model_name_or_path: dnotitia/Qwen3-0.6B-Base
+dataset_name: trl-lib/Capybara
+
+run_name: quickstart
+
+max_length: 2048
+packing: true
+
+assistant_only_loss: true
+num_train_epochs: 1
+
+per_device_train_batch_size: 2
+debug_first_n_batches: 2

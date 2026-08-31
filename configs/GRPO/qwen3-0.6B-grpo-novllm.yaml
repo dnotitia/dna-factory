@@ -1,0 +1,9 @@
+# Runs GRPO without vLLM (transformers.generate() path; much slower) — for debugging/CI or
+# environments without vllm installed.
+
+run_name: qwen3-0.6B-grpo-novllm
+
+use_vllm: false
+
+reward_funcs:
+  - accuracy_reward

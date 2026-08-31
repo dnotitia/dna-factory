@@ -1,0 +1,10 @@
+# Dr.GRPO (arXiv:2503.20783): loss_type: dr_grpo + scale_rewards: none — removes GRPO's length
+# and difficulty biases.
+
+run_name: qwen3-0.6B-rlvr-dr_grpo
+
+loss_type: dr_grpo
+scale_rewards: none
+
+reward_funcs:
+  - accuracy_reward

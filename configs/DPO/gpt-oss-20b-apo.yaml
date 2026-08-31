@@ -1,0 +1,36 @@
+model_name_or_path: axolotl-ai-co/gpt-oss-20b-dequantized
+
+# It takes approximately 20 hours on 8 x H100 GPUs
+datasets:
+  - path: dnotitia/dpo_claude3.5-sonnet_15k_v4
+    split: train
+    columns:
+      - chosen
+      - rejected
+  - path: dnotitia/dpo-kmmlu-180k-v3
+    split: train
+    columns:
+      - chosen
+      - rejected
+  - path: dnotitia/dpo-law-counsel-v2
+    split: train
+    columns:
+      - chosen
+      - rejected
+  - path: dnotitia/dpo_ethical_safety_claude35_10k_v2
+    split: train
+    columns:
+      - chosen
+      - rejected
+
+run_name: gpt-oss-apo
+# gpt-oss requires flash_attention_2, and requires CUDA 12.8 if you are using PyTroch 2.9
+# $ uv pip install flash-attn --no-build-isolation --verbose
+# attn_implementation: flash_attention_2
+
+max_length: 2048
+per_device_train_batch_size: 2
+num_train_epochs: 2
+
+# Using APO (Alignment with Preference Optimization) instead of DPO
+loss_type: apo_zero

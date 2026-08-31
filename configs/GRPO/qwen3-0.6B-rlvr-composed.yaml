@@ -1,0 +1,13 @@
+# Composed multi-reward GRPO: reward_weights order matches reward_funcs; each reward is also logged
+# separately under rewards/<name>/*. The length penalty is a pre-built instance tuned for this
+# recipe's max_completion_length (dna_factory/rewards/my_rewards.py) — see docs/grpo-rewards.md if you
+# change max_completion_length here.
+
+run_name: qwen3-0.6B-rlvr-composed
+
+reward_funcs:
+  - accuracy_reward
+  - think_format_reward
+  - dna_factory.rewards.soft_overlong_penalty
+
+reward_weights: [1.0, 0.2, 1.0]
