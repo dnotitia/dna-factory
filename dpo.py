@@ -36,6 +36,7 @@ from dna_factory.dnotitia_trainer_commons import (
     print_auto_generated_output_dir,
     print_environment_and_arguments,
     create_model_kwargs,
+    resolve_trust_remote_code,
     save_training_results,
 )
 from dna_factory.dnotitia_dpo_trainer import DnotitiaDPOTrainer
@@ -119,7 +120,7 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
     # Create tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,
-        trust_remote_code=getattr(model_args, "trust_remote_code", False),
+        trust_remote_code=resolve_trust_remote_code(model_args, training_args),
         use_fast=True
     )
 

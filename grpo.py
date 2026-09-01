@@ -44,6 +44,7 @@ from dna_factory.dnotitia_trainer_commons import (
     print_training_start_message,
     print_auto_generated_output_dir,
     print_environment_and_arguments,
+    resolve_trust_remote_code,
     save_training_results,
 )
 from dna_factory.dnotitia_grpo_trainer import DnotitiaGRPOTrainer
@@ -347,7 +348,7 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
     # Due to online RL nature, GRPOTrainer itself handles model instantiation unlike SFT/DPO.
     training_args.model_init_kwargs = dict(
         revision=model_args.model_revision,
-        trust_remote_code=model_args.trust_remote_code,
+        trust_remote_code=resolve_trust_remote_code(model_args, training_args),
         attn_implementation=model_args.attn_implementation,
         dtype=model_args.dtype,
     )
@@ -356,7 +357,7 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
     # Create tokenizer (GRPOTrainer sets the pad token and applies left/right padding internally)
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,
-        trust_remote_code=model_args.trust_remote_code,
+        trust_remote_code=resolve_trust_remote_code(model_args, training_args),
         use_fast=True
     )
 
