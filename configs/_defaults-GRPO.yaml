@@ -104,3 +104,12 @@ trust_remote_code: false
 ########################################################
 # Print debug input values using the overridden compute_loss() function for the first n batches
 debug_first_n_batches: 3
+
+# Prompt groups whose rollouts all scored the same have zero advantage and no gradient.
+#   off       train on them as-is (stock TRL)
+#   mask      skip their compute (truncate all-dead micro-batches); gradient unchanged while
+#             beta=0 and no entropy/router-aux loss is used
+#   resample  refill the batch from extra generation rounds; changes the gradient by design,
+#             and is not supported with streaming datasets
+dynamic_sampling: "off"   # quoted: bare off is a YAML 1.1 boolean
+dynamic_sampling_max_rounds: 2

@@ -3,11 +3,18 @@ from functools import wraps
 
 from trl import GRPOTrainer
 
+from dna_factory.dynamic_sampling import DynamicSamplingMixin
+
 # Initialize logger
 logger = logging.getLogger(__name__)
 
 
-class DnotitiaGRPOTrainer(GRPOTrainer):
+class DnotitiaGRPOTrainer(DynamicSamplingMixin, GRPOTrainer):
+    """GRPOTrainer with colored token debug output.
+
+    Dynamic sampling comes from DynamicSamplingMixin; see dna_factory/dynamic_sampling.py.
+    """
+
     def __init__(self, *args, debug_first_n_batches: int = 3, **kwargs):
         super().__init__(*args, **kwargs)
         # Maximum number of batches to print debug info for
