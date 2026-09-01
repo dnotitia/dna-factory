@@ -5,9 +5,9 @@ Guidance for Claude Code working in this repo.
 ## Setup
 
 ```bash
-uv v --python=3.13
-source .venv/bin/activate
-uv pip install -r requirements.txt
+$ uv sync
+$ CAUSAL_CONV1D_FORCE_BUILD=TRUE uv pip install causal-conv1d --no-build-isolation --no-cache-dir --verbose  # Optional
+$ source .venv/bin/activate
 ```
 
 ## Running Training
