@@ -6,16 +6,11 @@
 ########################################################
 # SCRIPT ARGUMENTS:
 ########################################################
-# Prompt-only dataset with a `solution` column (consumed by `accuracy_reward`)
-dataset_name: trl-lib/DeepMath-103K
+dataset_name: trl-lib/DeepMath-103K  # Prompt-only; `solution` column feeds `accuracy_reward`
 
-# Reward functions: built-in names from trl.rewards or dotted import paths (e.g. my_lib.rewards.custom_reward)
-# Available built-ins (zero-argument only): accuracy_reward, reasoning_accuracy_reward, think_format_reward. TRL reward factories (e.g. get_soft_overlong_punishment) need a module-level instance — see dna_factory/rewards/my_rewards.py and docs/grpo-rewards.md.
-# NOTE: `accuracy_reward`/`reasoning_accuracy_reward` require the `math_verify` package
-# NOTE: `accuracy_reward` returns None (which SKIPS the sample rather than scoring it 0) whenever
-# math_verify cannot parse the gold answer. That is ~16.5% of trl-lib/DeepMath-103K, whose answers
-# include plain `Yes`/`No`/`True`/`False`. `boxed_match_reward` falls back to a normalized string
-# comparison against the raw `solution`, so those rows still get scored instead of being dropped.
+# trl.rewards names (zero-arg only) or dotted import paths -- see docs/grpo-rewards.md.
+# `accuracy_reward` needs math_verify and returns None (skips the sample) on an unparseable gold
+# answer (~16.5% of DeepMath-103K); `boxed_match_reward` scores those by normalized string compare.
 reward_funcs:
   - accuracy_reward
   - dna_factory.rewards.boxed_match_reward
@@ -32,63 +27,44 @@ output_dir: auto  # Auto-generated output directory
 log_level: info
 
 # GRPO core arguments
-# beta=0.0 means NO reference model is created (memory win); set > 0 to enable the KL penalty
-beta: 0.0
-# GRPO loss type: grpo, dapo, dr_grpo, bnpo, cispo, sapo, luspo, vespo
-loss_type: dapo
-# Number of completions sampled per prompt; the effective generation batch size
-# (per_device_train_batch_size * num_processes * steps_per_generation) must be divisible by this value
-num_generations: 8
-# Qwen3 is a thinking model: it burns hundreds of tokens inside <think> before emitting \boxed{}.
-# Too small a cap truncates EVERY completion before the answer, so accuracy_reward scores 0 across
-# the whole group -> zero advantage -> `loss: 0` / `grad_norm: 0` and the model never moves.
-max_completion_length: 4096
-# Exclude completions that hit the cap from the loss (DAPO overlong filtering) instead of training
-# on them as if they had genuinely answered wrong.
-mask_truncated_completions: true
+beta: 0.0  # 0.0 = no reference model created (memory win); > 0 enables the KL penalty
+loss_type: dapo  # grpo, dapo, dr_grpo, bnpo, cispo, sapo, luspo, vespo
+num_generations: 8  # Completions per prompt; must divide the generation batch size
+max_completion_length: 8192  # Too small truncates every completion -> reward 0 -> no gradient
+mask_truncated_completions: true  # DAPO overlong filtering: drop capped completions from the loss
 temperature: 1.0
 epsilon: 0.2
 scale_rewards: group
 importance_sampling_level: token
 
-# Batch sizing: 8 (bs) x 1 (process) x 4 (steps_per_generation, defaults to gradient_accumulation_steps)
-# = 32 generation batch, divisible by num_generations=8 -> 4 distinct prompts per optimizer step.
-# At 1 prompt per step a single unparseable/uniform-reward group wipes out the whole update.
-# Leave `steps_per_generation` unset so it tracks gradient_accumulation_steps: setting it HIGHER
-# reuses one generation batch across several optimizer steps, which makes the updates off-policy.
+# Generation batch = bs x num_processes x steps_per_generation = 8 x 1 x 4 = 32 -> 4 prompts/step.
+# Leave `steps_per_generation` unset (tracks gradient_accumulation_steps); raising it goes off-policy.
 per_device_train_batch_size: 8
-gradient_accumulation_steps: 4  # This value must be carefully checked when training with DeepSpeed
+gradient_accumulation_steps: 4  # Check this value carefully when training with DeepSpeed
 
-# vLLM generation acceleration (colocate mode shares the training GPUs; keep memory headroom)
+# vLLM generation acceleration; colocate mode shares the training GPUs, so keep memory headroom
 use_vllm: true
 vllm_mode: colocate
 vllm_gpu_memory_utilization: 0.3
 
-# GRPO typically uses a much smaller learning rate compared to SFT
-learning_rate: 1e-6
+learning_rate: 1e-6  # GRPO typically needs a much smaller lr than SFT
 lr_scheduler_type: cosine_with_min_lr
 lr_scheduler_kwargs:
   min_lr_rate: 0.1
-# If you train bigger model, you may need to increase the warmup steps. e.g. 0.05 → 0.1
-warmup_steps: 0.05
+warmup_steps: 0.05  # Bigger models may need more, e.g. 0.1
 
 num_train_epochs: 1
 max_steps: -1
 
-# `bf16` and `tf32` are experimental API and are not effective for bfloat16 training
 bf16: true  # Should be enabled for DeepSpeed mixed precision training
 tf32: false
 
-# Enabling `gradient_checkpointing` will reduce memory usage at the cost of slower training speed
-# `use_liger_kernel` is kept disabled for GRPO: the liger GRPO loss path is unverified for the pinned liger-kernel
-gradient_checkpointing: true
-use_liger_kernel: false
+gradient_checkpointing: true  # Less memory, slower training
+use_liger_kernel: false  # Liger GRPO loss path is unverified for the pinned liger-kernel
 
-# Logging backend; use `- wandb` to enable Weights & Biases
-report_to:
+report_to:  # Use `- wandb` to enable Weights & Biases
   - none
 
-# Options for checkpoint saving
 save_strategy: steps
 save_steps: 0.2  # Save every 0.2 epochs
 save_total_limit: 3
@@ -98,25 +74,19 @@ do_eval: false
 ########################################################
 # MODEL ARGUMENTS:
 ########################################################
-# Please refer to the following URL for modified chat template-based models:
-# https://huggingface.co/collections/dnotitia/qwen3-modified-chat-template
+# Modified chat-template models: https://huggingface.co/collections/dnotitia/qwen3-modified-chat-template
 model_name_or_path: dnotitia/Qwen3-0.6B
-# NOTE: `torch_dtype` has been renamed to `dtype` in newer PyTorch version
-dtype: bfloat16
-# NOTE: `kernels-community/vllm-flash-attn3` is faster, but its kernels are not yet built for B200 (sm100)
-attn_implementation: sdpa
+dtype: bfloat16  # Renamed from `torch_dtype` in newer PyTorch versions
+attn_implementation: sdpa  # vllm-flash-attn3 is faster but has no B200 (sm100) kernels yet
 
 trust_remote_code: false
 
 ########################################################
 # DATASET MIXTURE ARGUMENTS:
 ########################################################
-
-# Please refer to the following URL for more information:
-# https://github.com/huggingface/trl/pull/3791#issuecomment-3177492252
+# See https://github.com/huggingface/trl/pull/3791#issuecomment-3177492252
 
 ########################################################
 # DNOTITIA GRPO TRAINER ARGUMENTS:
 ########################################################
-# Print debug input values using the overridden compute_loss() function for the first n batches
-debug_first_n_batches: 3
+debug_first_n_batches: 3  # Debug-print inputs via compute_loss() for the first n batches
