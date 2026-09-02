@@ -12,8 +12,13 @@ dataset_name: trl-lib/DeepMath-103K
 # Reward functions: built-in names from trl.rewards or dotted import paths (e.g. my_lib.rewards.custom_reward)
 # Available built-ins (zero-argument only): accuracy_reward, reasoning_accuracy_reward, think_format_reward. TRL reward factories (e.g. get_soft_overlong_punishment) need a module-level instance — see dna_factory/rewards/my_rewards.py and docs/grpo-rewards.md.
 # NOTE: `accuracy_reward`/`reasoning_accuracy_reward` require the `math_verify` package
+# NOTE: `accuracy_reward` returns None (which SKIPS the sample rather than scoring it 0) whenever
+# math_verify cannot parse the gold answer. That is ~16.5% of trl-lib/DeepMath-103K, whose answers
+# include plain `Yes`/`No`/`True`/`False`. `boxed_match_reward` falls back to a normalized string
+# comparison against the raw `solution`, so those rows still get scored instead of being dropped.
 reward_funcs:
   - accuracy_reward
+  - dna_factory.rewards.boxed_match_reward
 
 # Optional sequence-classification reward model, prepended to reward_funcs
 # reward_model_name_or_path: null
@@ -34,16 +39,25 @@ loss_type: dapo
 # Number of completions sampled per prompt; the effective generation batch size
 # (per_device_train_batch_size * num_processes * steps_per_generation) must be divisible by this value
 num_generations: 8
-max_completion_length: 256
+# Qwen3 is a thinking model: it burns hundreds of tokens inside <think> before emitting \boxed{}.
+# Too small a cap truncates EVERY completion before the answer, so accuracy_reward scores 0 across
+# the whole group -> zero advantage -> `loss: 0` / `grad_norm: 0` and the model never moves.
+max_completion_length: 4096
+# Exclude completions that hit the cap from the loss (DAPO overlong filtering) instead of training
+# on them as if they had genuinely answered wrong.
+mask_truncated_completions: true
 temperature: 1.0
 epsilon: 0.2
 scale_rewards: group
 importance_sampling_level: token
 
-# Batch sizing: 8 (bs) x 1 (process) x 1 (steps_per_generation defaults to gradient_accumulation_steps)
-# = 8, divisible by num_generations=8
+# Batch sizing: 8 (bs) x 1 (process) x 4 (steps_per_generation, defaults to gradient_accumulation_steps)
+# = 32 generation batch, divisible by num_generations=8 -> 4 distinct prompts per optimizer step.
+# At 1 prompt per step a single unparseable/uniform-reward group wipes out the whole update.
+# Leave `steps_per_generation` unset so it tracks gradient_accumulation_steps: setting it HIGHER
+# reuses one generation batch across several optimizer steps, which makes the updates off-policy.
 per_device_train_batch_size: 8
-gradient_accumulation_steps: 1  # This value must be carefully checked when training with DeepSpeed
+gradient_accumulation_steps: 4  # This value must be carefully checked when training with DeepSpeed
 
 # vLLM generation acceleration (colocate mode shares the training GPUs; keep memory headroom)
 use_vllm: true

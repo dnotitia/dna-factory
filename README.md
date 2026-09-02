@@ -21,16 +21,15 @@ No unnecessary bloat or additional packages that don't directly contribute to th
 Every line of code is written to be easily understood and maintained by any developer.
 
 # News
-- Sep/02/2026 - Added **On-Policy Distillation** support! 🚀
-- Jun/05/2026 - Added **GRPO (Group Relative Policy Optimization)** support! 🚀
-- Oct/29/2025 - Added **DPO (Direct Preference Optimization)** support! 🚀
+- Sep/02/2026 - Added **On-Policy Distillation** support!
+- Jun/05/2026 - Added **GRPO (Group Relative Policy Optimization)** support!
+- Oct/29/2025 - Added **DPO (Direct Preference Optimization)** support!
 - Sep/21/2025 - **DNA Factory** is born! 🎉
 
 # How to Run
 
 ```bash
 $ uv sync
-$ CAUSAL_CONV1D_FORCE_BUILD=TRUE uv pip install causal-conv1d --no-build-isolation --no-cache-dir --verbose  # Optional
 $ source .venv/bin/activate
 ```
 
@@ -70,10 +69,9 @@ Choose whichever approach works best for you!
 If you want to train a small-sized model and just need faster training speed, use MULTI-GPU type. It's sufficient for training models effectively:
 
 ```bash
-$ accelerate launch --config_file accelerate_configs/multi_gpu.yaml \
+$ accelerate launch \
     --num_processes 2 \
-    sft.py \
-    --config configs/SFT/qwen3-0.6B-sft.yaml
+    sft.py
 ```
 
 If you want to offload `Parameters`, `Gradients`, and `Optimizer States` to reduce memory usage, you should use DeepSpeed ZeRO like this:
@@ -116,21 +114,17 @@ $ accelerate launch --config_file accelerate_configs/zero1.yaml \
 GRPO is an online RL method: completions are generated during training and scored by reward functions. Datasets are prompt-only (a `prompt` column; extra columns such as `solution` are forwarded to the reward functions). Rewards are configured in YAML via `reward_funcs` (built-in names from `trl.rewards`, dotted import paths — including this repo's own judge and string-match rewards in `dna_factory.rewards`) and/or `reward_model_name_or_path`:
 
 ```bash
-# Single GPU (vLLM colocate mode is enabled by default; it shares the training GPU,
-# so keep memory headroom via `vllm_gpu_memory_utilization: 0.3`)
-$ python grpo.py \
-  --config configs/GRPO/qwen3-0.6B-grpo.yaml
+$ python grpo.py
+```
 
+```bash
 # Without vLLM (slower generation through transformers)
-$ python grpo.py \
-  --config configs/GRPO/qwen3-0.6B-grpo.yaml \
-  --use_vllm false
+$ python grpo.py --use_vllm false
 
 # Multiple GPUs
 $ accelerate launch --config_file accelerate_configs/zero3.yaml \
     --num_processes 4 \
-    grpo.py \
-    --config configs/GRPO/qwen3-0.6B-grpo.yaml
+    grpo.py
 ```
 
 If you prefer dedicating separate GPUs to generation, use vLLM server mode instead of colocate:
@@ -140,12 +134,12 @@ If you prefer dedicating separate GPUs to generation, use vLLM server mode inste
 $ CUDA_VISIBLE_DEVICES=0 trl vllm-serve --model dnotitia/Qwen3-0.6B
 
 # Terminal 2: training on the remaining GPUs
-$ CUDA_VISIBLE_DEVICES=1 python grpo.py \
-  --config configs/GRPO/qwen3-0.6B-grpo.yaml \
-  --vllm_mode server
+$ CUDA_VISIBLE_DEVICES=1 python grpo.py --vllm_mode server
 ```
 
-Note: the effective generation batch size (`per_device_train_batch_size` × number of processes × `steps_per_generation`) must be divisible by `num_generations`.
+Notes:
+- The effective generation batch size (`per_device_train_batch_size` × number of processes × `steps_per_generation`) must be divisible by `num_generations`.
+- A reward returning `None` excludes that sample instead of scoring it `0.0`, so `All reward functions returned None` warnings are normal. `max_completion_length` defaults to `4096` because a truncated completion never reaches an answer, which flattens the whole group to `grad_norm: 0`. Both are covered in [docs/grpo-rewards.md](docs/grpo-rewards.md#troubleshooting-a-flat-run).
 
 Reward functions (built-in `trl.rewards`, LLM-as-judge, and string-match) are documented in [docs/grpo-rewards.md](docs/grpo-rewards.md).
 
@@ -165,19 +159,15 @@ Datasets are prompt-only, just like GRPO. The teacher is set in YAML via `teache
 ```bash
 # Single GPU (vLLM colocate is enabled by default; the teacher shares the same GPU,
 # so keep memory headroom via `vllm_gpu_memory_utilization: 0.25`)
-$ python distill.py \
-  --config configs/Distill/qwen3-0.6B-distill.yaml
+$ python distill.py
 
 # Without vLLM (slower generation through transformers)
-$ python distill.py \
-  --config configs/Distill/qwen3-0.6B-distill.yaml \
-  --use_vllm false
+$ python distill.py --use_vllm false
 
 # Multiple GPUs
 $ accelerate launch --config_file accelerate_configs/zero3.yaml \
     --num_processes 4 \
-    distill.py \
-    --config configs/Distill/qwen3-0.6B-distill.yaml
+    distill.py
 ```
 
 Note: `beta` here selects the divergence itself (`1.0` = reverse KL, `0.0` = forward KL, `0.5` = JSD) — unlike GRPO's `beta`, which is a KL-penalty coefficient against a reference model. There is no reference model in distillation.
