@@ -69,7 +69,7 @@ Choose whichever approach works best for you!
 If you want to train a small-sized model and just need faster training speed, use MULTI-GPU type. It's sufficient for training models effectively:
 
 ```bash
-$ accelerate launch \
+$ accelerate launch --config_file accelerate_configs/multi_gpu.yaml \
     --num_processes 2 \
     sft.py
 ```
@@ -115,9 +115,7 @@ GRPO is an online RL method: completions are generated during training and score
 
 ```bash
 $ python grpo.py
-```
 
-```bash
 # Without vLLM (slower generation through transformers)
 $ python grpo.py --use_vllm false
 
@@ -147,18 +145,9 @@ Reward functions (built-in `trl.rewards`, LLM-as-judge, and string-match) are do
 
 On-policy distillation trains a **student** on completions it generates itself, scored token by token by a frozen **teacher**. The objective is the per-token reverse KL, `KL(student ‖ teacher)`. Compared to the other trainers it combines the on-policy trajectories of RL with the dense per-token supervision of SFT, which is where its order-of-magnitude compute advantage over RL comes from:
 
-| | supervision | trajectories | signal density |
-|---|---|---|---|
-| SFT | fixed reference answers | off-policy (dataset) | per token |
-| DPO | preference pairs | off-policy (dataset) | per sequence |
-| GRPO | reward functions | on-policy (student) | per sequence (scalar reward) |
-| **Distillation** | **a teacher model** | **on-policy (student)** | **per token** |
-
 Datasets are prompt-only, just like GRPO. The teacher is set in YAML via `teacher_model_name_or_path` and **must share the student's vocabulary**:
 
 ```bash
-# Single GPU (vLLM colocate is enabled by default; the teacher shares the same GPU,
-# so keep memory headroom via `vllm_gpu_memory_utilization: 0.25`)
 $ python distill.py
 
 # Without vLLM (slower generation through transformers)
