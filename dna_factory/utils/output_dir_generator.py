@@ -25,6 +25,8 @@ def generate_auto_output_dir(model_name_or_path, user_specified_args, script_arg
         'run_name': 'run',
         'attn_implementation': 'attn',
 
+        'teacher_model_name_or_path': 'teacher',
+
         'max_length': 'max',
         'packing': 'pack',
         'assistant_only_loss': 'ao_loss',

@@ -21,6 +21,7 @@ No unnecessary bloat or additional packages that don't directly contribute to th
 Every line of code is written to be easily understood and maintained by any developer.
 
 # News
+- Sep/02/2026 - Added **On-Policy Distillation** support! 🚀
 - Jun/05/2026 - Added **GRPO (Group Relative Policy Optimization)** support! 🚀
 - Oct/29/2025 - Added **DPO (Direct Preference Optimization)** support! 🚀
 - Sep/21/2025 - **DNA Factory** is born! 🎉
@@ -147,6 +148,41 @@ $ CUDA_VISIBLE_DEVICES=1 python grpo.py \
 Note: the effective generation batch size (`per_device_train_batch_size` × number of processes × `steps_per_generation`) must be divisible by `num_generations`.
 
 Reward functions (built-in `trl.rewards`, LLM-as-judge, and string-match) are documented in [docs/grpo-rewards.md](docs/grpo-rewards.md).
+
+# On-Policy Distillation
+
+On-policy distillation trains a **student** on completions it generates itself, scored token by token by a frozen **teacher**. The objective is the per-token reverse KL, `KL(student ‖ teacher)`. Compared to the other trainers it combines the on-policy trajectories of RL with the dense per-token supervision of SFT, which is where its order-of-magnitude compute advantage over RL comes from:
+
+| | supervision | trajectories | signal density |
+|---|---|---|---|
+| SFT | fixed reference answers | off-policy (dataset) | per token |
+| DPO | preference pairs | off-policy (dataset) | per sequence |
+| GRPO | reward functions | on-policy (student) | per sequence (scalar reward) |
+| **Distillation** | **a teacher model** | **on-policy (student)** | **per token** |
+
+Datasets are prompt-only, just like GRPO. The teacher is set in YAML via `teacher_model_name_or_path` and **must share the student's vocabulary**:
+
+```bash
+# Single GPU (vLLM colocate is enabled by default; the teacher shares the same GPU,
+# so keep memory headroom via `vllm_gpu_memory_utilization: 0.25`)
+$ python distill.py \
+  --config configs/Distill/qwen3-0.6B-distill.yaml
+
+# Without vLLM (slower generation through transformers)
+$ python distill.py \
+  --config configs/Distill/qwen3-0.6B-distill.yaml \
+  --use_vllm false
+
+# Multiple GPUs
+$ accelerate launch --config_file accelerate_configs/zero3.yaml \
+    --num_processes 4 \
+    distill.py \
+    --config configs/Distill/qwen3-0.6B-distill.yaml
+```
+
+Note: `beta` here selects the divergence itself (`1.0` = reverse KL, `0.0` = forward KL, `0.5` = JSD) — unlike GRPO's `beta`, which is a KL-penalty coefficient against a reference model. There is no reference model in distillation.
+
+Full guide: [docs/distillation.md](docs/distillation.md).
 
 # References
 - <https://github.com/huggingface/trl>
