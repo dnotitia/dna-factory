@@ -93,7 +93,8 @@ do_eval: false
 model_name_or_path: dnotitia/Qwen3-0.6B
 # NOTE: `torch_dtype` has been renamed to `dtype` in newer PyTorch version
 dtype: bfloat16
-attn_implementation: kernels-community/vllm-flash-attn3
+# NOTE: `kernels-community/vllm-flash-attn3` is faster, but its kernels are not yet built for B200 (sm100)
+attn_implementation: sdpa
 
 trust_remote_code: false
 

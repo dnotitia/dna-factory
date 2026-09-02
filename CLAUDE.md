@@ -39,7 +39,7 @@ CLI args override YAML. Multi-node flags: see README.md.
 ## Gotchas
 
 - `output_dir: auto` auto-generates a name from non-default args.
-- Default attn is `kernels-community/vllm-flash-attn3`; default models are from the `dnotitia/` HF org.
+- Default attn is `sdpa` (`kernels-community/vllm-flash-attn3` is faster but has no B200/sm100 kernels yet); default models are from the `dnotitia/` HF org.
 - Preprocessing copies each message's `thinking` → `reasoning_content` for Qwen3's chat template (SFT/DPO only; GRPO skips it — GRPO datasets are prompt-only).
 - DeepSpeed only (no FSDP).
 - GRPO rewards: `reward_funcs:` takes `trl.rewards` names or dotted import paths; a reward that returns `None` excludes that sample instead of scoring it 0 — the mechanism for composing rewards over a mixture, keyed by the per-dataset `label`. `accuracy_reward` needs `math-verify` and a `solution` column. See docs/grpo-rewards.md.
