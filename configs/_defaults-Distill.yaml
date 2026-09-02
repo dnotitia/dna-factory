@@ -74,8 +74,9 @@ use_liger_kernel: false
 log_completions: true
 num_completions_to_print: 2
 
+# Logging backend; use `- wandb` to enable Weights & Biases
 report_to:
-  - wandb
+  - none
 
 # Options for checkpoint saving
 save_strategy: steps

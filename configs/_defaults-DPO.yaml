@@ -46,8 +46,9 @@ tf32: false
 gradient_checkpointing: true
 use_liger_kernel: true
 
+# Logging backend; use `- wandb` to enable Weights & Biases
 report_to:
-  - wandb
+  - none
 
 # Options for checkpoint saving
 save_strategy: steps
