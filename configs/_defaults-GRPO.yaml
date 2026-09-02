@@ -30,16 +30,14 @@ log_level: info
 beta: 0.0  # 0.0 = no reference model created (memory win); > 0 enables the KL penalty
 loss_type: dapo  # grpo, dapo, dr_grpo, bnpo, cispo, sapo, luspo, vespo
 num_generations: 8  # Completions per prompt; must divide the generation batch size
-max_completion_length: 8192  # Too small truncates every completion -> reward 0 -> no gradient
+max_completion_length: 16384  # Too small truncates every completion -> reward 0 -> no gradient
 mask_truncated_completions: true  # DAPO overlong filtering: drop capped completions from the loss
 temperature: 1.0
 epsilon: 0.2
 scale_rewards: group
 importance_sampling_level: token
 
-# Generation batch = bs x num_processes x steps_per_generation = 8 x 1 x 4 = 32 -> 4 prompts/step.
-# Leave `steps_per_generation` unset (tracks gradient_accumulation_steps); raising it goes off-policy.
-per_device_train_batch_size: 8
+per_device_train_batch_size: 2
 gradient_accumulation_steps: 4  # Check this value carefully when training with DeepSpeed
 
 # vLLM generation acceleration; colocate mode shares the training GPUs, so keep memory headroom
@@ -89,4 +87,4 @@ trust_remote_code: false
 ########################################################
 # DNOTITIA GRPO TRAINER ARGUMENTS:
 ########################################################
-debug_first_n_batches: 3  # Debug-print inputs via compute_loss() for the first n batches
+debug_first_n_batches: 10  # Debug-print inputs via compute_loss() for the first n batches
