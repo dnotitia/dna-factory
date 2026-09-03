@@ -6,7 +6,6 @@ Guidance for Claude Code working in this repo.
 
 ```bash
 $ uv sync
-$ CAUSAL_CONV1D_FORCE_BUILD=TRUE uv pip install causal-conv1d --no-build-isolation --no-cache-dir --verbose  # Optional
 $ source .venv/bin/activate
 ```
 

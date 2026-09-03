@@ -76,7 +76,9 @@ def _normalize(text):
     return text.strip()
 
 
-def make_string_match_reward(answer_column="solution", extractor="boxed", only_label=None, name=None):
+def make_string_match_reward(
+    answer_column="solution", extractor="boxed", only_label=None, name=None
+):
     """
     Build a sync string-match GRPO reward function.
 
@@ -92,7 +94,9 @@ def make_string_match_reward(answer_column="solution", extractor="boxed", only_l
     See docs/grpo-rewards-full.md for the full contract.
     """
     if extractor not in _EXTRACTORS:
-        raise ValueError(f"Unknown extractor {extractor!r}; choose from {sorted(_EXTRACTORS)}")
+        raise ValueError(
+            f"Unknown extractor {extractor!r}; choose from {sorted(_EXTRACTORS)}"
+        )
     extract = _EXTRACTORS[extractor]
     resolved_name = name or f"string_match_{extractor}"
 
@@ -119,7 +123,9 @@ def make_string_match_reward(answer_column="solution", extractor="boxed", only_l
                 scores.append(None)
                 continue
             gold_extracted = extract(gold_text)
-            gold_norm = _normalize(gold_extracted if gold_extracted is not None else gold_text)
+            gold_norm = _normalize(
+                gold_extracted if gold_extracted is not None else gold_text
+            )
             completion_norm = _normalize(extract(_to_text(completions[i])))
             scores.append(1.0 if completion_norm == gold_norm else 0.0)
         return scores

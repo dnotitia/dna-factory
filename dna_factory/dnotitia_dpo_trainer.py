@@ -15,34 +15,40 @@ class DnotitiaDPOTrainer(DPOTrainer):
         self.debug_first_n_batches = debug_first_n_batches
 
     @wraps(DPOTrainer.compute_loss)
-    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+    def compute_loss(
+        self, model, inputs, return_outputs=False, num_items_in_batch=None
+    ):
         # TRL's preference collator combines chosen and rejected sequences into
         # one batch: [chosen_0, ..., chosen_n, rejected_0, ..., rejected_n].
         # `completion_mask` distinguishes prompt tokens (0) from completion
         # tokens (1). Older TRL releases exposed separate prompt/chosen/rejected
         # input-id fields, so do not rely on those keys here.
-        if not hasattr(self, '_debug_count'):
+        if not hasattr(self, "_debug_count"):
             self._debug_count = 0
 
-        required_keys = {'input_ids', 'attention_mask', 'completion_mask'}
-        if self._debug_count < self.debug_first_n_batches and required_keys.issubset(inputs):
-            input_ids = inputs['input_ids']
-            attention_mask = inputs['attention_mask']
-            completion_mask = inputs['completion_mask']
+        required_keys = {"input_ids", "attention_mask", "completion_mask"}
+        if self._debug_count < self.debug_first_n_batches and required_keys.issubset(
+            inputs
+        ):
+            input_ids = inputs["input_ids"]
+            attention_mask = inputs["attention_mask"]
+            completion_mask = inputs["completion_mask"]
             pair_count = len(input_ids) // 2
 
             def decode_colored(ids, attention, completion, rejected=False):
                 text = ""
-                for token_id, is_attended, is_completion in zip(ids, attention, completion):
+                for token_id, is_attended, is_completion in zip(
+                    ids, attention, completion
+                ):
                     token_text = self.processing_class.decode(
-                        [token_id.item()], skip_special_tokens=False, errors='replace'
-                    ).replace('�', '🤗')
+                        [token_id.item()], skip_special_tokens=False, errors="replace"
+                    ).replace("�", "🤗")
                     if is_attended.item() == 0:
-                        color = '90'  # Dark gray: padding
+                        color = "90"  # Dark gray: padding
                     elif rejected and is_completion.item() == 1:
-                        color = '91'  # Red: rejected completion
+                        color = "91"  # Red: rejected completion
                     else:
-                        color = '36'  # Cyan: prompt or chosen completion
+                        color = "36"  # Cyan: prompt or chosen completion
                     text += f"\033[{color}m{token_text}\033[0m"
                 return text
 
@@ -54,9 +60,17 @@ class DnotitiaDPOTrainer(DPOTrainer):
                 rejected_attention = attention_mask[index + pair_count]
                 rejected_completion = completion_mask[index + pair_count]
 
-                prompt_length = int(((chosen_attention == 1) & (chosen_completion == 0)).sum().item())
-                chosen_length = int(((chosen_attention == 1) & (chosen_completion == 1)).sum().item())
-                rejected_length = int(((rejected_attention == 1) & (rejected_completion == 1)).sum().item())
+                prompt_length = int(
+                    ((chosen_attention == 1) & (chosen_completion == 0)).sum().item()
+                )
+                chosen_length = int(
+                    ((chosen_attention == 1) & (chosen_completion == 1)).sum().item()
+                )
+                rejected_length = int(
+                    ((rejected_attention == 1) & (rejected_completion == 1))
+                    .sum()
+                    .item()
+                )
 
                 logger.info("-" * 80)
                 logger.info(f"PROMPT LENGTH: {prompt_length:,}")
@@ -68,7 +82,9 @@ class DnotitiaDPOTrainer(DPOTrainer):
                     "from multi-byte decoding:"
                 )
                 logger.info("-" * 80)
-                logger.info(f"CHOSEN: {decode_colored(chosen_ids, chosen_attention, chosen_completion)}")
+                logger.info(
+                    f"CHOSEN: {decode_colored(chosen_ids, chosen_attention, chosen_completion)}"
+                )
                 logger.info(
                     f"REJECTED: {decode_colored(rejected_ids, rejected_attention, rejected_completion, rejected=True)}"
                 )
@@ -97,15 +113,20 @@ class DnotitiaDPOTrainer(DPOTrainer):
             self.use_liger_kernel = False
             try:
                 loss_output = super().compute_loss(
-                    model, inputs, return_outputs=return_outputs, num_items_in_batch=num_items_in_batch
+                    model,
+                    inputs,
+                    return_outputs=return_outputs,
+                    num_items_in_batch=num_items_in_batch,
                 )
             finally:
                 self.use_liger_kernel = original_use_liger_kernel
         else:
             # Call parent class's compute_loss method to calculate the actual loss.
             loss_output = super().compute_loss(
-                model, inputs, return_outputs=return_outputs, num_items_in_batch=num_items_in_batch
-
+                model,
+                inputs,
+                return_outputs=return_outputs,
+                num_items_in_batch=num_items_in_batch,
             )
         if return_outputs:
             # If return_outputs is True, return the full output (loss, outputs)
