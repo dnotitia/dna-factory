@@ -23,7 +23,9 @@ _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 # --- Generic judge instances (packaged default rubric; configured via JUDGE_* env vars) ---
 judge_reward = make_judge_reward(name="judge_reward")
-judge_reward_with_reference = make_judge_reward(reference_column="solution", name="judge_reward_with_reference")
+judge_reward_with_reference = make_judge_reward(
+    reference_column="solution", name="judge_reward_with_reference"
+)
 
 # --- Per-label judges for configs/GRPO/qwen3-0.6B-rlvr*.yaml; each pins its own rubric_file ---
 persona_judge = make_judge_reward(
@@ -54,12 +56,16 @@ boxed_match_reward = make_string_match_reward(name="boxed_match_reward")
 # Cosine-scaled correctness reward: math-verified correctness scaled by completion length along a
 # cosine schedule, so a shorter correct answer scores higher. Needs a `solution` column (like
 # accuracy_reward) and math_verify. Rebuild with max_len matched to the recipe's max_completion_length.
-cosine_scaled_reward = get_cosine_scaled_reward(max_len=256)
+cosine_scaled_reward = get_cosine_scaled_reward(max_len=4096)
 
 # N-gram repetition penalty (anti-degeneration): penalizes repeated 3-grams in the completion.
-repetition_penalty_reward = get_repetition_penalty_reward(ngram_size=3, max_penalty=-1.0)
+repetition_penalty_reward = get_repetition_penalty_reward(
+    ngram_size=3, max_penalty=-1.0
+)
 
-# Tuned for configs/_defaults-GRPO.yaml's max_completion_length: 256 (soft_punish_cache = 256 // 5).
+# Tuned for configs/_defaults-GRPO.yaml's max_completion_length: 4096 (soft_punish_cache = 4096 // 5).
 # Used by configs/GRPO/qwen3-0.6B-rlvr-composed.yaml. If a recipe overrides max_completion_length,
 # build a matching new instance rather than reusing this one — the length isn't auto-synced.
-soft_overlong_penalty = get_soft_overlong_punishment(max_completion_len=256, soft_punish_cache=51)
+soft_overlong_penalty = get_soft_overlong_punishment(
+    max_completion_len=4096, soft_punish_cache=819
+)

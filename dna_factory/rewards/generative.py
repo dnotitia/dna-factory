@@ -25,9 +25,13 @@ logger = logging.getLogger(__name__)
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 # Only the judge-server connection is env-configurable; everything else is a fixed constant below.
-JUDGE_BASE_URL = os.environ.get("JUDGE_BASE_URL", "http://localhost:8001/v1")  # OpenAI-compatible judge endpoint
+JUDGE_BASE_URL = os.environ.get(
+    "JUDGE_BASE_URL", "http://localhost:8001/v1"
+)  # OpenAI-compatible judge endpoint
 JUDGE_MODEL = os.environ.get("JUDGE_MODEL")  # None → auto-detect from the server
-JUDGE_API_KEY = os.environ.get("JUDGE_API_KEY", "EMPTY")  # API key (vLLM doesn't require one)
+JUDGE_API_KEY = os.environ.get(
+    "JUDGE_API_KEY", "EMPTY"
+)  # API key (vLLM doesn't require one)
 
 
 def _load_default_prompt():
@@ -67,7 +71,10 @@ async def _get_client_and_model():
     global _client, _resolved_model
     if _client is None:
         from openai import AsyncOpenAI
-        _client = AsyncOpenAI(base_url=JUDGE_BASE_URL, api_key=JUDGE_API_KEY, timeout=120)  # 120s per request
+
+        _client = AsyncOpenAI(
+            base_url=JUDGE_BASE_URL, api_key=JUDGE_API_KEY, timeout=120
+        )  # 120s per request
     if _resolved_model is None:
         if JUDGE_MODEL:
             _resolved_model = JUDGE_MODEL
@@ -75,7 +82,9 @@ async def _get_client_and_model():
             # Auto-detect: take the first model served by the endpoint (vLLM serves exactly one)
             models = await _client.models.list()
             _resolved_model = models.data[0].id
-            logger.info(f"Auto-detected judge model from {JUDGE_BASE_URL}: {_resolved_model}")
+            logger.info(
+                f"Auto-detected judge model from {JUDGE_BASE_URL}: {_resolved_model}"
+            )
     return _client, _resolved_model
 
 
@@ -83,7 +92,9 @@ def _to_text(message_or_text):
     # Conversational format: a list of {"role": ..., "content": ...} dicts; standard format: a string
     if isinstance(message_or_text, list):
         return "\n".join(
-            f"{msg['role']}: {msg['content']}" for msg in message_or_text if msg["role"] != "system"
+            f"{msg['role']}: {msg['content']}"
+            for msg in message_or_text
+            if msg["role"] != "system"
         )
     return message_or_text
 
@@ -109,7 +120,9 @@ async def _judge_one(semaphore, judge_input):
 
     async with semaphore:
         client, model = await _get_client_and_model()
-        max_retries = 2  # retries after the first attempt (backoff 1s, 2s); not env-configurable
+        max_retries = (
+            2  # retries after the first attempt (backoff 1s, 2s); not env-configurable
+        )
         for attempt in range(max_retries + 1):
             try:
                 response = await client.chat.completions.create(
@@ -136,10 +149,12 @@ async def _judge_one(semaphore, judge_input):
                 return score
             except Exception as e:
                 if attempt == max_retries:
-                    logger.warning(f"Judge request failed after {max_retries + 1} attempts: {e}")
+                    logger.warning(
+                        f"Judge request failed after {max_retries + 1} attempts: {e}"
+                    )
                     return None
                 # Exponential backoff: 1s, 2s, 4s, ...
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
 
 
 def _log_judge_metrics(log_metric, scores, elapsed, prefix):
@@ -147,7 +162,9 @@ def _log_judge_metrics(log_metric, scores, elapsed, prefix):
     if log_metric is None or not scores:
         return
     parsed = [s for s in scores if s is not None]
-    log_metric(f"{prefix}/parse_failure_rate", (len(scores) - len(parsed)) / len(scores))
+    log_metric(
+        f"{prefix}/parse_failure_rate", (len(scores) - len(parsed)) / len(scores)
+    )
     if parsed:
         log_metric(f"{prefix}/score_mean", sum(parsed) / len(parsed))
     log_metric(f"{prefix}/batch_latency_sec", elapsed)
@@ -175,17 +192,25 @@ def _build_judge_inputs(template, prompts, completions, references, labels, only
                 continue
             judge_inputs.append(
                 template.format(
-                    prompt=_to_text(prompts[i]), completion=_to_text(completions[i]), reference=reference_text
+                    prompt=_to_text(prompts[i]),
+                    completion=_to_text(completions[i]),
+                    reference=reference_text,
                 )
             )
         else:
-            judge_inputs.append(template.format(prompt=_to_text(prompts[i]), completion=_to_text(completions[i])))
+            judge_inputs.append(
+                template.format(
+                    prompt=_to_text(prompts[i]), completion=_to_text(completions[i])
+                )
+            )
         skip_mask.append(False)
 
     return judge_inputs, skip_mask
 
 
-def make_judge_reward(rubric_file=None, only_label=None, reference_column=None, name=None):
+def make_judge_reward(
+    rubric_file=None, only_label=None, reference_column=None, name=None
+):
     """
     Build an async LLM-as-judge GRPO reward function.
 
@@ -207,7 +232,11 @@ def make_judge_reward(rubric_file=None, only_label=None, reference_column=None, 
 
     def _template():
         if state["template"] is None:
-            default_loader = _load_default_reference_prompt if reference_column else _load_default_prompt
+            default_loader = (
+                _load_default_reference_prompt
+                if reference_column
+                else _load_default_prompt
+            )
             state["template"] = _resolve_template_source(rubric_file, default_loader)
         return state["template"]
 
@@ -236,11 +265,15 @@ def make_judge_reward(rubric_file=None, only_label=None, reference_column=None, 
                 )
                 return [None] * len(prompts)
 
-        judge_inputs, _ = _build_judge_inputs(template, prompts, completions, references, labels, only_label)
+        judge_inputs, _ = _build_judge_inputs(
+            template, prompts, completions, references, labels, only_label
+        )
         semaphore = asyncio.Semaphore(16)  # max in-flight judge requests per process
 
         start_time = time.monotonic()
-        scores = await asyncio.gather(*[_judge_one(semaphore, ji) for ji in judge_inputs])
+        scores = await asyncio.gather(
+            *[_judge_one(semaphore, ji) for ji in judge_inputs]
+        )
         elapsed = time.monotonic() - start_time
 
         _log_judge_metrics(log_metric, scores, elapsed, prefix=resolved_name)

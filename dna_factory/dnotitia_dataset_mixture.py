@@ -24,6 +24,7 @@ times" trick to fractional values:
 
 The subsample is seeded so runs are reproducible.
 """
+
 from dataclasses import dataclass, field
 
 from datasets import concatenate_datasets
@@ -34,9 +35,12 @@ from trl.scripts.utils import DatasetConfig
 @dataclass
 class WeightedDatasetConfig(DatasetConfig):
     """A `DatasetConfig` with an extra `weight` (size multiplier, default 1.0)."""
+
     weight: float = field(
         default=1.0,
-        metadata={"help": "Size multiplier for this dataset in the mixture (1.0 = use as-is)."},
+        metadata={
+            "help": "Size multiplier for this dataset in the mixture (1.0 = use as-is)."
+        },
     )
 
 
@@ -47,9 +51,12 @@ class WeightedDatasetMixtureConfig(DatasetMixtureConfig):
     The annotation must stay `list[WeightedDatasetConfig]` (not bare `list`) so
     `HfArgumentParser` can introspect the element type.
     """
+
     datasets: list[WeightedDatasetConfig] = field(
         default_factory=list,
-        metadata={"help": "List of (weighted) dataset configurations to include in the mixture."},
+        metadata={
+            "help": "List of (weighted) dataset configurations to include in the mixture."
+        },
     )
 
     def __post_init__(self):
@@ -76,6 +83,7 @@ def resample_by_weight(dataset, weight, seed=42):
         if k > 0:
             idx = list(range(n))
             import random
+
             random.Random(seed).shuffle(idx)
             parts.append(dataset.select(sorted(idx[:k])))
 

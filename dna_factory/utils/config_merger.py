@@ -7,24 +7,24 @@ from pathlib import Path
 def merge_config_files(default_config_path, user_config_path=None):
     """
     Merge default config with user config and create a temporary merged config file.
-    
+
     Args:
         default_config_path (str): Path to the default config file
         user_config_path (str): Path to the user config file (optional)
-    
+
     Returns:
         str: Path to the temporary merged config file
     """
     # Load default config
-    with open(default_config_path, 'r', encoding='utf-8') as f:
+    with open(default_config_path, "r", encoding="utf-8") as f:
         default_config = yaml.safe_load(f) or {}
 
-    # Start with default config 
+    # Start with default config
     merged_config = default_config.copy()
 
     # If user config exists, merge it (user config overrides defaults)
     if user_config_path and Path(user_config_path).exists():
-        with open(user_config_path, 'r', encoding='utf-8') as f:
+        with open(user_config_path, "r", encoding="utf-8") as f:
             user_config = yaml.safe_load(f) or {}
 
         # Deep merge user config into default config
@@ -50,7 +50,10 @@ def merge_config_files(default_config_path, user_config_path=None):
                     candidate_keys = ("id", "name", "key")
                     # Key is acceptable if present in all dict elements
                     for candidate in candidate_keys:
-                        if all(isinstance(elem, dict) and candidate in elem for elem in sample_list):
+                        if all(
+                            isinstance(elem, dict) and candidate in elem
+                            for elem in sample_list
+                        ):
                             return candidate
                     return None
 
@@ -72,7 +75,9 @@ def merge_config_files(default_config_path, user_config_path=None):
                         if isinstance(o_elem, dict) and key_field in o_elem:
                             elem_id = o_elem[key_field]
                             if elem_id in base_map:
-                                base_map[elem_id] = deep_merge(base_map[elem_id], o_elem)
+                                base_map[elem_id] = deep_merge(
+                                    base_map[elem_id], o_elem
+                                )
                             else:
                                 base_map[elem_id] = o_elem
                                 base_order.append(elem_id)
@@ -115,9 +120,9 @@ def merge_config_files(default_config_path, user_config_path=None):
         merged_config = deep_merge(merged_config, user_config)
 
     # Create temporary file with merged config
-    temp_fd, temp_path = tempfile.mkstemp(suffix='.yaml', prefix='merged_config_')
+    temp_fd, temp_path = tempfile.mkstemp(suffix=".yaml", prefix="merged_config_")
     try:
-        with os.fdopen(temp_fd, 'w', encoding='utf-8') as temp_file:
+        with os.fdopen(temp_fd, "w", encoding="utf-8") as temp_file:
             # Preserve key insertion order for readability and stable diffs
             yaml.safe_dump(
                 merged_config,

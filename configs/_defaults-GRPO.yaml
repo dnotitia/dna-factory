@@ -6,14 +6,14 @@
 ########################################################
 # SCRIPT ARGUMENTS:
 ########################################################
-# Prompt-only dataset with a `solution` column (consumed by `accuracy_reward`)
-dataset_name: trl-lib/DeepMath-103K
+dataset_name: trl-lib/DeepMath-103K  # Prompt-only; `solution` column feeds `accuracy_reward`
 
-# Reward functions: built-in names from trl.rewards or dotted import paths (e.g. my_lib.rewards.custom_reward)
-# Available built-ins (zero-argument only): accuracy_reward, reasoning_accuracy_reward, think_format_reward. TRL reward factories (e.g. get_soft_overlong_punishment) need a module-level instance — see dna_factory/rewards/my_rewards.py and docs/grpo-rewards.md.
-# NOTE: `accuracy_reward`/`reasoning_accuracy_reward` require the `math_verify` package
+# trl.rewards names (zero-arg only) or dotted import paths -- see docs/grpo-rewards.md.
+# `accuracy_reward` needs math_verify and returns None (skips the sample) on an unparseable gold
+# answer (~16.5% of DeepMath-103K); `boxed_match_reward` scores those by normalized string compare.
 reward_funcs:
   - accuracy_reward
+  - dna_factory.rewards.boxed_match_reward
 
 # Optional sequence-classification reward model, prepended to reward_funcs
 # reward_model_name_or_path: null
@@ -27,53 +27,42 @@ output_dir: auto  # Auto-generated output directory
 log_level: info
 
 # GRPO core arguments
-# beta=0.0 means NO reference model is created (memory win); set > 0 to enable the KL penalty
-beta: 0.0
-# GRPO loss type: grpo, dapo, dr_grpo, bnpo, cispo, sapo, luspo, vespo
-loss_type: dapo
-# Number of completions sampled per prompt; the effective generation batch size
-# (per_device_train_batch_size * num_processes * steps_per_generation) must be divisible by this value
-num_generations: 8
-max_completion_length: 256
+beta: 0.0  # 0.0 = no reference model created (memory win); > 0 enables the KL penalty
+loss_type: dapo  # grpo, dapo, dr_grpo, bnpo, cispo, sapo, luspo, vespo
+num_generations: 8  # Completions per prompt; must divide the generation batch size
+max_completion_length: 16384  # Too small truncates every completion -> reward 0 -> no gradient
+mask_truncated_completions: true  # DAPO overlong filtering: drop capped completions from the loss
 temperature: 1.0
 epsilon: 0.2
 scale_rewards: group
 importance_sampling_level: token
 
-# Batch sizing: 8 (bs) x 1 (process) x 1 (steps_per_generation defaults to gradient_accumulation_steps)
-# = 8, divisible by num_generations=8
-per_device_train_batch_size: 8
-gradient_accumulation_steps: 1  # This value must be carefully checked when training with DeepSpeed
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 4  # Check this value carefully when training with DeepSpeed
 
-# vLLM generation acceleration (colocate mode shares the training GPUs; keep memory headroom)
+# vLLM generation acceleration; colocate mode shares the training GPUs, so keep memory headroom
 use_vllm: true
 vllm_mode: colocate
 vllm_gpu_memory_utilization: 0.3
 
-# GRPO typically uses a much smaller learning rate compared to SFT
-learning_rate: 1e-6
+learning_rate: 1e-6  # GRPO typically needs a much smaller lr than SFT
 lr_scheduler_type: cosine_with_min_lr
 lr_scheduler_kwargs:
   min_lr_rate: 0.1
-# If you train bigger model, you may need to increase the warmup steps. e.g. 0.05 → 0.1
-warmup_steps: 0.05
+warmup_steps: 0.05  # Bigger models may need more, e.g. 0.1
 
 num_train_epochs: 1
 max_steps: -1
 
-# `bf16` and `tf32` are experimental API and are not effective for bfloat16 training
 bf16: true  # Should be enabled for DeepSpeed mixed precision training
 tf32: false
 
-# Enabling `gradient_checkpointing` will reduce memory usage at the cost of slower training speed
-# `use_liger_kernel` is kept disabled for GRPO: the liger GRPO loss path is unverified for the pinned liger-kernel
-gradient_checkpointing: true
-use_liger_kernel: false
+gradient_checkpointing: true  # Less memory, slower training
+use_liger_kernel: false  # Liger GRPO loss path is unverified for the pinned liger-kernel
 
-report_to:
-  - wandb
+report_to:  # Use `- wandb` to enable Weights & Biases
+  - none
 
-# Options for checkpoint saving
 save_strategy: steps
 save_steps: 0.2  # Save every 0.2 epochs
 save_total_limit: 3
@@ -83,27 +72,23 @@ do_eval: false
 ########################################################
 # MODEL ARGUMENTS:
 ########################################################
-# Please refer to the following URL for modified chat template-based models:
-# https://huggingface.co/collections/dnotitia/qwen3-modified-chat-template
+# Modified chat-template models: https://huggingface.co/collections/dnotitia/qwen3-modified-chat-template
 model_name_or_path: dnotitia/Qwen3-0.6B
-# NOTE: `torch_dtype` has been renamed to `dtype` in newer PyTorch version
-dtype: bfloat16
-attn_implementation: kernels-community/vllm-flash-attn3
+dtype: bfloat16  # Renamed from `torch_dtype` in newer PyTorch versions
+attn_implementation: sdpa  # vllm-flash-attn3 is faster but has no B200 (sm100) kernels yet
 
 trust_remote_code: false
 
 ########################################################
 # DATASET MIXTURE ARGUMENTS:
 ########################################################
-
-# Please refer to the following URL for more information:
-# https://github.com/huggingface/trl/pull/3791#issuecomment-3177492252
+# See https://github.com/huggingface/trl/pull/3791#issuecomment-3177492252
 
 ########################################################
 # DNOTITIA GRPO TRAINER ARGUMENTS:
 ########################################################
 # Print debug input values using the overridden compute_loss() function for the first n batches
-debug_first_n_batches: 3
+debug_first_n_batches: 10
 
 # Prompt groups whose rollouts all scored the same have zero advantage and no gradient.
 #   off       train on them as-is (stock TRL)

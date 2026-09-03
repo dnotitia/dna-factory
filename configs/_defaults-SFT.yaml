@@ -53,8 +53,9 @@ activation_offloading: false
 # For Qwen model, <|im_end|> is used as the end of sentence token
 eos_token: <|im_end|>
 
+# Logging backend; use `- wandb` to enable Weights & Biases
 report_to:
-  - wandb
+  - none
 
 # Options for checkpoint saving
 save_strategy: steps
@@ -71,7 +72,8 @@ do_eval: false
 model_name_or_path: dnotitia/Qwen3-0.6B-Base
 # NOTE: `torch_dtype` has been renamed to `dtype` in newer PyTorch version
 dtype: bfloat16
-attn_implementation: kernels-community/vllm-flash-attn3
+# NOTE: `kernels-community/vllm-flash-attn3` is faster, but its kernels are not yet built for B200 (sm100)
+attn_implementation: sdpa
 
 # trust_remote_code: false
 
