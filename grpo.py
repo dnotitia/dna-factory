@@ -393,6 +393,8 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
         quantization_config=quantization_config,
         peft_config=get_peft_config(model_args),
         debug_first_n_batches=dnotitia_args.debug_first_n_batches,
+        dynamic_sampling=dnotitia_args.dynamic_sampling,
+        dynamic_sampling_max_rounds=dnotitia_args.dynamic_sampling_max_rounds,
     )
 
     # Check checkpoint

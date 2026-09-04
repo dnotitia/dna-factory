@@ -11,3 +11,18 @@ class DnotitiaArguments:
             "help": "Number of batches to print debug information for during training"
         },
     )
+    dynamic_sampling: str = field(
+        default="off",
+        metadata={"help": (
+            "Handling of GRPO prompt groups whose rollouts all scored the same (zero advantage). "
+            "'off': train on them as-is. "
+            "'mask': skip their compute by truncating all-dead micro-batches to one token; "
+            "leaves the gradient unchanged while beta=0 and no entropy/router-aux loss is used. "
+            "'resample': refill the batch with informative groups from extra generation rounds, "
+            "which changes the gradient by design. Not supported with streaming datasets."
+        )}
+    )
+    dynamic_sampling_max_rounds: int = field(
+        default=2,
+        metadata={"help": "Extra generation rounds allowed by dynamic_sampling='resample'."}
+    )
