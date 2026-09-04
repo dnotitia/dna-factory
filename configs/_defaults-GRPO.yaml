@@ -52,7 +52,7 @@ lr_scheduler_kwargs:
 warmup_steps: 0.05  # Bigger models may need more, e.g. 0.1
 
 num_train_epochs: 1
-max_steps: -1
+max_steps: 600  # Light default: ~10h at ~1min/step; set -1 for a full epoch
 
 bf16: true  # Should be enabled for DeepSpeed mixed precision training
 tf32: false
