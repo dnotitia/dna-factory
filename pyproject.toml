@@ -14,6 +14,7 @@ dependencies = [
     "liger-kernel==0.8.2",
     "math-verify==0.9.0",
     "peft==0.20.0",
+    "pytest>=9.1.1",
     "tilelang==0.1.12",
     "torch==2.13.0",
     "transformers==5.16.1",
