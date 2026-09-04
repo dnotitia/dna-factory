@@ -38,6 +38,7 @@ from trl.scripts.utils import DatasetConfig
 from dna_factory.utils.colorize_args import parse_user_args
 from dna_factory.utils.config_merger import merge_config_files
 from dna_factory.utils.output_dir_generator import generate_auto_output_dir
+from dna_factory.periodic_checkpoint import PeriodicCheckpointCallback
 from dna_factory.dnotitia_trainer_commons import (
     setup_logging,
     print_dna_factory_banner,
@@ -382,6 +383,16 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
     # there are no pre-existing assistant turns carrying a `thinking` field (completions are
     # generated online during training).
 
+    # Wall-clock periodic checkpointing (off when periodic_save_seconds <= 0)
+    callbacks = []
+    if dnotitia_args.periodic_save_seconds and dnotitia_args.periodic_save_seconds > 0:
+        logger.info(
+            f"Enabling wall-clock checkpointing every {dnotitia_args.periodic_save_seconds}s."
+        )
+        callbacks.append(
+            PeriodicCheckpointCallback(dnotitia_args.periodic_save_seconds)
+        )
+
     # Initialize the Dnotitia GRPO trainer
     trainer = DnotitiaGRPOTrainer(
         model=model_args.model_name_or_path,
@@ -394,6 +405,7 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
         peft_config=get_peft_config(model_args),
         debug_first_n_batches=dnotitia_args.debug_first_n_batches,
         dynamic_sampling=dnotitia_args.dynamic_sampling,
+        callbacks=callbacks or None,
         dynamic_sampling_max_rounds=dnotitia_args.dynamic_sampling_max_rounds,
     )
 

@@ -26,3 +26,12 @@ class DnotitiaArguments:
         default=2,
         metadata={"help": "Extra generation rounds allowed by dynamic_sampling='resample'."}
     )
+    periodic_save_seconds: float = field(
+        default=0.0,
+        metadata={"help": (
+            "Wall-clock checkpoint interval in seconds (e.g. 21600 for 6 hours); "
+            "0 disables it. The trainer only saves on step counts, so this callback "
+            "sets should_save when the interval elapses and the normal save path "
+            "(including save_total_limit rotation) handles the rest."
+        )}
+    )
