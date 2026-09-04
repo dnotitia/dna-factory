@@ -12,7 +12,7 @@ dataset_name: trl-lib/DeepMath-103K  # Prompt-only; `solution` column feeds `acc
 # `accuracy_reward` needs math_verify and returns None (skips the sample) on an unparseable gold
 # answer (~16.5% of DeepMath-103K); `boxed_match_reward` scores those by normalized string compare.
 reward_funcs:
-  - accuracy_reward
+  - dna_factory.rewards.safe_accuracy_reward
   - dna_factory.rewards.boxed_match_reward
 
 # Optional sequence-classification reward model, prepended to reward_funcs
@@ -88,7 +88,7 @@ trust_remote_code: false
 # DNOTITIA GRPO TRAINER ARGUMENTS:
 ########################################################
 # Print debug input values using the overridden compute_loss() function for the first n batches
-debug_first_n_batches: 10
+debug_first_n_batches: 5
 
 # Prompt groups whose rollouts all scored the same have zero advantage and no gradient.
 #   off       train on them as-is (stock TRL)
