@@ -98,3 +98,8 @@ debug_first_n_batches: 10
 #             and is not supported with streaming datasets
 dynamic_sampling: "off"   # quoted: bare off is a YAML 1.1 boolean
 dynamic_sampling_max_rounds: 2
+
+# Wall-clock checkpointing: the Trainer only saves on step counts, so this sets
+# should_save every N seconds and the normal save path (save_total_limit rotation
+# included) handles the rest. 0 disables it. save_steps above stays as a coarse backstop.
+periodic_save_seconds: 21600  # save every 6 hours
