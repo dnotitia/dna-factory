@@ -21,3 +21,6 @@ dependencies = [
     "trl==1.9.2",
     "wandb==0.28.1",
 ]
+
+[tool.uv]
+package = false
