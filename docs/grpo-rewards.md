@@ -171,6 +171,30 @@ def my_reward(prompts, completions, completion_ids, log_metric=None, **kwargs) -
 - Give each reward function used together a distinct `__name__` — that's the key TRL logs `rewards/<name>/mean` under.
 - `async def` works too; `GRPOTrainer` awaits all async rewards for a batch concurrently.
 
+## Troubleshooting a flat run
+
+Both symptoms below show up as `loss: 0` / `grad_norm: 0`: GRPO's advantage is the reward's deviation
+from its own group mean, so a group whose rewards are all identical produces no gradient at all.
+Watch `rewards/<name>/std`, `reward_std` and `frac_reward_zero_std`.
+
+**`All reward functions returned None` warnings.** Expected, not a bug: a reward returns `None` to
+exclude a sample rather than score it `0.0` (see above). `accuracy_reward` does this whenever
+`math_verify` cannot parse the gold `solution` — about 16% of `trl-lib/DeepMath-103K`, whose answers
+include plain `Yes` / `No` / `True` / `False`. The default `reward_funcs` pairs it with
+`boxed_match_reward`, which falls back to a normalized string comparison and scores those rows.
+The warning gets loud when few prompts per step (`generation_batch_size / num_generations`) make each
+skip a large fraction of the batch.
+
+**`completions/clipped_ratio: 1` with every reward `0`.** Every completion hit
+`max_completion_length` before it produced an answer, so nothing verifiable was ever emitted. A
+thinking model needs room to finish — hence the `4096` default. `mask_truncated_completions: true`
+(also a default) keeps the still-truncated ones out of the loss instead of training on them as
+genuine wrong answers.
+
+Note that `soft_overlong_penalty` / `cosine_scaled_reward` hard-code their length bound, so changing
+`max_completion_length` means rebuilding those instances — see
+[grpo-rewards-full.md](grpo-rewards-full.md).
+
 ---
 
 For anything not covered above — see [docs/grpo-rewards-full.md](grpo-rewards-full.md).

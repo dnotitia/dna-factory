@@ -1,30 +1,25 @@
 import logging
 from functools import wraps
 
-from trl import GRPOTrainer
-
-from dna_factory.dynamic_sampling import DynamicSamplingMixin
+from trl import DistillationTrainer
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
 
-class DnotitiaGRPOTrainer(DynamicSamplingMixin, GRPOTrainer):
-    """GRPOTrainer with colored token debug output.
-
-    Dynamic sampling comes from DynamicSamplingMixin; see dna_factory/dynamic_sampling.py.
-    """
-
+class DnotitiaDistillationTrainer(DistillationTrainer):
     def __init__(self, *args, debug_first_n_batches: int = 3, **kwargs):
         super().__init__(*args, **kwargs)
         # Maximum number of batches to print debug info for
         self.debug_first_n_batches = debug_first_n_batches
 
-    @wraps(GRPOTrainer.compute_loss)
+    @wraps(DistillationTrainer.compute_loss)
     def compute_loss(
         self, model, inputs, return_outputs=False, num_items_in_batch=None
     ):
-        # Decode and display prompt/completion ids with mask highlighting
+        # Decode and display prompt/completion ids with mask highlighting. The distillation inputs carry the
+        # same prompt/completion tensors as GRPO's (the student generated the completions on-policy), minus
+        # `advantages`: the supervision here is the teacher's full next-token distribution, not a scalar reward.
         if not hasattr(self, "_debug_count"):
             self._debug_count = 0
 
@@ -35,14 +30,17 @@ class DnotitiaGRPOTrainer(DynamicSamplingMixin, GRPOTrainer):
                 and "prompt_mask" in inputs
                 and "completion_ids" in inputs
                 and "completion_mask" in inputs
-                and "advantages" in inputs
             ):
                 # Take i-th sample in batch
                 prompt_ids = inputs["prompt_ids"][i]
                 prompt_masks = inputs["prompt_mask"][i]
                 completion_ids = inputs["completion_ids"][i]
                 completion_masks = inputs["completion_mask"][i]
-                advantage = inputs["advantages"][i]
+
+                # Tool-calling runs mask out tool-result tokens on top of the completion mask; mirror the
+                # effective loss mask `_compute_loss` uses so the colors match what is actually trained on.
+                if "tool_mask" in inputs:
+                    completion_masks = completion_masks * inputs["tool_mask"][i]
 
                 prompt_colored_text = ""
                 for prompt_id, prompt_mask in zip(prompt_ids, prompt_masks):
@@ -78,15 +76,12 @@ class DnotitiaGRPOTrainer(DynamicSamplingMixin, GRPOTrainer):
                             f"\033[36m{token_text}\033[0m"  # Cyan color
                         )
 
-                # Advantage is a per-sample scalar at this point (group-normalized reward)
-                advantage_value = (
-                    advantage.item() if hasattr(advantage, "item") else float(advantage)
-                )
-
                 logger.info("-" * 80)
                 logger.info(f"PROMPT LENGTH: {len(prompt_ids):,}")
                 logger.info(f"COMPLETION LENGTH: {len(completion_ids):,}")
-                logger.info(f"ADVANTAGE: {advantage_value:+.6f}")
+                logger.info(
+                    f"DIVERGENCE: beta={self.beta} (1.0 = reverse KL, 0.0 = forward KL, 0.5 = JSD)"
+                )
                 logger.info(
                     "INPUTS: \033[36mCYAN\033[0m for prompt/completion tokens included in loss, "
                     "\033[90mDARK GRAY\033[0m when mask is 0 (means padding/masked-out), 🤗 for broken characters "
@@ -100,7 +95,11 @@ class DnotitiaGRPOTrainer(DynamicSamplingMixin, GRPOTrainer):
                 self._debug_count += 1
 
         # Call parent class's compute_loss method to calculate the actual loss.
-        # Note: GRPOTrainer.compute_loss raises if return_outputs=True, so it is never forwarded.
+        # Note: unlike GRPOTrainer, DistillationTrainer.compute_loss accepts `return_outputs` and returns
+        # `(loss, None)` for it, so the flag is forwarded as-is.
         return super().compute_loss(
-            model, inputs, num_items_in_batch=num_items_in_batch
+            model,
+            inputs,
+            return_outputs=return_outputs,
+            num_items_in_batch=num_items_in_batch,
         )

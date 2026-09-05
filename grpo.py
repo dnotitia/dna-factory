@@ -38,12 +38,14 @@ from trl.scripts.utils import DatasetConfig
 from dna_factory.utils.colorize_args import parse_user_args
 from dna_factory.utils.config_merger import merge_config_files
 from dna_factory.utils.output_dir_generator import generate_auto_output_dir
+from dna_factory.periodic_checkpoint import PeriodicCheckpointCallback
 from dna_factory.dnotitia_trainer_commons import (
     setup_logging,
     print_dna_factory_banner,
     print_training_start_message,
     print_auto_generated_output_dir,
     print_environment_and_arguments,
+    resolve_trust_remote_code,
     save_training_results,
 )
 from dna_factory.dnotitia_grpo_trainer import DnotitiaGRPOTrainer
@@ -347,7 +349,7 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
     # Due to online RL nature, GRPOTrainer itself handles model instantiation unlike SFT/DPO.
     training_args.model_init_kwargs = dict(
         revision=model_args.model_revision,
-        trust_remote_code=model_args.trust_remote_code,
+        trust_remote_code=resolve_trust_remote_code(model_args, training_args),
         attn_implementation=model_args.attn_implementation,
         dtype=model_args.dtype,
     )
@@ -356,7 +358,7 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
     # Create tokenizer (GRPOTrainer sets the pad token and applies left/right padding internally)
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,
-        trust_remote_code=model_args.trust_remote_code,
+        trust_remote_code=resolve_trust_remote_code(model_args, training_args),
         use_fast=True
     )
 
@@ -381,6 +383,16 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
     # there are no pre-existing assistant turns carrying a `thinking` field (completions are
     # generated online during training).
 
+    # Wall-clock periodic checkpointing (off when periodic_save_seconds <= 0)
+    callbacks = []
+    if dnotitia_args.periodic_save_seconds and dnotitia_args.periodic_save_seconds > 0:
+        logger.info(
+            f"Enabling wall-clock checkpointing every {dnotitia_args.periodic_save_seconds}s."
+        )
+        callbacks.append(
+            PeriodicCheckpointCallback(dnotitia_args.periodic_save_seconds)
+        )
+
     # Initialize the Dnotitia GRPO trainer
     trainer = DnotitiaGRPOTrainer(
         model=model_args.model_name_or_path,
@@ -392,6 +404,9 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
         quantization_config=quantization_config,
         peft_config=get_peft_config(model_args),
         debug_first_n_batches=dnotitia_args.debug_first_n_batches,
+        dynamic_sampling=dnotitia_args.dynamic_sampling,
+        callbacks=callbacks or None,
+        dynamic_sampling_max_rounds=dnotitia_args.dynamic_sampling_max_rounds,
     )
 
     # Check checkpoint

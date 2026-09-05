@@ -244,6 +244,29 @@ class TestGenerateAutoOutputDir:
         assert "dpo_claude3.5-sonnet_15k_v3" not in result
         assert "dpo-kmmlu-180k-v2" not in result
 
+    def test_distillation_teacher_model(self):
+        """Test the DISTILL training type and the teacher model abbreviation"""
+        model_name = "dnotitia/Qwen3-0.6B"
+        user_args = {'teacher_model_name_or_path', 'beta', 'max_completion_length'}
+
+        script_args = SimpleNamespace()
+        training_args = SimpleNamespace(
+            teacher_model_name_or_path="dnotitia/Qwen3-1.7B",
+            beta=1.0,
+            max_completion_length=512,
+        )
+        model_args = SimpleNamespace()
+        dataset_mixture_args = SimpleNamespace()
+        dnotitia_args = SimpleNamespace()
+
+        result = generate_auto_output_dir(
+            model_name, user_args, script_args, training_args,
+            model_args, dataset_mixture_args, dnotitia_args, "DISTILL"
+        )
+
+        # The '/' in the teacher id is normalized to '-', as for every other value
+        assert result == "Qwen3-0.6B-DISTILL.teacher-dnotitia-Qwen3-1.7B.mcl-512.beta-1.0"
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

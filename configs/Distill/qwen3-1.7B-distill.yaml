@@ -1,0 +1,15 @@
+model_name_or_path: dnotitia/Qwen3-1.7B        # student
+teacher_model_name_or_path: dnotitia/Qwen3-4B  # teacher (must share the student's vocabulary)
+dataset_name: trl-lib/ultrafeedback-prompt
+
+run_name: qwen3-1.7B-distill
+
+beta: 1.0  # reverse KL — the on-policy distillation objective
+
+max_completion_length: 512
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 2
+
+# The student's optimizer states and the resident teacher both grow with model size, so leave the
+# colocated vLLM engine less of the GPU than the 0.6B config does
+vllm_gpu_memory_utilization: 0.2

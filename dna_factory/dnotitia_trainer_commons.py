@@ -21,20 +21,22 @@ from dna_factory.utils.colorize_logging import ColoredFormatter, format_logs_wit
 def setup_logging(training_args, trainer_package_name):
     """
     Configure logging for the training script and all relevant packages.
-    
+
     Args:
         training_args: Training arguments with logging configuration
         trainer_package_name: Name of the trainer package (e.g., 'dna_factory.dnotitia_sft_trainer')
-    
+
     Returns:
         logger: Configured logger instance
     """
     # Create console handler and set formatter
     console_colored_handler = logging.StreamHandler(sys.stdout)
-    console_colored_handler.setFormatter(ColoredFormatter(
-        fmt="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    ))
+    console_colored_handler.setFormatter(
+        ColoredFormatter(
+            fmt="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
     logging.basicConfig(handlers=[console_colored_handler])
 
     # Set logging level
@@ -43,8 +45,16 @@ def setup_logging(training_args, trainer_package_name):
     logger.setLevel(log_level)
 
     # Configure essential package loggers
-    for package_name in ['huggingface_hub', 'datasets', 'tokenizers', 'transformers', 'torch', 'accelerate', 'trl',
-                         trainer_package_name]:
+    for package_name in [
+        "huggingface_hub",
+        "datasets",
+        "tokenizers",
+        "transformers",
+        "torch",
+        "accelerate",
+        "trl",
+        trainer_package_name,
+    ]:
         package_logger = logging.getLogger(package_name)
         package_logger.setLevel(log_level)
         for handler in package_logger.handlers[:]:
@@ -57,7 +67,7 @@ def setup_logging(training_args, trainer_package_name):
     transformers.utils.logging.set_verbosity(log_level)
 
     # Suppress asyncio warnings from wandb
-    logging.getLogger('asyncio').setLevel(logging.ERROR)
+    logging.getLogger("asyncio").setLevel(logging.ERROR)
 
     return logger
 
@@ -65,37 +75,55 @@ def setup_logging(training_args, trainer_package_name):
 def print_dna_factory_banner(logger, script_file_path):
     """
     Print the DNA Factory ASCII art banner with version information.
-    
+
     Args:
         logger: Logger instance to use for printing
         script_file_path: Path to the script file (typically __file__)
     """
-    logger.info("==========================================================================================")
-    logger.info("██████╗ ███╗   ██╗ █████╗     ███████╗ █████╗  ██████╗████████╗ ██████╗ ██████╗ ██╗   ██╗")
-    logger.info("██╔══██╗████╗  ██║██╔══██╗    ██╔════╝██╔══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝")
-    logger.info("██║  ██║██╔██╗ ██║███████║    █████╗  ███████║██║        ██║   ██║   ██║██████╔╝ ╚████╔╝ ")
-    logger.info("██║  ██║██║╚██╗██║██╔══██║    ██╔══╝  ██╔══██║██║        ██║   ██║   ██║██╔══██╗  ╚██╔╝  ")
-    logger.info("██████╔╝██║ ╚████║██║  ██║    ██║     ██║  ██║╚██████╗   ██║   ╚██████╔╝██║  ██║   ██║   ")
-    logger.info("╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝    ╚═╝     ╚═╝  ╚═╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ")
-    logger.info("==========================================================================================")
+    logger.info(
+        "=========================================================================================="
+    )
+    logger.info(
+        "██████╗ ███╗   ██╗ █████╗     ███████╗ █████╗  ██████╗████████╗ ██████╗ ██████╗ ██╗   ██╗"
+    )
+    logger.info(
+        "██╔══██╗████╗  ██║██╔══██╗    ██╔════╝██╔══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝"
+    )
+    logger.info(
+        "██║  ██║██╔██╗ ██║███████║    █████╗  ███████║██║        ██║   ██║   ██║██████╔╝ ╚████╔╝ "
+    )
+    logger.info(
+        "██║  ██║██║╚██╗██║██╔══██║    ██╔══╝  ██╔══██║██║        ██║   ██║   ██║██╔══██╗  ╚██╔╝  "
+    )
+    logger.info(
+        "██████╔╝██║ ╚████║██║  ██║    ██║     ██║  ██║╚██████╗   ██║   ╚██████╔╝██║  ██║   ██║   "
+    )
+    logger.info(
+        "╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝    ╚═╝     ╚═╝  ╚═╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝   "
+    )
+    logger.info(
+        "=========================================================================================="
+    )
     logger.info("🧬 LLM Post-Training Platform by Dnotitia Inc. 🧬")
-    
+
     # Get version from VERSION file
     try:
-        version_file = os.path.join(os.path.dirname(script_file_path), 'VERSION')
-        with open(version_file, 'r') as f:
+        version_file = os.path.join(os.path.dirname(script_file_path), "VERSION")
+        with open(version_file, "r") as f:
             version = f.read().strip()
         logger.info(f"🏷️ Version: {version}")
     except Exception:
         logger.info("🏷️ Version: Unknown")
-    
-    logger.info("==========================================================================================")
+
+    logger.info(
+        "=========================================================================================="
+    )
 
 
 def print_training_start_message(logger, training_type):
     """
     Print the training start message.
-    
+
     Args:
         logger: Logger instance to use for printing
         training_type: Type of training (e.g., "SFT", "DPO")
@@ -108,24 +136,31 @@ def print_training_start_message(logger, training_type):
 def print_auto_generated_output_dir(logger, output_dir):
     """
     Print the auto-generated output directory with highlighting.
-    
+
     Args:
         logger: Logger instance to use for printing
         output_dir: The auto-generated output directory path
     """
-    YELLOW = '\033[33m'  # Bright yellow color
-    RESET = '\033[0m'
+    YELLOW = "\033[33m"  # Bright yellow color
+    RESET = "\033[0m"
     logger.info("Auto-generated output directory:")
     logger.info(f"{YELLOW}{output_dir}{RESET}")
     logger.info("")
 
 
-def print_environment_and_arguments(logger, script_args, training_args, model_args, 
-                                   dataset_mixture_args, dnotitia_args, user_specified_args,
-                                   trainer_type):
+def print_environment_and_arguments(
+    logger,
+    script_args,
+    training_args,
+    model_args,
+    dataset_mixture_args,
+    dnotitia_args,
+    user_specified_args,
+    trainer_type,
+):
     """
     Print OS environment variables and all parsed arguments in a formatted way.
-    
+
     Args:
         logger: Logger instance to use for printing
         script_args: Script arguments
@@ -136,52 +171,95 @@ def print_environment_and_arguments(logger, script_args, training_args, model_ar
         user_specified_args: Set of user-specified argument names
         trainer_type: Type of trainer (e.g., "SFT", "DPO")
     """
-    logger.info("------------------------------------------------------------------------------------------")
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
     logger.info(" OS ENVIRONMENT VARIABLES:")
-    logger.info("------------------------------------------------------------------------------------------")
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
     logger.info(format_logs_with_colors("CUDA_VISIBLE_DEVICES"))
     logger.info(format_logs_with_colors("WORLD_SIZE"))
     logger.info(format_logs_with_colors("RANK"))
     logger.info(format_logs_with_colors("LOCAL_RANK"))
-    logger.info("------------------------------------------------------------------------------------------")
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
     logger.info(" SCRIPT ARGUMENTS:")
-    logger.info("------------------------------------------------------------------------------------------")
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
     logger.info(format_args_with_colors(vars(script_args), user_specified_args))
-    logger.info("------------------------------------------------------------------------------------------")
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
     logger.info(" TRAINING ARGUMENTS:")
-    logger.info("------------------------------------------------------------------------------------------")
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
     logger.info(format_args_with_colors(vars(training_args), user_specified_args))
-    logger.info("------------------------------------------------------------------------------------------")
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
     logger.info(" MODEL ARGUMENTS:")
-    logger.info("------------------------------------------------------------------------------------------")
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
     logger.info(format_args_with_colors(vars(model_args), user_specified_args))
-    logger.info("------------------------------------------------------------------------------------------")
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
     logger.info(" DATASET MIXTURE ARGUMENTS:")
-    logger.info("------------------------------------------------------------------------------------------")
-    logger.info(format_args_with_colors(vars(dataset_mixture_args), user_specified_args))
-    logger.info("------------------------------------------------------------------------------------------")
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
+    logger.info(
+        format_args_with_colors(vars(dataset_mixture_args), user_specified_args)
+    )
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
     logger.info(f" DNOTITIA {trainer_type} TRAINER ARGUMENTS:")
-    logger.info("------------------------------------------------------------------------------------------")
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
     logger.info(format_args_with_colors(vars(dnotitia_args), user_specified_args))
-    logger.info("------------------------------------------------------------------------------------------")
+    logger.info(
+        "------------------------------------------------------------------------------------------"
+    )
     logger.info("")
+
+
+def resolve_trust_remote_code(model_args, training_args=None):
+    """Resolve `trust_remote_code` across TRL versions.
+
+    TRL 1.9 moved the flag off `ModelConfig` and onto the trainer config
+    (`SFTConfig`/`DPOConfig`/`GRPOConfig`), so a YAML `trust_remote_code: true` now lands in
+    `training_args`. Prefer `model_args` when it still carries the field (older TRL) and fall
+    back to `training_args`, so both layouts work.
+    """
+    for args in (model_args, training_args):
+        value = getattr(args, "trust_remote_code", None)
+        if value is not None:
+            return value
+    return False
 
 
 def create_model_kwargs(model_args, training_args, dnotitia_args):
     """
     Create model initialization kwargs including quantization config.
-    
+
     Args:
         model_args: Model arguments
         training_args: Training arguments
         dnotitia_args: Dnotitia-specific arguments
-    
+
     Returns:
         dict: Model kwargs ready for AutoModelForCausalLM.from_pretrained()
     """
     model_kwargs = dict(
         revision=model_args.model_revision,
-        trust_remote_code=getattr(model_args, "trust_remote_code", False),
+        trust_remote_code=resolve_trust_remote_code(model_args, training_args),
         attn_implementation=model_args.attn_implementation,
         dtype=model_args.dtype,
         # use_cache=False if training_args.gradient_checkpointing else True,
@@ -200,7 +278,7 @@ def create_model_kwargs(model_args, training_args, dnotitia_args):
 def save_training_results(trainer, train_result, dataset, script_args, training_args):
     """
     Save training metrics, model, and related artifacts.
-    
+
     Args:
         trainer: The trainer instance
         train_result: Training result from trainer.train()
