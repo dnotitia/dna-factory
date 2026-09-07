@@ -5,7 +5,6 @@ This module tests the logging colorization functionality.
 """
 
 import logging
-import os
 import sys
 import pytest
 from pathlib import Path
@@ -142,99 +141,40 @@ class TestColoredFormatter:
 
 class TestFormatLogsWithColors:
     """Test cases for format_logs_with_colors function"""
-    
-    def test_format_with_value_above_threshold(self):
-        """Test formatting when value is above threshold"""
-        os.environ['WORLD_SIZE'] = '4'
-        result = format_logs_with_colors('WORLD_SIZE', 2)
-        
-        # Should contain yellow color
-        assert '\033[33m' in result
-        # Should contain reset code
-        assert '\033[0m' in result
-        # Should contain variable name and value
-        assert 'WORLD_SIZE' in result
-        assert '4' in result
-        
-        # Cleanup
-        del os.environ['WORLD_SIZE']
-    
-    def test_format_with_value_equal_threshold(self):
-        """Test formatting when value equals threshold"""
-        os.environ['WORLD_SIZE'] = '2'
-        result = format_logs_with_colors('WORLD_SIZE', 2)
-        
-        # Should be colored (>= threshold)
-        assert '\033[33m' in result
-        assert '\033[0m' in result
-        assert '2' in result
-        
-        # Cleanup
-        del os.environ['WORLD_SIZE']
-    
-    def test_format_with_value_below_threshold(self):
-        """Test formatting when value is below threshold"""
-        os.environ['WORLD_SIZE'] = '1'
-        result = format_logs_with_colors('WORLD_SIZE', 2)
-        
-        # Should NOT contain yellow color
-        assert '\033[33m' not in result
-        # Should contain variable name and value
-        assert 'WORLD_SIZE' in result
-        assert '1' in result
-        
-        # Cleanup
-        del os.environ['WORLD_SIZE']
-    
-    def test_format_with_nonexistent_variable(self):
+
+    @pytest.mark.parametrize(
+        ('variable_name', 'value'),
+        [
+            pytest.param('WORLD_SIZE', '4', id='multiple_processes'),
+            pytest.param('WORLD_SIZE', '2', id='two_processes'),
+            pytest.param('WORLD_SIZE', '1', id='single_process'),
+            pytest.param('TEST_VAR', '100', id='large_value'),
+            pytest.param('CUDA_VISIBLE_DEVICES', '0,1', id='gpu_list'),
+        ],
+    )
+    def test_format_with_nonzero_value(self, monkeypatch, variable_name, value):
+        """Nonzero environment values are highlighted, including GPU lists."""
+        monkeypatch.setenv(variable_name, value)
+
+        result = format_logs_with_colors(variable_name)
+
+        assert result == f'\033[33m{variable_name}: {value}\033[0m'
+
+    def test_format_with_nonexistent_variable(self, monkeypatch):
         """Test formatting when environment variable doesn't exist"""
-        # Make sure the variable doesn't exist
-        if 'NONEXISTENT_VAR' in os.environ:
-            del os.environ['NONEXISTENT_VAR']
-        
-        result = format_logs_with_colors('NONEXISTENT_VAR', 2)
-        
-        # Should not be colored
-        assert '\033[33m' not in result
-        # Should show 'None'
-        assert 'None' in result
-        assert 'NONEXISTENT_VAR' in result
-    
-    def test_format_with_zero_value(self):
+        monkeypatch.delenv('NONEXISTENT_VAR', raising=False)
+
+        result = format_logs_with_colors('NONEXISTENT_VAR')
+
+        assert result == 'NONEXISTENT_VAR: None'
+
+    def test_format_with_zero_value(self, monkeypatch):
         """Test formatting with zero value"""
-        os.environ['TEST_VAR'] = '0'
-        result = format_logs_with_colors('TEST_VAR', 1)
-        
-        # Should not be colored (below threshold)
-        assert '\033[33m' not in result
-        assert '0' in result
-        
-        # Cleanup
-        del os.environ['TEST_VAR']
-    
-    def test_format_with_large_value(self):
-        """Test formatting with large value"""
-        os.environ['TEST_VAR'] = '100'
-        result = format_logs_with_colors('TEST_VAR', 10)
-        
-        # Should be colored
-        assert '\033[33m' in result
-        assert '100' in result
-        
-        # Cleanup
-        del os.environ['TEST_VAR']
-    
-    def test_format_with_zero_threshold(self):
-        """Test formatting with zero threshold"""
-        os.environ['TEST_VAR'] = '1'
-        result = format_logs_with_colors('TEST_VAR', 0)
-        
-        # Should be colored (1 >= 0)
-        assert '\033[33m' in result
-        assert '1' in result
-        
-        # Cleanup
-        del os.environ['TEST_VAR']
+        monkeypatch.setenv('TEST_VAR', '0')
+
+        result = format_logs_with_colors('TEST_VAR')
+
+        assert result == 'TEST_VAR: 0'
 
 
 class TestColoredFormatterIntegration:
@@ -284,4 +224,3 @@ class TestColoredFormatterIntegration:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
-
