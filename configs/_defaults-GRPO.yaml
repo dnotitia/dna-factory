@@ -63,9 +63,8 @@ use_liger_kernel: false  # Liger GRPO loss path is unverified for the pinned lig
 report_to:  # Use `- wandb` to enable Weights & Biases
   - none
 
-save_strategy: steps
-save_steps: 0.2  # Save every 0.2 epochs
-save_total_limit: 3
+save_strategy: "no"  # Step-based saves off; PeriodicCheckpointCallback below is the only checkpoint source
+save_total_limit: 3  # Still applies to periodic checkpoints (rotation handled by the normal save path)
 
 do_eval: false
 
@@ -100,6 +99,8 @@ dynamic_sampling: "off"   # quoted: bare off is a YAML 1.1 boolean
 dynamic_sampling_max_rounds: 2
 
 # Wall-clock checkpointing: the Trainer only saves on step counts, so this sets
-# should_save every N seconds and the normal save path (save_total_limit rotation
-# included) handles the rest. 0 disables it. save_steps above stays as a coarse backstop.
-periodic_save_seconds: 21600  # save every 6 hours
+# should_save every interval and the normal save path (save_total_limit rotation
+# included) handles the rest. Human-friendly durations ('6h', '30m', '90s',
+# combined '1h30m') or plain seconds (21600); 0/'off' disables it.
+# save_strategy above is "no", so this is the only checkpoint source.
+periodic_save_seconds: 6h  # save every 6 hours

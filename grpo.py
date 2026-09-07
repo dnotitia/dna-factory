@@ -38,7 +38,7 @@ from trl.scripts.utils import DatasetConfig
 from dna_factory.utils.colorize_args import parse_user_args
 from dna_factory.utils.config_merger import merge_config_files
 from dna_factory.utils.output_dir_generator import generate_auto_output_dir
-from dna_factory.periodic_checkpoint import PeriodicCheckpointCallback
+from dna_factory.periodic_checkpoint import PeriodicCheckpointCallback, parse_duration_to_seconds
 from dna_factory.dnotitia_trainer_commons import (
     setup_logging,
     print_dna_factory_banner,
@@ -383,14 +383,26 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
     # there are no pre-existing assistant turns carrying a `thinking` field (completions are
     # generated online during training).
 
-    # Wall-clock periodic checkpointing (off when periodic_save_seconds <= 0)
+    # Wall-clock periodic checkpointing (off when periodic_save_seconds is 0/'off').
+    # Accepts human-friendly durations ('6h') or plain seconds ('21600').
+    try:
+        periodic_seconds = parse_duration_to_seconds(dnotitia_args.periodic_save_seconds)
+    except ValueError as e:
+        raise ValueError(f"Invalid `periodic_save_seconds` value: {e}") from e
     callbacks = []
-    if dnotitia_args.periodic_save_seconds and dnotitia_args.periodic_save_seconds > 0:
+    if periodic_seconds > 0:
         logger.info(
-            f"Enabling wall-clock checkpointing every {dnotitia_args.periodic_save_seconds}s."
+            f"Enabling wall-clock checkpointing every {periodic_seconds:g}s "
+            f"(periodic_save_seconds={dnotitia_args.periodic_save_seconds!r})."
         )
         callbacks.append(
-            PeriodicCheckpointCallback(dnotitia_args.periodic_save_seconds)
+            PeriodicCheckpointCallback(periodic_seconds)
+        )
+    elif training_args.save_strategy == "no":
+        logger.warning(
+            "Both step-based checkpointing (save_strategy='no') and wall-clock "
+            "checkpointing (periodic_save_seconds is off) are disabled — no checkpoints "
+            "will be saved during training."
         )
 
     # Initialize the Dnotitia GRPO trainer
