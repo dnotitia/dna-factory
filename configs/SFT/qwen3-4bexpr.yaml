@@ -13,6 +13,5 @@ learning_rate: 1e-6
 assistant_only_loss: true
 num_train_epochs: 2
 
-save_strategy: steps
-save_steps: 0.2
+save_strategy: "no"  # Step-based saves off; periodic_save_seconds (6h) is the only checkpoint source
 save_total_limit: 5

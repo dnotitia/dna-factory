@@ -12,5 +12,5 @@ num_train_epochs: 1
 
 eos_token: 
 
-# Don't save too often
-save_steps: 500
+# Step-based saves are off (save_strategy: "no" in _defaults-SFT.yaml);
+# periodic_save_seconds (6h) is the only checkpoint source, so no save_steps here.

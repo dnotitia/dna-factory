@@ -29,6 +29,7 @@ from trl import (
 from dna_factory.utils.colorize_args import parse_user_args
 from dna_factory.utils.config_merger import merge_config_files
 from dna_factory.utils.output_dir_generator import generate_auto_output_dir
+from dna_factory.periodic_checkpoint import PeriodicCheckpointCallback, parse_duration_to_seconds
 from dna_factory.dnotitia_trainer_commons import (
     setup_logging,
     print_dna_factory_banner,
@@ -173,6 +174,28 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
         return updated_fields
     dataset = dataset.map(preprocess_thinking_data)
 
+    # Wall-clock periodic checkpointing (off when periodic_save_seconds is 0/'off').
+    # Accepts human-friendly durations ('6h') or plain seconds ('21600').
+    try:
+        periodic_seconds = parse_duration_to_seconds(dnotitia_args.periodic_save_seconds)
+    except ValueError as e:
+        raise ValueError(f"Invalid `periodic_save_seconds` value: {e}") from e
+    callbacks = []
+    if periodic_seconds > 0:
+        logger.info(
+            f"Enabling wall-clock checkpointing every {periodic_seconds:g}s "
+            f"(periodic_save_seconds={dnotitia_args.periodic_save_seconds!r})."
+        )
+        callbacks.append(
+            PeriodicCheckpointCallback(periodic_seconds)
+        )
+    elif training_args.save_strategy == "no":
+        logger.warning(
+            "Both step-based checkpointing (save_strategy='no') and wall-clock "
+            "checkpointing (periodic_save_seconds is off) are disabled — no checkpoints "
+            "will be saved during training."
+        )
+
     # Initialize the Dnotitia DPO trainer
     trainer = DnotitiaDPOTrainer(
         model=model,
@@ -183,6 +206,7 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
         processing_class=tokenizer,
         peft_config=get_peft_config(model_args),
         debug_first_n_batches=dnotitia_args.debug_first_n_batches,
+        callbacks=callbacks or None,
     )
 
     # Check checkpoint

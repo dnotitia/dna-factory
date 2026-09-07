@@ -58,9 +58,8 @@ report_to:
   - none
 
 # Options for checkpoint saving
-save_strategy: steps
-save_steps: 0.1  # Save every 0.2 epochs
-save_total_limit: 3
+save_strategy: "no"  # Step-based saves off; PeriodicCheckpointCallback below is the only checkpoint source
+save_total_limit: 3  # Still applies to periodic checkpoints (rotation handled by the normal save path)
 
 do_eval: false
 
@@ -89,3 +88,10 @@ attn_implementation: sdpa
 ########################################################
 # Print debug input values using the overridden compute_loss() function for the first n batches
 debug_first_n_batches: 3
+
+# Wall-clock checkpointing: the Trainer only saves on step counts, so this sets
+# should_save every interval and the normal save path (save_total_limit rotation
+# included) handles the rest. Human-friendly durations ('6h', '30m', '90s',
+# combined '1h30m') or plain seconds (21600); 0/'off' disables it.
+# save_strategy above is "no", so this is the only checkpoint source.
+periodic_save_seconds: 6h  # save every 6 hours
