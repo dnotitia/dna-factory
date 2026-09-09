@@ -82,14 +82,6 @@ def load_models(script_args, training_args, model_args, dnotitia_args, ctx, trai
     return {"model": model, "ref_model": ref_model}
 
 
-def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
-    return get_dataset(dataset_mixture_args)
-
-
-def postprocess_dataset(dataset, ctx, train_logger):
-    return dataset.map(preprocess_thinking_data)
-
-
 SPEC = TrainingSpec(
     name="DPO",
     output_dir_tag="DPO",
@@ -99,8 +91,8 @@ SPEC = TrainingSpec(
     defaults_yaml="configs/_defaults-DPO.yaml",
     dataclass_types=(ScriptArguments, DPOConfig, ModelConfig, DatasetMixtureConfig, DnotitiaArguments),
     load_models=load_models,
-    load_mixture=load_mixture,
-    postprocess_dataset=postprocess_dataset,
+    load_mixture=lambda mixture_args, training_args, ctx, log: get_dataset(mixture_args),
+    postprocess_dataset=lambda dataset, ctx, log: dataset.map(preprocess_thinking_data),
     trainer_cls=DnotitiaDPOTrainer,
 )
 
