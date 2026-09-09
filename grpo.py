@@ -1,9 +1,9 @@
 """
 Group Relative Policy Optimization (GRPO) training script for DNA Factory.
 
-Note: This file intentionally maintains some duplication with sft.py/dpo.py for readability and clarity.
-Common utilities (logging, banners, argument printing) are extracted to dnotitia_trainer_commons.py,
-while core training logic remains here for easy understanding of the complete GRPO flow.
+Method-specific logic only (reward resolution, prompt-only dataset mixture,
+trainer wiring); the shared setup/train/save flow lives in
+dna_factory/training_runner.py.
 Key GRPO-specific differences:
 - Online RL: completions are generated during training and scored by reward functions.
 - Reward signal is required: built-in reward functions from trl.rewards, dotted import paths,
@@ -11,50 +11,27 @@ Key GRPO-specific differences:
 - The model is passed to the trainer as a string (not pre-instantiated) so that
   `training_args.model_init_kwargs` is honored and distributed device_map handling works.
 - No ref_model parameter: GRPOTrainer creates an internal reference model only when `beta != 0`.
-When modifying shared utility logic, update dnotitia_trainer_commons.py.
 """
 
 import importlib
 import logging
-import multiprocessing
 import os
 import sys
 from dataclasses import dataclass, field
 
-from datasets import load_dataset
-from transformers import AutoTokenizer, set_seed
-from transformers.trainer_utils import get_last_checkpoint
 from trl import (
     DatasetMixtureConfig,
+    GRPOConfig,
     ModelConfig,
     ScriptArguments,
-    GRPOConfig,
-    TrlParser,
-    get_peft_config,
     get_quantization_config,
 )
 from trl.scripts.utils import DatasetConfig
 
-from dna_factory.utils.colorize_args import parse_user_args
-from dna_factory.utils.config_merger import merge_config_files
-from dna_factory.utils.output_dir_generator import generate_auto_output_dir
-from dna_factory.periodic_checkpoint import PeriodicCheckpointCallback, parse_duration_to_seconds
-from dna_factory.dnotitia_trainer_commons import (
-    setup_logging,
-    print_dna_factory_banner,
-    print_training_start_message,
-    print_auto_generated_output_dir,
-    print_environment_and_arguments,
-    resolve_trust_remote_code,
-    save_training_results,
-)
-from dna_factory.dnotitia_grpo_trainer import DnotitiaGRPOTrainer
 from dna_factory.dnotitia_arguments import DnotitiaArguments
-
-# vLLM 0.20.0 bundles an incomplete vendored `deep_gemm`, and its kernel warmup crashes on
-# Hopper/Blackwell GPUs even for bf16 models. FP8 GEMM kernels are not needed for bf16
-# training, so DeepGEMM is disabled by default (override by exporting VLLM_USE_DEEP_GEMM=1).
-os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
+from dna_factory.dnotitia_grpo_trainer import DnotitiaGRPOTrainer
+from dna_factory.dnotitia_trainer_commons import resolve_trust_remote_code
+from dna_factory.training_runner import TrainingSpec, cli_main, run_training
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -239,7 +216,7 @@ def _normalize_dataset_for_grpo(dataset, label):
 
 def get_dataset_with_schema_alignment(mixture_config):
     """
-    GRPO mixture loader (analogous to sft.py:get_dataset_with_schema_alignment).
+    GRPO mixture loader.
 
     TRL's stock get_dataset() just concatenates the datasets, which raises when they have different
     columns. Mixture datasets here are heterogeneous (conversational `messages` vs plain `prompt`,
@@ -258,8 +235,9 @@ def get_dataset_with_schema_alignment(mixture_config):
     the HF hub.
     """
     import os
+
     import datasets as ds
-    from datasets import concatenate_datasets, DatasetDict
+    from datasets import DatasetDict, concatenate_datasets
 
     datasets_list = []
     for dataset_config in mixture_config.datasets:
@@ -286,187 +264,69 @@ def get_dataset_with_schema_alignment(mixture_config):
     return DatasetDict({"train": combined})
 
 
-def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_args, user_specified_args=None):
-    # Set seed for reproducibility
-    set_seed(training_args.seed)
-
-    # Use empty set if no user args provided
-    if user_specified_args is None:
-        user_specified_args = set()
-
-    # Set dataset number of processes to the number of CPUs
-    training_args.dataset_num_proc = multiprocessing.cpu_count() // 2
-
-    # Auto-generate output_dir if set to 'auto'
-    auto_generated_dir = False
-    if training_args.output_dir == 'auto':
-        auto_generated_dir = True
-        auto_output_dir = generate_auto_output_dir(
-            model_args.model_name_or_path,
-            user_specified_args,
-            script_args,
-            training_args,
-            model_args,
-            dataset_mixture_args,
-            dnotitia_args,
-            'GRPO',
-        )
-        training_args.output_dir = auto_output_dir
-
-    # Setup logging
-    logger = setup_logging(training_args, 'dna_factory.dnotitia_grpo_trainer')
-
-    # Print DNA Factory banner
-    print_dna_factory_banner(logger, __file__)
-
-    # Print the script start message
-    print_training_start_message(logger, "GRPO")
-
-    # Log auto-generated output directory if applicable
-    if auto_generated_dir:
-        print_auto_generated_output_dir(logger, training_args.output_dir)
-
-    # Print the parsed arguments
-    print_environment_and_arguments(
-        logger, script_args, training_args, model_args,
-        dataset_mixture_args, dnotitia_args, user_specified_args,
-        trainer_type="GRPO"
-    )
-
-    # Check for last checkpoint
-    last_checkpoint = None
-    if os.path.isdir(training_args.output_dir):
-        last_checkpoint = get_last_checkpoint(training_args.output_dir)
-    if last_checkpoint is not None and training_args.resume_from_checkpoint is None:
-        logger.info(f"Checkpoint detected, resuming training at {last_checkpoint=}.")
-
+def setup_training_args(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
     # Resolve reward functions (GRPO-specific)
-    reward_funcs = resolve_reward_funcs(script_args, training_args)
+    ctx["reward_funcs"] = resolve_reward_funcs(script_args, training_args)
 
     # Model init kwargs (GRPO-specific): the model is passed to the trainer as a string, so init kwargs
     # go through `training_args.model_init_kwargs`. GRPOTrainer manages `use_cache` itself during
     # generation and training forwards, so it is intentionally omitted here.
     # Due to online RL nature, GRPOTrainer itself handles model instantiation unlike SFT/DPO.
-    training_args.model_init_kwargs = dict(
-        revision=model_args.model_revision,
-        trust_remote_code=resolve_trust_remote_code(model_args, training_args),
-        attn_implementation=model_args.attn_implementation,
-        dtype=model_args.dtype,
-    )
-    quantization_config = get_quantization_config(model_args)
+    training_args.model_init_kwargs = {
+        "revision": model_args.model_revision,
+        "trust_remote_code": resolve_trust_remote_code(model_args, training_args),
+        "attn_implementation": model_args.attn_implementation,
+        "dtype": model_args.dtype,
+    }
+    ctx["quantization_config"] = get_quantization_config(model_args)
 
-    # Create tokenizer (GRPOTrainer sets the pad token and applies left/right padding internally)
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_args.model_name_or_path,
-        trust_remote_code=resolve_trust_remote_code(model_args, training_args),
-        use_fast=True
-    )
 
-    # Load the dataset (prompt-only: a `prompt` column, plain text or conversational; extra columns
-    # such as `expected_output`/`solution` are forwarded to the reward functions as keyword arguments)
-    if dataset_mixture_args.datasets:
-        logger.info(
-            "The `datasets` argument will be used to load the "
-            "dataset and `dataset_name` will be ignored."
-        )
-        # Schema-aligning loader (not TRL's stock get_dataset): normalizes mixed datasets to a
-        # common prompt-only schema and derives `expected_output` for reference-guided judging.
-        dataset = get_dataset_with_schema_alignment(dataset_mixture_args)
-    elif script_args.dataset_name:
-        dataset = load_dataset(
-            script_args.dataset_name, name=script_args.dataset_config, streaming=script_args.dataset_streaming
-        )
-    else:
-        raise ValueError("Either `datasets` or `dataset_name` must be provided.")
+def load_models(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
+    return {"model": model_args.model_name_or_path}
 
+
+def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
+    # Schema-aligning loader (not TRL's stock get_dataset): normalizes mixed datasets to a
+    # common prompt-only schema and derives `expected_output` for reference-guided judging.
+    return get_dataset_with_schema_alignment(dataset_mixture_args)
+
+
+def extra_trainer_kwargs(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
+    return {
+        "reward_funcs": ctx["reward_funcs"],
+        "quantization_config": ctx["quantization_config"],
+        "dynamic_sampling": dnotitia_args.dynamic_sampling,
+        "dynamic_sampling_max_rounds": dnotitia_args.dynamic_sampling_max_rounds,
+    }
+
+
+SPEC = TrainingSpec(
+    name="GRPO",
+    output_dir_tag="GRPO",
+    trainer_type="GRPO",
+    trainer_module="dna_factory.dnotitia_grpo_trainer",
+    script_file=__file__,
+    defaults_yaml="configs/_defaults-GRPO.yaml",
+    dataclass_types=(GRPOScriptArguments, GRPOConfig, ModelConfig, LabeledDatasetMixtureConfig, DnotitiaArguments),
+    # vLLM 0.20.0 bundles an incomplete vendored `deep_gemm`, and its kernel warmup crashes on
+    # Hopper/Blackwell GPUs even for bf16 models. FP8 GEMM kernels are not needed for bf16
+    # training, so DeepGEMM is disabled by default (override by exporting VLLM_USE_DEEP_GEMM=1).
+    extra_env={"VLLM_USE_DEEP_GEMM": "0"},
+    setup_training_args=setup_training_args,
+    load_models=load_models,
+    load_mixture=load_mixture,
     # Note: no thinking → reasoning_content preprocessing here. GRPO datasets are prompt-only, so
     # there are no pre-existing assistant turns carrying a `thinking` field (completions are
     # generated online during training).
+    trainer_cls=DnotitiaGRPOTrainer,
+    extra_trainer_kwargs=extra_trainer_kwargs,
+)
 
-    # Wall-clock periodic checkpointing (off when periodic_save_seconds is 0/'off').
-    # Accepts human-friendly durations ('6h') or plain seconds ('21600').
-    try:
-        periodic_seconds = parse_duration_to_seconds(dnotitia_args.periodic_save_seconds)
-    except ValueError as e:
-        raise ValueError(f"Invalid `periodic_save_seconds` value: {e}") from e
-    callbacks = []
-    if periodic_seconds > 0:
-        logger.info(
-            f"Enabling wall-clock checkpointing every {periodic_seconds:g}s "
-            f"(periodic_save_seconds={dnotitia_args.periodic_save_seconds!r})."
-        )
-        callbacks.append(
-            PeriodicCheckpointCallback(periodic_seconds)
-        )
-    elif training_args.save_strategy == "no":
-        logger.warning(
-            "Both step-based checkpointing (save_strategy='no') and wall-clock "
-            "checkpointing (periodic_save_seconds is off) are disabled — no checkpoints "
-            "will be saved during training."
-        )
 
-    # Initialize the Dnotitia GRPO trainer
-    trainer = DnotitiaGRPOTrainer(
-        model=model_args.model_name_or_path,
-        reward_funcs=reward_funcs,
-        args=training_args,
-        train_dataset=dataset[script_args.dataset_train_split],
-        eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None,
-        processing_class=tokenizer,
-        quantization_config=quantization_config,
-        peft_config=get_peft_config(model_args),
-        debug_first_n_batches=dnotitia_args.debug_first_n_batches,
-        dynamic_sampling=dnotitia_args.dynamic_sampling,
-        callbacks=callbacks or None,
-        dynamic_sampling_max_rounds=dnotitia_args.dynamic_sampling_max_rounds,
-    )
-
-    # Check checkpoint
-    checkpoint = None
-    if training_args.resume_from_checkpoint is not None:
-        checkpoint = training_args.resume_from_checkpoint
-    elif last_checkpoint is not None:
-        checkpoint = last_checkpoint
-
-    # Train the model
-    train_result = trainer.train(resume_from_checkpoint=checkpoint)
-
-    # Save training results
-    save_training_results(trainer, train_result, dataset, script_args, training_args)
+def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_args, user_specified_args=None):
+    return run_training(SPEC, script_args, training_args, model_args,
+                        dataset_mixture_args, dnotitia_args, user_specified_args)
 
 
 if __name__ == "__main__":
-    # Initialize the parser
-    dataclass_types = (GRPOScriptArguments, GRPOConfig, ModelConfig, LabeledDatasetMixtureConfig, DnotitiaArguments)
-    parser = TrlParser(dataclass_types)
-
-    # Get arguments with load default YAML configuration
-    cli_args = sys.argv[1:]
-
-    # Parse user-specified arguments before adding defaults
-    user_specified_args = parse_user_args(cli_args)
-
-    # Check if user provided a config file
-    user_has_config = "--config" in cli_args
-    if user_has_config:
-        user_config_path = None
-        # Find the config file path specified by user
-        try:
-            config_index = cli_args.index("--config")
-            if config_index + 1 < len(cli_args):
-                user_config_path = cli_args[config_index + 1]
-
-            config_path = merge_config_files("configs/_defaults-GRPO.yaml", user_config_path)
-        except (ValueError, IndexError):
-            config_path = "configs/_defaults-GRPO.yaml"
-    else:
-        config_path = "configs/_defaults-GRPO.yaml"
-    full_args = ["--config", config_path] + cli_args
-
-    # Parse arguments
-    (script_args, training_args, model_args, dataset_mixture_args, dnotitia_args, _) = \
-        (parser.parse_args_and_config(full_args,
-                                      return_remaining_strings=True))
-
-    # Run the main function
-    main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_args, user_specified_args)
+    cli_main(SPEC)
