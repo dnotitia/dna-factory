@@ -1,11 +1,11 @@
 - [DNA Factory](#dna-factory)
-- [Key Features](#key-features)
-- [Design Principles](#design-principles)
 - [News](#news)
+- [Design Principles](#design-principles)
+- [Key Features](#key-features)
 - [How to Run](#how-to-run)
   - [Advanced Usage](#advanced-usage)
-  - [Multi-GPU](#multi-gpu)
-  - [Multi-Node](#multi-node)
+  - [Multi-GPUs](#multi-gpus)
+  - [Multi-Nodes](#multi-nodes)
 - [Supported backends](#supported-backends)
 
 # DNA Factory
@@ -16,13 +16,11 @@
 
 LLM Post-Training (SFT / DPO / GRPO / On-Policy Distillation) on HuggingFace TRL + DeepSpeed.
 
-# Key Features
-
-1. **Color-coded logging** across huggingface_hub, datasets, tokenizers, transformers, torch, accelerate, and trl.
-1. **Auto-generated output directory** from the model name and CLI args (e.g. `Qwen3-0.6B-SFT-num_train_epochs-2-...`).
-1. **Commented default YAMLs** (`configs/_defaults-*.yaml`), overridable by custom YAML or CLI args.
-1. **Ready-made accelerate configs** for DDP and DeepSpeed ZeRO-1/3 (+ CPU offload).
-1. **Flexible checkpoint interval** You can now specify save intervals in hours (e.g., `6h` to save every 6 hours), making scheduled checkpointing easy and intuitive.
+# News
+- Sep/02/2026 - **On-Policy Distillation** support.
+- Jun/05/2026 - **GRPO (Group Relative Policy Optimization)** support.
+- Oct/29/2025 - **DPO (Direct Preference Optimization)** support.
+- Sep/21/2025 - **DNA Factory** is born! 🎉
 
 <img width="80%" src="https://github.com/user-attachments/assets/f58514c2-004f-46cd-9545-0a9b69e85ecd" />
 
@@ -32,11 +30,13 @@ LLM Post-Training (SFT / DPO / GRPO / On-Policy Distillation) on HuggingFace TRL
 - **Lightweight Design** — no bloat beyond core functionality.
 - **Clean and Readable Code** — every line understandable by any developer.
 
-# News
-- Sep/02/2026 - **On-Policy Distillation** support.
-- Jun/05/2026 - **GRPO (Group Relative Policy Optimization)** support.
-- Oct/29/2025 - **DPO (Direct Preference Optimization)** support.
-- Sep/21/2025 - **DNA Factory** is born! 🎉
+# Key Features
+
+1. **Color-coded logging** across huggingface_hub, datasets, tokenizers, transformers, torch, accelerate, and trl.
+1. **Auto-generated output directory** from the model name and CLI args (e.g. `Qwen3-0.6B-SFT-num_train_epochs-2-...`).
+1. **Commented default YAMLs** (`configs/_defaults-*.yaml`), overridable by custom YAML or CLI args.
+1. **Ready-made accelerate configs** for DDP and DeepSpeed ZeRO-1/3 (+ CPU offload).
+1. **Flexible checkpoint interval** You can now specify save intervals in hours (e.g., `6h` to save every 6 hours), making scheduled checkpointing easy and intuitive.
 
 # How to Run
 
@@ -78,7 +78,7 @@ $ python sft.py \
   --num_train_epochs 2
 ```
 
-## Multi-GPU
+## Multi-GPUs
 
 DDP for speed, DeepSpeed ZeRO to save memory (only stages 1 and 3 are supported):
 
@@ -93,10 +93,7 @@ $ accelerate launch --config_file accelerate_configs/zero1.yaml \
     --config configs/SFT/qwen3-0.6B-sft.yaml
 ```
 
-MoE models must use the matching MoE config (`zero3-qwen3-moe.yaml`,
-`zero3-qwen3_5-moe.yaml`), not plain `zero3.yaml`.
-
-## Multi-Node
+## Multi-Nodes
 
 See [multi-nodes.md](docs/multi-nodes.md) for the master/worker launch commands.
 
