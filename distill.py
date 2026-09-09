@@ -4,27 +4,13 @@ On-Policy Distillation training script for DNA Factory.
 Method-specific logic only (teacher validation, prompt-only dataset mixture,
 trainer wiring); the shared setup/train/save flow lives in
 dna_factory/training_runner.py.
+See docs/distillation.md for background.
 
-What on-policy distillation is (https://thinkingmachines.ai/blog/on-policy-distillation/):
-- The *student* samples its own completions (on-policy), so it is trained on the states it actually visits.
-  This removes the exposure bias of off-policy/SFT distillation, which only ever sees teacher trajectories.
-- The *teacher* then grades those completions token by token. Every token carries supervision (a dense
-  signal), unlike RL where a whole trajectory collapses to one scalar reward — which is where the
-  order-of-magnitude compute win over RL comes from.
-- The objective is the per-token reverse KL, KL(student || teacher). It is mode-seeking (the student commits
-  to one teacher behavior instead of averaging several) and "unhackable": low KL always means the student is
-  reproducing teacher behavior.
-
-Key distillation-specific differences from the other scripts:
-- Two models: the trained `model` (student) and a frozen `teacher_model`. The teacher is named in the
-  training config via `teacher_model_name_or_path`, and it must share the student's vocabulary (the loss
-  compares full next-token distributions; TRL raises on a vocab_size mismatch).
-- Online generation: like GRPO, completions are produced during training (vLLM colocate by default), so the
-  dataset is prompt-only. Unlike GRPO there is no reward function — the teacher *is* the supervision.
-- Both models are passed to the trainer as strings so `training_args.{model,teacher_model}_init_kwargs` are
-  honored and distributed device_map handling works.
-- `beta` selects the divergence itself (1.0 = reverse KL, 0.0 = forward KL, 0.5 = JSD); it is NOT GRPO's
-  reference-model KL-penalty coefficient. There is no reference model here.
+Distillation-specific notes:
+- Student samples its own completions; the frozen teacher grades every token (no reward functions).
+- `teacher_model_name_or_path` is required and must share the student's vocabulary.
+- Both models pass as strings so `*_init_kwargs` are honored; `beta` selects the divergence
+  (1.0 = reverse KL, 0.0 = forward KL, 0.5 = JSD), not a GRPO-style KL penalty.
 """
 
 import logging
