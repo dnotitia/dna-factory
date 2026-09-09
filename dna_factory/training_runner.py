@@ -18,19 +18,22 @@ from transformers import AutoTokenizer, set_seed
 from transformers.trainer_utils import get_last_checkpoint
 from trl import TrlParser, get_peft_config
 
+from dna_factory.dnotitia_trainer_commons import (
+    print_auto_generated_output_dir,
+    print_dna_factory_banner,
+    print_environment_and_arguments,
+    print_training_start_message,
+    resolve_trust_remote_code,
+    save_training_results,
+    setup_logging,
+)
+from dna_factory.periodic_checkpoint import (
+    PeriodicCheckpointCallback,
+    parse_duration_to_seconds,
+)
 from dna_factory.utils.colorize_args import parse_user_args
 from dna_factory.utils.config_merger import merge_config_files
 from dna_factory.utils.output_dir_generator import generate_auto_output_dir
-from dna_factory.periodic_checkpoint import PeriodicCheckpointCallback, parse_duration_to_seconds
-from dna_factory.dnotitia_trainer_commons import (
-    setup_logging,
-    print_dna_factory_banner,
-    print_training_start_message,
-    print_auto_generated_output_dir,
-    print_environment_and_arguments,
-    resolve_trust_remote_code,
-    save_training_results,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -185,15 +188,15 @@ def run_training(spec, script_args, training_args, model_args, dataset_mixture_a
         )
 
     # Initialize the trainer
-    trainer_kwargs = dict(
-        args=training_args,
-        train_dataset=dataset[script_args.dataset_train_split],
-        eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None,
-        processing_class=tokenizer,
-        peft_config=get_peft_config(model_args),
-        debug_first_n_batches=dnotitia_args.debug_first_n_batches,
-        callbacks=callbacks or None,
-    )
+    trainer_kwargs = {
+        'args': training_args,
+        'train_dataset': dataset[script_args.dataset_train_split],
+        'eval_dataset': dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None,
+        'processing_class': tokenizer,
+        'peft_config': get_peft_config(model_args),
+        'debug_first_n_batches': dnotitia_args.debug_first_n_batches,
+        'callbacks': callbacks or None,
+    }
     trainer_kwargs.update(models_kwargs)
     trainer_kwargs.update(_default(
         {}, spec.extra_trainer_kwargs,
