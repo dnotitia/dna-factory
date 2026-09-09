@@ -1,29 +1,38 @@
+- [DNA Factory](#dna-factory)
+- [Key Features](#key-features)
+- [Design Principles](#design-principles)
+- [News](#news)
+- [How to Run](#how-to-run)
+  - [Advanced Usage](#advanced-usage)
+  - [Multi-GPU](#multi-gpu)
+  - [Multi-Node](#multi-node)
+- [Supported backends](#supported-backends)
+
 # DNA Factory
 
 ![](./assets/dna-factory.png)
 
+LLM post-training (SFT / DPO / GRPO / On-Policy Distillation) on HuggingFace TRL + DeepSpeed.
+
 # Key Features
 
-1. **Unified Color-Coded Logging**: Provides unified logging format with color-coded messages from various packages including 'huggingface_hub', 'datasets', 'tokenizers', 'transformers', 'torch', 'accelerate', and 'trl' for better readability.
-1. **Auto-Generated Output Directory**: Automatically generates output directory names based on the model name and user-specified CLI arguments (e.g., `Qwen3-0.6B-SFT-num_train_epochs-2-learning_rate-1e-4`), making it easy to organize and track different training runs.
-1. **Comprehensive Default Configuration**: Provides detailed default YAML configuration with extensive comments that users can easily override with their own config files or CLI arguments.
-1. **Pre-configured Multi-GPU Training Options**: Includes ready-to-use configurations for DDP, DeepSpeed ZeRO Stage 1/3, and CPU offloading to support various training scenarios.
+1. **Color-coded logging** across huggingface_hub, datasets, tokenizers, transformers, torch, accelerate, and trl.
+1. **Auto-generated output directory** from the model name and CLI args (e.g. `Qwen3-0.6B-SFT-num_train_epochs-2-...`).
+1. **Commented default YAMLs** (`configs/_defaults-*.yaml`), overridable by custom YAML or CLI args.
+1. **Ready-made accelerate configs** for DDP and DeepSpeed ZeRO-1/3 (+ CPU offload).
 
 <img width="80%" src="https://github.com/user-attachments/assets/f58514c2-004f-46cd-9545-0a9b69e85ecd" />
 
 # Design Principles
 
-- **One Way Approach**  
-We choose one proven approach for each technology decision. For example, we use DeepSpeed instead of FSDP because we have more experience and better results with DeepSpeed.
-- **Lightweight Design**  
-No unnecessary bloat or additional packages that don't directly contribute to the core functionality.
-- **Clean and Readable Code**  
-Every line of code is written to be easily understood and maintained by any developer.
+- **One Way Approach** — one proven choice per decision (e.g. DeepSpeed over FSDP).
+- **Lightweight Design** — no bloat beyond core functionality.
+- **Clean and Readable Code** — every line understandable by any developer.
 
 # News
-- Sep/02/2026 - Added **On-Policy Distillation** support!
-- Jun/05/2026 - Added **GRPO (Group Relative Policy Optimization)** support!
-- Oct/29/2025 - Added **DPO (Direct Preference Optimization)** support!
+- Sep/02/2026 - **On-Policy Distillation** support.
+- Jun/05/2026 - **GRPO (Group Relative Policy Optimization)** support.
+- Oct/29/2025 - **DPO (Direct Preference Optimization)** support.
 - Sep/21/2025 - **DNA Factory** is born! 🎉
 
 # How to Run
@@ -31,139 +40,62 @@ Every line of code is written to be easily understood and maintained by any deve
 ```bash
 $ uv sync
 $ source .venv/bin/activate
+$ python sft.py
 ```
 
-You can run it in a simple way:
 ```bash
-$ python sft.py
+# DPO (same accelerate configs as SFT; see docs/dpo.md)
+$ python dpo.py
+
+# GRPO — online RL: completions are generated during training and scored by
+# reward functions. Datasets are prompt-only; extra columns (e.g. `solution`)
+# are forwarded to reward functions. See docs/grpo-rewards.md.
+$ python grpo.py
+
+# On-Policy Distillation — the student trains on its own completions, scored
+# token by token by a frozen teacher (per-token reverse KL).
+# See docs/distillation.md.
+$ python distill.py
 ```
 
 ## Advanced Usage
 
-You can use CLI options:
+CLI options, custom YAML, or both (CLI wins):
 
 ```bash
 $ python sft.py \
   --model_name_or_path Qwen/Qwen3-0.6B \
   --dataset_name dnotitia/Reasoning_R1_Kor_completion_25k_sharegpt_v1 \
   --num_train_epochs 2
-```
 
-You can also use your custom YAML configuration:
-```bash
-$ python sft.py \
-  --config configs/SFT/qwen3-0.6B-sft.yaml
-```
+$ python sft.py --config configs/SFT/qwen3-0.6B-sft.yaml
 
-You can even combine both CLI and YAML approaches:
-```bash
 $ python sft.py \
   --config configs/SFT/qwen3-0.6B-sft.yaml \
   --num_train_epochs 2
 ```
 
-Choose whichever approach works best for you!
+## Multi-GPU
 
-## Multi GPUs
-
-If you want to train a small-sized model and just need faster training speed, use MULTI-GPU type. It's sufficient for training models effectively:
+DDP for speed, DeepSpeed ZeRO to save memory (only stages 1 and 3 are supported):
 
 ```bash
 $ accelerate launch --config_file accelerate_configs/multi_gpu.yaml \
     --num_processes 2 \
     sft.py
-```
 
-If you want to offload `Parameters`, `Gradients`, and `Optimizer States` to reduce memory usage, you should use DeepSpeed ZeRO like this:
-
-```bash
 $ accelerate launch --config_file accelerate_configs/zero1.yaml \
     --num_processes 2 \
     sft.py \
     --config configs/SFT/qwen3-0.6B-sft.yaml
 ```
 
-We support only ZeRO Stage 1 and ZeRO Stage 3 to keep DNA Factory simple and straightforward.
+MoE models must use the matching MoE config (`zero3-qwen3-moe.yaml`,
+`zero3-qwen3_5-moe.yaml`), not plain `zero3.yaml`.
 
-## Multi Nodes
+## Multi-Node
 
-```bash
-# Master
-$ accelerate launch --config_file accelerate_configs/zero1.yaml \
-    --num_machines 2 \
-    --num_processes 16 \
-    --main_process_ip 10.233.71.18 \
-    --main_process_port 6000 \
-    --machine_rank 0 \
-    sft.py \
-    --config configs/SFT/smollm3-sft.yaml
+See [multi-nodes.md](docs/multi-nodes.md) for the master/worker launch commands.
 
-# Worker
-$ accelerate launch --config_file accelerate_configs/zero1.yaml \
-    --num_machines 2 \
-    --num_processes 16 \
-    --main_process_ip 10.233.71.18 \
-    --main_process_port 6000 \
-    --machine_rank 1 \
-    sft.py \
-    --config configs/SFT/smollm3-sft.yaml
-```
-
-# GRPO
-
-GRPO is an online RL method: completions are generated during training and scored by reward functions. Datasets are prompt-only (a `prompt` column; extra columns such as `solution` are forwarded to the reward functions). Rewards are configured in YAML via `reward_funcs` (built-in names from `trl.rewards`, dotted import paths — including this repo's own judge and string-match rewards in `dna_factory.rewards`) and/or `reward_model_name_or_path`:
-
-```bash
-$ python grpo.py
-
-# Without vLLM (slower generation through transformers)
-$ python grpo.py --use_vllm false
-
-# Multiple GPUs
-$ accelerate launch --config_file accelerate_configs/zero3.yaml \
-    --num_processes 4 \
-    grpo.py
-```
-
-If you prefer dedicating separate GPUs to generation, use vLLM server mode instead of colocate:
-
-```bash
-# Terminal 1: vLLM server on a dedicated GPU
-$ CUDA_VISIBLE_DEVICES=0 trl vllm-serve --model dnotitia/Qwen3-0.6B
-
-# Terminal 2: training on the remaining GPUs
-$ CUDA_VISIBLE_DEVICES=1 python grpo.py --vllm_mode server
-```
-
-Notes:
-- The effective generation batch size (`per_device_train_batch_size` × number of processes × `steps_per_generation`) must be divisible by `num_generations`.
-- A reward returning `None` excludes that sample instead of scoring it `0.0`, so `All reward functions returned None` warnings are normal. `max_completion_length` defaults to `4096` because a truncated completion never reaches an answer, which flattens the whole group to `grad_norm: 0`. Both are covered in [docs/grpo-rewards.md](docs/grpo-rewards.md#troubleshooting-a-flat-run).
-
-Reward functions (built-in `trl.rewards`, LLM-as-judge, and string-match) are documented in [docs/grpo-rewards.md](docs/grpo-rewards.md).
-
-# On-Policy Distillation
-
-On-policy distillation trains a **student** on completions it generates itself, scored token by token by a frozen **teacher**. The objective is the per-token reverse KL, `KL(student ‖ teacher)`. Compared to the other trainers it combines the on-policy trajectories of RL with the dense per-token supervision of SFT, which is where its order-of-magnitude compute advantage over RL comes from:
-
-Datasets are prompt-only, just like GRPO. The teacher is set in YAML via `teacher_model_name_or_path` and **must share the student's vocabulary**:
-
-```bash
-$ python distill.py
-
-# Without vLLM (slower generation through transformers)
-$ python distill.py --use_vllm false
-
-# Multiple GPUs
-$ accelerate launch --config_file accelerate_configs/zero3.yaml \
-    --num_processes 4 \
-    distill.py
-```
-
-Note: `beta` here selects the divergence itself (`1.0` = reverse KL, `0.0` = forward KL, `0.5` = JSD) — unlike GRPO's `beta`, which is a KL-penalty coefficient against a reference model. There is no reference model in distillation.
-
-Full guide: [docs/distillation.md](docs/distillation.md).
-
-# References
-- <https://github.com/huggingface/trl>
-- <https://github.com/huggingface/open-r1>
-- <https://github.com/huggingface/alignment-handbook>
+# Supported backends
+- HuggingFace TRL <https://github.com/huggingface/trl>

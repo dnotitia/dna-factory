@@ -25,7 +25,7 @@ accelerate launch --config_file accelerate_configs/zero3.yaml --num_processes 4 
   sft.py --config configs/SFT/qwen3-0.6B-sft.yaml
 ```
 
-CLI args override YAML. Multi-node flags: see README.md.
+CLI args override YAML. Multi-node flags: see docs/multi-nodes.md.
 
 MoE models must launch with the matching MoE accelerate config
 (`zero3-qwen3-moe.yaml`, `zero3-qwen3_5-moe.yaml`): it sets

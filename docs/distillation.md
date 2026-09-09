@@ -35,6 +35,17 @@ capability cheaply, since prompts can be reused over many epochs without the mem
 
 ## Running it
 
+Datasets are prompt-only, just like GRPO. The teacher is set in YAML via `teacher_model_name_or_path` and **must share the student's vocabulary**:
+
+```bash
+# Without vLLM (slower generation through transformers)
+$ python distill.py --use_vllm false
+```
+
+Note: `beta` here selects the divergence itself (`1.0` = reverse KL, `0.0` = forward KL, `0.5` = JSD) — unlike GRPO's `beta`, which is a KL-penalty coefficient against a reference model. There is no reference model in distillation.
+
+Full guide: [docs/distillation.md](docs/distillation.md).
+
 ```bash
 # Single GPU (vLLM colocate is on by default; it shares the training GPU with the teacher,
 # so headroom is set via `vllm_gpu_memory_utilization: 0.25`)

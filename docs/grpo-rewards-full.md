@@ -1,6 +1,6 @@
 # GRPO Reward Functions
 
-This is the full implementation guide for writing and wiring reward functions for `grpo.py`. `README.md`'s GRPO section and `CLAUDE.md` only summarize and link here — this is the one place that documents the contract in detail.
+This is the full implementation guide for writing and wiring reward functions for `grpo.py`. `README.md`'s GRPO section only summarizes and links here — this is the one place that documents the contract in detail.
 
 ## Reward function taxonomy
 

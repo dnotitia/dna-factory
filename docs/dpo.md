@@ -1,6 +1,12 @@
 # DPO
 
-DPO training follows almost the same approach as SFT. You can train with a single GPU or multiple GPUs using the same accelerate configurations:
+DPO trains a policy against chosen/rejected pairs with a frozen reference model
+for the KL term, so it loads **two models** (`model` + `ref_model`) — budget ~2×
+the memory of an equivalent SFT run.
+
+Dataset: string `prompt`/`chosen`/`rejected` columns (e.g.
+`trl-lib/ultrafeedback_binarized`) or conversational `messages`. Qwen `thinking`
+fields are mapped to `reasoning_content` the same way as SFT.
 
 ```bash
 # Single GPU
