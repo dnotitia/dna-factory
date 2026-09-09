@@ -155,18 +155,6 @@ def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_
     )
     set_use_cache(model, not training_args.gradient_checkpointing)
 
-    # MoE + DeepSpeed ZeRO3: expert 접근이 라우팅으로 비결정적 → ZeRO3 param-trace 오류 및 Liger
-    # fused-MoE 커널이 gather 안 된(파티션된) expert 가중치를 인덱싱해 illegal memory access.
-    # MoE 블록을 z3 leaf 로 지정해 블록 단위로 param 을 한 번에 gather (표준 MoE+ZeRO3 fix).
-    # 대상 클래스 없는 모델(dense/타 MoE)은 Exception → skip
-    try:
-        from deepspeed.utils import set_z3_leaf_modules
-        from transformers.models.qwen3_5_moe.modeling_qwen3_5_moe import Qwen3_5MoeSparseMoeBlock
-        set_z3_leaf_modules(model, [Qwen3_5MoeSparseMoeBlock])
-        logger.info("set_z3_leaf_modules: Qwen3_5MoeSparseMoeBlock -> z3 leaf")
-    except Exception as _e:
-        logger.warning(f"set_z3_leaf_modules skip: {_e}")
-
     # Create tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,
