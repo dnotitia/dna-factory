@@ -93,6 +93,14 @@ def load_models(script_args, training_args, model_args, dnotitia_args, ctx, trai
     return {"model": model}
 
 
+def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
+    return get_dataset_with_schema_alignment(dataset_mixture_args, seed=training_args.seed)
+
+
+def postprocess_dataset(dataset, ctx, train_logger):
+    return dataset.map(preprocess_thinking_data)
+
+
 SPEC = TrainingSpec(
     name="SFT",
     output_dir_tag="SFT",
@@ -102,9 +110,8 @@ SPEC = TrainingSpec(
     defaults_yaml="configs/_defaults-SFT.yaml",
     dataclass_types=(ScriptArguments, SFTConfig, ModelConfig, WeightedDatasetMixtureConfig, DnotitiaArguments),
     load_models=load_models,
-    load_mixture=lambda mixture_args, training_args, ctx, log: get_dataset_with_schema_alignment(
-        mixture_args, seed=training_args.seed),
-    postprocess_dataset=lambda dataset, ctx, log: dataset.map(preprocess_thinking_data),
+    load_mixture=load_mixture,
+    postprocess_dataset=postprocess_dataset,
     trainer_cls=DnotitiaSFTTrainer,
 )
 

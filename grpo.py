@@ -281,6 +281,16 @@ def setup_training_args(script_args, training_args, model_args, dnotitia_args, c
     ctx["quantization_config"] = get_quantization_config(model_args)
 
 
+def load_models(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
+    return {"model": model_args.model_name_or_path}
+
+
+def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
+    # Schema-aligning loader (not TRL's stock get_dataset): normalizes mixed datasets to a
+    # common prompt-only schema and derives `expected_output` for reference-guided judging.
+    return get_dataset_with_schema_alignment(dataset_mixture_args)
+
+
 def extra_trainer_kwargs(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
     return {
         "reward_funcs": ctx["reward_funcs"],
@@ -303,12 +313,8 @@ SPEC = TrainingSpec(
     # training, so DeepGEMM is disabled by default (override by exporting VLLM_USE_DEEP_GEMM=1).
     extra_env={"VLLM_USE_DEEP_GEMM": "0"},
     setup_training_args=setup_training_args,
-    load_models=lambda script_args, training_args, model_args, dnotitia_args, ctx, log: {
-        "model": model_args.model_name_or_path},
-    # Schema-aligning loader (not TRL's stock get_dataset): normalizes mixed datasets to a
-    # common prompt-only schema and derives `expected_output` for reference-guided judging.
-    load_mixture=lambda mixture_args, training_args, ctx, log: get_dataset_with_schema_alignment(
-        mixture_args),
+    load_models=load_models,
+    load_mixture=load_mixture,
     # Note: no thinking → reasoning_content preprocessing here. GRPO datasets are prompt-only, so
     # there are no pre-existing assistant turns carrying a `thinking` field (completions are
     # generated online during training).
