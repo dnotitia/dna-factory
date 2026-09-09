@@ -22,6 +22,7 @@ LLM Post-Training (SFT / DPO / GRPO / On-Policy Distillation) on HuggingFace TRL
 1. **Auto-generated output directory** from the model name and CLI args (e.g. `Qwen3-0.6B-SFT-num_train_epochs-2-...`).
 1. **Commented default YAMLs** (`configs/_defaults-*.yaml`), overridable by custom YAML or CLI args.
 1. **Ready-made accelerate configs** for DDP and DeepSpeed ZeRO-1/3 (+ CPU offload).
+1. **Flexible checkpoint interval** You can now specify save intervals in hours (e.g., `6h` to save every 6 hours), making scheduled checkpointing easy and intuitive.
 
 <img width="80%" src="https://github.com/user-attachments/assets/f58514c2-004f-46cd-9545-0a9b69e85ecd" />
 
@@ -42,21 +43,21 @@ LLM Post-Training (SFT / DPO / GRPO / On-Policy Distillation) on HuggingFace TRL
 ```bash
 $ uv sync
 $ source .venv/bin/activate
+
 $ python sft.py
 ```
 
 ```bash
-# DPO (same accelerate configs as SFT; see docs/dpo.md)
+# DPO (same accelerate configs as SFT)
 $ python dpo.py
 
 # GRPO — online RL: completions are generated during training and scored by
 # reward functions. Datasets are prompt-only; extra columns (e.g. `solution`)
-# are forwarded to reward functions. See docs/grpo-rewards.md.
+# are forwarded to reward functions.
 $ python grpo.py
 
 # On-Policy Distillation — the student trains on its own completions, scored
 # token by token by a frozen teacher (per-token reverse KL).
-# See docs/distillation.md.
 $ python distill.py
 ```
 
