@@ -21,7 +21,7 @@ log_level: info
 # The teacher: the model whose next-token distribution the student is trained to match.
 # It MUST share the student's vocabulary — the loss compares full next-token distributions, so training
 # stops with an explicit error on a `vocab_size` mismatch. See docs/distillation.md.
-teacher_model_name_or_path: dnotitia/Qwen3-1.7B
+teacher_model_name_or_path: dnotitia/Qwen3-4B
 # teacher_model_revision: null  # Branch/tag/commit of the teacher (defaults to its main revision)
 
 # Which divergence to minimize between the student and the teacher, over the student's own completions:
