@@ -12,7 +12,9 @@
 
 ![](./assets/dna-factory.png)
 
-LLM post-training (SFT / DPO / GRPO / On-Policy Distillation) on HuggingFace TRL + DeepSpeed.
+*"It Just Works!"*
+
+LLM Post-Training (SFT / DPO / GRPO / On-Policy Distillation) on HuggingFace TRL + DeepSpeed.
 
 # Key Features
 
