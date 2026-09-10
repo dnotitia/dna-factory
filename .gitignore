@@ -2,4 +2,7 @@
 .idea
 wandb
 __pycache__
+
+# Exclusions for personal use
 Qwen3*/
+sangpark/
