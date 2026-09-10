@@ -179,14 +179,14 @@ loss is computed on, dark gray for masked/padding tokens.
 - If the student is already close to the teacher, the loss starts low; judge progress by the *relative*
   drop, and confirm on held-out prompts rather than on the training curve alone.
 
-To confirm on held-out prompts, `testcase/expr_distillation_reverse_kl.py` measures exactly the training
+To confirm on held-out prompts, `utils/measure-distill-kl.py` measures exactly the training
 objective — the student samples its own completions, and the per-token reverse KL against the teacher is
 averaged over them — on a fixed prompt set and seed. Run it on the base student and on the checkpoint:
 
 ```bash
-$ python testcase/expr_distillation_reverse_kl.py \
+$ python utils/measure-distill-kl.py \
     --student dnotitia/Qwen3-0.6B --teacher dnotitia/Qwen3-1.7B
-$ python testcase/expr_distillation_reverse_kl.py \
+$ python utils/measure-distill-kl.py \
     --student ./my-distilled-checkpoint --tokenizer dnotitia/Qwen3-1.7B \
     --teacher dnotitia/Qwen3-1.7B
 ```

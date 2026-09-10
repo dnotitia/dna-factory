@@ -1,6 +1,6 @@
 # Utils
 
-Dataset validation/conversion for SFT and DPO, plus a vLLM compatibility check for GRPO.
+Dataset validation/conversion for SFT and DPO, a vLLM compatibility check for GRPO, and a held-out reverse-KL probe for on-policy distillation.
 
 ## check-SFT-dataset.py
 
@@ -45,3 +45,15 @@ bash utils/check-vllm-version.sh
 ```
 
 If installed vLLM is outside the range (`uv pip show vllm`), pin vLLM into it or fall back to `--use_vllm false`.
+
+## measure-distill-kl.py
+
+Measures the on-policy reverse KL, KL(student || teacher), on a fixed held-out prompt set — the same quantity on-policy distillation minimizes. Run on the base student and on the distilled checkpoint with the same prompts/seed.
+
+```bash
+python utils/measure-distill-kl.py \
+    --student dnotitia/Qwen3-0.6B --teacher dnotitia/Qwen3-1.7B
+python utils/measure-distill-kl.py \
+    --student ./my-distilled-checkpoint --tokenizer dnotitia/Qwen3-1.7B \
+    --teacher dnotitia/Qwen3-1.7B
+```

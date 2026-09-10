@@ -5,9 +5,9 @@ completions, and we score the per-token divergence of its next-token distributio
 teacher's at exactly those states. Run it on the base student and on the distilled checkpoint
 with the same prompts/seed to see whether training moved the objective on unseen prompts.
 
-    $ python testcase/expr_distillation_reverse_kl.py \
+    $ python utils/measure-distill-kl.py \
         --student dnotitia/Qwen3-0.6B --teacher dnotitia/Qwen3-1.7B      # before
-    $ python testcase/expr_distillation_reverse_kl.py \
+    $ python utils/measure-distill-kl.py \
         --student ./my-distilled-checkpoint --tokenizer dnotitia/Qwen3-1.7B \
         --teacher dnotitia/Qwen3-1.7B                                    # after
 """
