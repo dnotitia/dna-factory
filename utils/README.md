@@ -1,6 +1,6 @@
-# Dataset Utils
+# Utils
 
-Validate and convert SFT/DPO datasets for DNA Factory.
+Dataset validation/conversion for SFT and DPO, plus a vLLM compatibility check for GRPO.
 
 ## check-SFT-dataset.py
 
@@ -10,7 +10,7 @@ Target format: user `{'content', 'role'}` + assistant `{'content', 'role', 'thin
 # Validate
 python check-SFT-dataset.py <dataset_name>
 
-# Convert legacy format and upload to Hub
+# Convert legacy format and upload to Hub (requires `huggingface-cli login`)
 python check-SFT-dataset.py <source_dataset> <target_dataset> <type>
 ```
 
@@ -27,7 +27,7 @@ Target format: `{chosen: [...], rejected: [...]}` — both start with the same u
 # Validate
 python check-DPO-dataset.py <dataset_name>
 
-# Convert legacy format and upload to Hub
+# Convert legacy format and upload to Hub (requires `huggingface-cli login`)
 python check-DPO-dataset.py <source_dataset> <target_dataset> <type>
 ```
 
@@ -45,10 +45,3 @@ bash utils/check-vllm-version.sh
 ```
 
 If installed vLLM is outside the range (`uv pip show vllm`), pin vLLM into it or fall back to `--use_vllm false`.
-
-## Setup
-
-```bash
-pip install datasets
-huggingface-cli login  # write token, for private datasets and convert uploads
-```
