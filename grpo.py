@@ -1,17 +1,4 @@
-"""
-Group Relative Policy Optimization (GRPO) training script for DNA Factory.
-
-Method-specific logic only (reward resolution, prompt-only dataset mixture,
-trainer wiring); the shared setup/train/save flow lives in
-dna_factory/training_runner.py.
-Key GRPO-specific differences:
-- Online RL: completions are generated during training and scored by reward functions.
-- Reward signal is required: built-in reward functions from trl.rewards, dotted import paths,
-  and/or a sequence-classification reward model (`reward_model_name_or_path`).
-- The model is passed to the trainer as a string (not pre-instantiated) so that
-  `training_args.model_init_kwargs` is honored and distributed device_map handling works.
-- No ref_model parameter: GRPOTrainer creates an internal reference model only when `beta != 0`.
-"""
+"""GRPO training script. Shared setup/train/save flow lives in dna_factory/training_runner.py."""
 
 import importlib
 import logging
@@ -33,28 +20,12 @@ from dna_factory.dnotitia_grpo_trainer import DnotitiaGRPOTrainer
 from dna_factory.dnotitia_trainer_commons import resolve_trust_remote_code
 from dna_factory.training_runner import TrainingSpec, cli_main, run_training
 
-# Initialize logger
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class GRPOScriptArguments(ScriptArguments):
-    """
-    Script arguments for the GRPO training script.
-
-    Args:
-        reward_model_name_or_path (`str`, *optional*):
-            Reward model id of a pretrained model hosted inside a model repo on huggingface.co or local path to a
-            directory containing model weights saved using `PreTrainedModel.save_pretrained`. Loaded internally by
-            GRPOTrainer as a sequence-classification model with a single label.
-        reward_funcs (`list[str]`, *optional*):
-            Reward functions to use. Supported bare names (zero-argument only): `"accuracy_reward"`,
-            `"reasoning_accuracy_reward"`, `"think_format_reward"`. A TRL reward factory (e.g.
-            `get_soft_overlong_punishment`) needs a module-level instance built with its arguments
-            first — see `dna_factory/rewards/my_rewards.py` — then reference that instance via a dotted
-            import path (e.g., `'my_lib.rewards.custom_reward'`). See docs/grpo-rewards.md for a
-            quickstart, or docs/grpo-rewards-full.md for the full reward-function contract.
-    """
+    """GRPO script args: reward model + reward funcs (see docs/grpo-rewards.md)."""
 
     reward_model_name_or_path: str | None = field(
         default=None,
@@ -78,11 +49,7 @@ class GRPOScriptArguments(ScriptArguments):
 
 @dataclass
 class LabeledDatasetConfig(DatasetConfig):
-    """A `DatasetConfig` with an extra `label` (provenance) field.
-
-    `label` is a plain string tag applied to every row loaded from this dataset entry, used for
-    per-sample reward routing (see `dna_factory.rewards.make_judge_reward`'s `only_label`).
-    """
+    """DatasetConfig + `label` tag for per-sample reward routing."""
 
     label: str | None = field(
         default=None,
@@ -94,11 +61,7 @@ class LabeledDatasetConfig(DatasetConfig):
 
 @dataclass
 class LabeledDatasetMixtureConfig(DatasetMixtureConfig):
-    """`DatasetMixtureConfig` whose entries are `LabeledDatasetConfig` (adds per-dataset `label`).
-
-    The annotation must stay `list[LabeledDatasetConfig]` (not bare `list`) so `HfArgumentParser` can
-    introspect the element type.
-    """
+    """DatasetMixtureConfig with LabeledDatasetConfig entries."""
 
     datasets: list[LabeledDatasetConfig] = field(
         default_factory=list,
@@ -106,23 +69,14 @@ class LabeledDatasetMixtureConfig(DatasetMixtureConfig):
     )
 
     def __post_init__(self):
-        # Convert dicts (from CLI/YAML parsing) into LabeledDatasetConfig objects.
         for idx, dataset in enumerate(self.datasets):
             if isinstance(dataset, dict):
                 self.datasets[idx] = LabeledDatasetConfig(**dataset)
 
 
 def resolve_reward_funcs(script_args, training_args):
-    """
-    Build the `reward_funcs` list GRPOTrainer expects from `script_args.reward_funcs` (built-in
-    names or dotted import paths) and `script_args.reward_model_name_or_path` (prepended, loaded by
-    GRPOTrainer itself as a sequence-classification model). Note: a dotted path is resolved via a
-    bare `getattr` — no arguments are passed — so a configurable reward must already be a
-    fully-built instance in its own module (see docs/grpo-rewards.md's factory-in-user-module
-    pattern, e.g. `dna_factory.rewards.make_judge_reward`, `dna_factory.rewards.soft_overlong_penalty`).
-    """
-    # Import lazily so optional reward dependencies (e.g. math_verify) are only required when used
-    # For reward functions in detail: see https://huggingface.co/docs/trl/rewards
+    """Build GRPOTrainer `reward_funcs` from bare names, dotted paths, and/or a reward model id."""
+    # Lazily imported: optional deps (e.g. math_verify) only needed when used.
     from trl.rewards import (
         accuracy_reward,
         reasoning_accuracy_reward,
@@ -136,7 +90,6 @@ def resolve_reward_funcs(script_args, training_args):
     }
 
     reward_funcs = []
-    # A reward model id string is loaded internally by GRPOTrainer as AutoModelForSequenceClassification
     if script_args.reward_model_name_or_path:
         reward_funcs.append(script_args.reward_model_name_or_path)
 
@@ -144,7 +97,6 @@ def resolve_reward_funcs(script_args, training_args):
         if func_name in reward_funcs_registry:
             reward_funcs.append(reward_funcs_registry[func_name])
         elif "." in func_name:
-            # Dotted import path (e.g. 'my_lib.rewards.custom_reward'), resolved relative to the cwd
             module_path, attr_name = func_name.rsplit(".", 1)
             sys.path.insert(0, os.getcwd())
             module = importlib.import_module(module_path)
@@ -164,21 +116,7 @@ def resolve_reward_funcs(script_args, training_args):
 
 
 def _normalize_dataset_for_grpo(dataset, label):
-    """
-    Per-dataset mechanical normalization (the unit of work `get_dataset_with_schema_alignment` loops
-    over; factored out so it's directly testable with a plain `(dataset, label)` pair):
-
-      - `messages` present → split into `prompt` (turns before the last assistant turn, role/content
-        only) and `expected_output` (that last assistant turn's content, or None if the dataset has
-        no assistant turn at all); `messages` is dropped.
-      - `prompt` present (no `messages`) → a plain string becomes a single user turn; a list is kept
-        but reduced to role/content only. Every other existing column (`solution`, a pre-existing
-        `expected_output`, anything else) is left untouched.
-      - Neither present → a clear error (nothing else to build a GRPO prompt from).
-
-    Then injects a `label` column (the dataset's provenance tag; see `LabeledDatasetConfig`) so reward
-    functions can route per-sample via `dna_factory.rewards.make_judge_reward`'s `only_label`.
-    """
+    """Normalize one dataset to prompt-only schema + `label` column."""
     feats = dataset.features
     if "messages" in feats:
 
@@ -215,25 +153,7 @@ def _normalize_dataset_for_grpo(dataset, label):
 
 
 def get_dataset_with_schema_alignment(mixture_config):
-    """
-    GRPO mixture loader.
-
-    TRL's stock get_dataset() just concatenates the datasets, which raises when they have different
-    columns. Mixture datasets here are heterogeneous (conversational `messages` vs plain `prompt`,
-    plus arbitrary extra columns such as `solution`/`expected_output`), so each dataset is normalized
-    to a `prompt` (+ `label`) schema by `_normalize_dataset_for_grpo` while every other column is left
-    alone, and the results are concatenated. `datasets.concatenate_datasets` natively aligns mismatched
-    schemas across the mixture (missing columns are added and filled with `None`; see the loader unit
-    test), so no manual column padding is needed here.
-
-    No `task_type`, no column-shape-based routing: every extra column (including `label`) is simply
-    forwarded by GRPOTrainer to reward functions as a keyword argument, and reward functions that
-    don't apply to a given sample return `None` for it (TRL excludes it from that reward). See
-    `dna_factory/rewards/generative.py`'s `make_judge_reward` for the reward side of this pattern.
-
-    A local save_to_disk directory is loaded via load_from_disk; otherwise the path is loaded from
-    the HF hub.
-    """
+    """Load mixture datasets, normalize each to prompt schema, and concatenate."""
     import os
 
     import datasets as ds
@@ -265,13 +185,9 @@ def get_dataset_with_schema_alignment(mixture_config):
 
 
 def setup_training_args(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
-    # Resolve reward functions (GRPO-specific)
     ctx["reward_funcs"] = resolve_reward_funcs(script_args, training_args)
 
-    # Model init kwargs (GRPO-specific): the model is passed to the trainer as a string, so init kwargs
-    # go through `training_args.model_init_kwargs`. GRPOTrainer manages `use_cache` itself during
-    # generation and training forwards, so it is intentionally omitted here.
-    # Due to online RL nature, GRPOTrainer itself handles model instantiation unlike SFT/DPO.
+    # Model passed as string; init kwargs go through training_args.
     training_args.model_init_kwargs = {
         "revision": model_args.model_revision,
         "trust_remote_code": resolve_trust_remote_code(model_args, training_args),
@@ -286,8 +202,6 @@ def load_models(script_args, training_args, model_args, dnotitia_args, ctx, trai
 
 
 def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
-    # Schema-aligning loader (not TRL's stock get_dataset): normalizes mixed datasets to a
-    # common prompt-only schema and derives `expected_output` for reference-guided judging.
     return get_dataset_with_schema_alignment(dataset_mixture_args)
 
 
@@ -308,16 +222,12 @@ SPEC = TrainingSpec(
     script_file=__file__,
     defaults_yaml="configs/_defaults-GRPO.yaml",
     dataclass_types=(GRPOScriptArguments, GRPOConfig, ModelConfig, LabeledDatasetMixtureConfig, DnotitiaArguments),
-    # vLLM 0.20.0 bundles an incomplete vendored `deep_gemm`, and its kernel warmup crashes on
-    # Hopper/Blackwell GPUs even for bf16 models. FP8 GEMM kernels are not needed for bf16
-    # training, so DeepGEMM is disabled by default (override by exporting VLLM_USE_DEEP_GEMM=1).
+    # Disable DeepGEMM: vLLM 0.20.0 warmup crashes on Hopper/Blackwell; unneeded for bf16.
     extra_env={"VLLM_USE_DEEP_GEMM": "0"},
     setup_training_args=setup_training_args,
     load_models=load_models,
     load_mixture=load_mixture,
-    # Note: no thinking → reasoning_content preprocessing here. GRPO datasets are prompt-only, so
-    # there are no pre-existing assistant turns carrying a `thinking` field (completions are
-    # generated online during training).
+    # No thinking -> reasoning_content preprocessing: GRPO datasets are prompt-only.
     trainer_cls=DnotitiaGRPOTrainer,
     extra_trainer_kwargs=extra_trainer_kwargs,
 )
