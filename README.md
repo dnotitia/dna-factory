@@ -1,4 +1,8 @@
-- [DNA Factory](#dna-factory)
+
+# DNA Factory
+
+![](./assets/dna-factory.png)
+
 - [News](#news)
 - [Design Principles](#design-principles)
 - [Key Features](#key-features)
@@ -6,17 +10,14 @@
   - [Advanced Usage](#advanced-usage)
   - [Multi-GPUs](#multi-gpus)
   - [Multi-Nodes](#multi-nodes)
-- [Supported backends](#supported-backends)
-
-# DNA Factory
-
-![](./assets/dna-factory.png)
+- [Acknowledgments](#acknowledgments)
 
 *"It Just Works!"*
 
 LLM Post-Training (SFT / DPO / GRPO / On-Policy Distillation) on HuggingFace TRL + DeepSpeed.
 
 # News
+
 - Sep/02/2026 - **On-Policy Distillation** support.
 - Jun/05/2026 - **GRPO (Group Relative Policy Optimization)** support.
 - Oct/29/2025 - **DPO (Direct Preference Optimization)** support.
@@ -44,20 +45,20 @@ LLM Post-Training (SFT / DPO / GRPO / On-Policy Distillation) on HuggingFace TRL
 $ uv sync
 $ source .venv/bin/activate
 
+# SFT — supervised fine-tuning on labeled instruction/response (or conversation) data.
 $ python sft.py
 ```
 
+Beyond SFT, DPO, GRPO, and On-Policy Distillation are also available:
+
 ```bash
-# DPO (same accelerate configs as SFT)
+# DPO — preference learning on chosen vs rejected responses.
 $ python dpo.py
 
-# GRPO — online RL: completions are generated during training and scored by
-# reward functions. Datasets are prompt-only; extra columns (e.g. `solution`)
-# are forwarded to reward functions.
+# GRPO — online RL: generate completions and score them with reward functions.
 $ python grpo.py
 
-# On-Policy Distillation — the student trains on its own completions, scored
-# token by token by a frozen teacher (per-token reverse KL).
+# On-Policy Distillation — student completions scored token-wise by a frozen teacher.
 $ python distill.py
 ```
 
@@ -80,7 +81,7 @@ $ python sft.py \
 
 ## Multi-GPUs
 
-DDP for speed, DeepSpeed ZeRO to save memory (only stages 1 and 3 are supported):
+DDP for speed, DeepSpeed ZeRO to save memory (ZeRO-1 and ZoRO-3 are supported):
 
 ```bash
 $ accelerate launch --config_file accelerate_configs/multi_gpu.yaml \
@@ -97,5 +98,12 @@ $ accelerate launch --config_file accelerate_configs/zero1.yaml \
 
 See [multi-nodes.md](docs/multi-nodes.md) for the master/worker launch commands.
 
-# Supported backends
+# Acknowledgments
+
+This project is made possible thanks to:
+
 - HuggingFace TRL <https://github.com/huggingface/trl>
+
+<img width="40%" src="./assets/nipaLogo.png" alt="NIPA 정보통신산업진흥원" />
+
+- NIPA 오픈소스 지원 프로그램 <https://www.nipa.kr>
