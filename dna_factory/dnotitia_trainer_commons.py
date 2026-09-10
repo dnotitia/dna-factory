@@ -8,6 +8,7 @@ different training scripts. Core training logic remains in each script for clari
 import logging
 import os
 import sys
+import tomllib
 
 import datasets
 import transformers
@@ -19,16 +20,7 @@ from dna_factory.utils.colorize_logging import ColoredFormatter, format_logs_wit
 
 
 def setup_logging(training_args, trainer_package_name):
-    """
-    Configure logging for the training script and all relevant packages.
-
-    Args:
-        training_args: Training arguments with logging configuration
-        trainer_package_name: Name of the trainer package (e.g., 'dna_factory.dnotitia_sft_trainer')
-
-    Returns:
-        logger: Configured logger instance
-    """
+    """Configure logging for the training script and all relevant packages."""
     # Create console handler and set formatter
     console_colored_handler = logging.StreamHandler(sys.stdout)
     console_colored_handler.setFormatter(
@@ -72,14 +64,29 @@ def setup_logging(training_args, trainer_package_name):
     return logger
 
 
-def print_dna_factory_banner(logger, script_file_path):
-    """
-    Print the DNA Factory ASCII art banner with version information.
+def get_dna_factory_version(script_file_path):
+    """Read the package version from pyproject.toml (single source of truth).
 
-    Args:
-        logger: Logger instance to use for printing
-        script_file_path: Path to the script file (typically __file__)
+    Walks up from the calling script's directory to find pyproject.toml,
+    so the lookup keeps working even if entry-point scripts move into subdirs.
     """
+    try:
+        current = os.path.dirname(os.path.abspath(script_file_path))
+        while True:
+            candidate = os.path.join(current, "pyproject.toml")
+            if os.path.isfile(candidate):
+                with open(candidate, "rb") as f:
+                    return tomllib.load(f)["project"]["version"]
+            parent = os.path.dirname(current)
+            if parent == current:
+                return None
+            current = parent
+    except Exception:
+        return None
+
+
+def print_dna_factory_banner(logger, script_file_path):
+    """Print the DNA Factory ASCII art banner with version information."""
     logger.info(
         "=========================================================================================="
     )
@@ -106,13 +113,11 @@ def print_dna_factory_banner(logger, script_file_path):
     )
     logger.info("🧬 LLM Post-Training Platform by Dnotitia Inc. 🧬")
 
-    # Get version from VERSION file
-    try:
-        version_file = os.path.join(os.path.dirname(script_file_path), "VERSION")
-        with open(version_file, "r") as f:
-            version = f.read().strip()
-        logger.info(f"🏷️ Version: {version}")
-    except Exception:
+    # Get version from pyproject.toml (single source of truth)
+    version = get_dna_factory_version(script_file_path)
+    if version is not None:
+        logger.info(f"🏷️ Version: v{version}")
+    else:
         logger.info("🏷️ Version: Unknown")
 
     logger.info(
@@ -121,26 +126,14 @@ def print_dna_factory_banner(logger, script_file_path):
 
 
 def print_training_start_message(logger, training_type):
-    """
-    Print the training start message.
-
-    Args:
-        logger: Logger instance to use for printing
-        training_type: Type of training (e.g., "SFT", "DPO")
-    """
+    """Print the training start message."""
     logger.info("")
     logger.info(f"Running {training_type} training script...")
     logger.info("")
 
 
 def print_auto_generated_output_dir(logger, output_dir):
-    """
-    Print the auto-generated output directory with highlighting.
-
-    Args:
-        logger: Logger instance to use for printing
-        output_dir: The auto-generated output directory path
-    """
+    """Print the auto-generated output directory with highlighting."""
     YELLOW = "\033[33m"  # Bright yellow color
     RESET = "\033[0m"
     logger.info("Auto-generated output directory:")
@@ -158,19 +151,7 @@ def print_environment_and_arguments(
     user_specified_args,
     trainer_type,
 ):
-    """
-    Print OS environment variables and all parsed arguments in a formatted way.
-
-    Args:
-        logger: Logger instance to use for printing
-        script_args: Script arguments
-        training_args: Training arguments
-        model_args: Model arguments
-        dataset_mixture_args: Dataset mixture arguments
-        dnotitia_args: Dnotitia-specific arguments
-        user_specified_args: Set of user-specified argument names
-        trainer_type: Type of trainer (e.g., "SFT", "DPO")
-    """
+    """Print OS environment variables and all parsed arguments in a formatted way."""
     logger.info(
         "------------------------------------------------------------------------------------------"
     )
@@ -246,24 +227,14 @@ def resolve_trust_remote_code(model_args, training_args=None):
 
 
 def create_model_kwargs(model_args, training_args, dnotitia_args):
-    """
-    Create model initialization kwargs including quantization config.
-
-    Args:
-        model_args: Model arguments
-        training_args: Training arguments
-        dnotitia_args: Dnotitia-specific arguments
-
-    Returns:
-        dict: Model kwargs ready for AutoModelForCausalLM.from_pretrained()
-    """
-    model_kwargs = dict(
-        revision=model_args.model_revision,
-        trust_remote_code=resolve_trust_remote_code(model_args, training_args),
-        attn_implementation=model_args.attn_implementation,
-        dtype=model_args.dtype,
+    """Create model initialization kwargs including quantization config."""
+    model_kwargs = {
+        "revision": model_args.model_revision,
+        "trust_remote_code": resolve_trust_remote_code(model_args, training_args),
+        "attn_implementation": model_args.attn_implementation,
+        "dtype": model_args.dtype,
         # use_cache=False if training_args.gradient_checkpointing else True,
-    )
+    }
 
     # Quantization config
     quantization_config = get_quantization_config(model_args)
@@ -276,16 +247,7 @@ def create_model_kwargs(model_args, training_args, dnotitia_args):
 
 
 def save_training_results(trainer, train_result, dataset, script_args, training_args):
-    """
-    Save training metrics, model, and related artifacts.
-
-    Args:
-        trainer: The trainer instance
-        train_result: Training result from trainer.train()
-        dataset: The dataset used for training
-        script_args: Script arguments
-        training_args: Training arguments
-    """
+    """Save training metrics, model, and related artifacts."""
     # Log and save metrics
     metrics = train_result.metrics
     metrics["train_samples"] = len(dataset[script_args.dataset_train_split])

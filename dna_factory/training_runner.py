@@ -51,7 +51,7 @@ class TrainingSpec:
     output_dir_tag: str  # e.g. "SFT", "DISTILL"
     trainer_type: str  # e.g. "SFT", "DISTILL"
     trainer_module: str  # e.g. "dna_factory.dnotitia_sft_trainer" (for setup_logging)
-    script_file: str  # caller __file__ (for the banner VERSION lookup)
+    script_file: str  # caller __file__ (for the banner pyproject version lookup)
 
     # CLI parsing.
     defaults_yaml: str  # e.g. "configs/_defaults-SFT.yaml"
