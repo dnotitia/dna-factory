@@ -7,17 +7,18 @@ This module tests the argument parsing and colorization functionality.
 import os
 import sys
 import tempfile
-import pytest
 from pathlib import Path
+
+import pytest
 
 # Add parent directory to path to import dna_factory
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dna_factory.utils.colorize_args import (
+    colorize_user_args,
+    format_args_with_colors,
     parse_user_args,
     parse_yaml_config,
-    colorize_user_args,
-    format_args_with_colors
 )
 
 

@@ -7,9 +7,10 @@ This module tests the configuration file merging functionality.
 import os
 import sys
 import tempfile
-import yaml
-import pytest
 from pathlib import Path
+
+import pytest
+import yaml
 
 # Add parent directory to path to import dna_factory
 sys.path.insert(0, str(Path(__file__).parent.parent))

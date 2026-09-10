@@ -12,7 +12,10 @@ from transformers import TrainerControl, TrainerState
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import dna_factory.periodic_checkpoint as pc
-from dna_factory.periodic_checkpoint import PeriodicCheckpointCallback, parse_duration_to_seconds
+from dna_factory.periodic_checkpoint import (
+    PeriodicCheckpointCallback,
+    parse_duration_to_seconds,
+)
 
 
 def _fresh():

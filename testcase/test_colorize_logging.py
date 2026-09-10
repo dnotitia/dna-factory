@@ -6,8 +6,9 @@ This module tests the logging colorization functionality.
 
 import logging
 import sys
-import pytest
 from pathlib import Path
+
+import pytest
 
 # Add parent directory to path to import dna_factory
 sys.path.insert(0, str(Path(__file__).parent.parent))

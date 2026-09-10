@@ -15,8 +15,8 @@ import pytest
 # Add parent directory to path to import dna_factory
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import dna_factory.rewards as rewards
 import dna_factory.rewards.my_rewards as my_rewards
+from dna_factory import rewards
 from dna_factory.rewards import safe_accuracy_reward
 
 

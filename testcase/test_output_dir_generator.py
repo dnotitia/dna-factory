@@ -5,9 +5,10 @@ This module tests the automatic output directory name generation functionality.
 """
 
 import sys
-import pytest
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 # Add parent directory to path to import dna_factory
 sys.path.insert(0, str(Path(__file__).parent.parent))
