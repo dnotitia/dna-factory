@@ -1,0 +1,22 @@
+# Distill with a SEPARATE vLLM server (vllm_mode: server) instead of colocate. Same student/teacher
+# pair as qwen3-0.6B-distill.yaml — the only thing this demonstrates over that config is the
+# generation backend. The vLLM server serves the *student* (which generates); TRL syncs updated
+# weights into it each step. The teacher stays on the training GPUs.
+#
+#   CUDA_VISIBLE_DEVICES=1 trl vllm-serve --model dnotitia/Qwen3-0.6B --port 8000
+#   CUDA_VISIBLE_DEVICES=0 python distill.py --config configs/Distill/qwen3-0.6B-distill-server.yaml
+
+run_name: qwen3-0.6B-distill-server
+
+model_name_or_path: dnotitia/Qwen3-0.6B          # student
+teacher_model_name_or_path: dnotitia/Qwen3-4B  # teacher (must share the student's vocabulary)
+dataset_name: trl-lib/ultrafeedback-prompt
+
+beta: 1.0  # reverse KL — the on-policy distillation objective
+
+max_completion_length: 512
+per_device_train_batch_size: 8
+
+use_vllm: true
+vllm_mode: server
+vllm_server_base_url: http://localhost:8000

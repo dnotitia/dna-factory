@@ -68,16 +68,15 @@ $ python distill.py \
   --config configs/Distill/qwen3-1.7B-distill.yaml
 ```
 
-Dedicating separate GPUs to generation works the same way as GRPO:
+Dedicating separate GPUs to generation works the same way as GRPO (`configs/Distill/qwen3-0.6B-distill-server.yaml`):
 
 ```bash
 # Terminal 1: vLLM server on a dedicated GPU (serves the *student*, which is what generates)
-$ CUDA_VISIBLE_DEVICES=0 trl vllm-serve --model dnotitia/Qwen3-0.6B
+$ CUDA_VISIBLE_DEVICES=1 trl vllm-serve --model dnotitia/Qwen3-0.6B --port 8000
 
 # Terminal 2: training on the remaining GPUs
-$ CUDA_VISIBLE_DEVICES=1 python distill.py \
-  --config configs/Distill/qwen3-0.6B-distill.yaml \
-  --vllm_mode server
+$ CUDA_VISIBLE_DEVICES=0 python distill.py \
+  --config configs/Distill/qwen3-0.6B-distill-server.yaml
 ```
 
 ## Configuration
