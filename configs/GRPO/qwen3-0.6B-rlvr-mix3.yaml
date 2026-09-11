@@ -1,6 +1,6 @@
 # Per-label judge routing over a 3-dataset PUBLIC mixture: each row's `label` selects one judge
 # (persona/rlvr = reference-guided, need `messages` for expected_output; ccp = direct). Public
-# stand-ins — swap in your own data + rubrics. Serve a judge and set JUDGE_* first (see docs/grpo-rewards-full.md).
+# stand-ins — swap in your own data + rubrics. Serve a judge and set JUDGE_* first (see docs/grpo-rewards.md).
 #
 #   JUDGE_BASE_URL=http://localhost:8001/v1 python grpo.py --config configs/GRPO/qwen3-0.6B-rlvr-mix3.yaml
 

@@ -5,8 +5,7 @@ Generative (LLM-as-judge) reward framework for GRPO training.
     $ JUDGE_BASE_URL=http://localhost:8001/v1 python grpo.py --reward_funcs dna_factory.rewards.judge_reward
 
 make_judge_reward(rubric_file, only_label, reference_column, name) builds one such async judge.
-Quickstart: docs/grpo-rewards.md. Full contract, JUDGE_* reference, and usage examples:
-docs/grpo-rewards-full.md.
+Contract, JUDGE_* reference, and instances: docs/grpo-rewards.md.
 This module is the framework only — all concrete instances (judge_reward, judge_reward_with_reference,
 persona_judge, ccp_judge, rlvr_judge) live in my_rewards.py.
 """
@@ -225,7 +224,7 @@ def make_judge_reward(
     Returns:
         async (prompts, completions, completion_ids, log_metric=None, **kwargs) -> list[float | None].
 
-    See docs/grpo-rewards-full.md for the full contract.
+    See docs/grpo-rewards.md for the contract.
     """
     resolved_name = name or (f"judge_{only_label}" if only_label else "judge_reward")
     state = {"template": None}

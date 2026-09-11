@@ -4,7 +4,7 @@ completion by extracting its final answer (`extractor`) and comparing it, normal
 gold answer in `kwargs[answer_column]`. Faster/cheaper than a judge and dependency-free, but strict
 — unlike `accuracy_reward` (math_verify), "0.5" and "1/2" won't match. `make_string_match_reward`
 builds one reward; the concrete instances (e.g. `boxed_match_reward`) live in my_rewards.py.
-Full contract: docs/grpo-rewards-full.md.
+Contract: docs/grpo-rewards.md.
 """
 
 import re
@@ -91,7 +91,7 @@ def make_string_match_reward(
     Returns:
         (prompts, completions, completion_ids, log_metric=None, **kwargs) -> list[float | None].
 
-    See docs/grpo-rewards-full.md for the full contract.
+    See docs/grpo-rewards.md for the contract.
     """
     if extractor not in _EXTRACTORS:
         raise ValueError(
