@@ -37,7 +37,10 @@ LLM Post-Training (SFT / DPO / GRPO / On-Policy Distillation) on HuggingFace TRL
 1. **Auto-generated output directory** from the model name and CLI args (e.g. `Qwen3-0.6B-SFT-num_train_epochs-2-...`).
 1. **Commented default YAMLs** (`configs/_defaults-*.yaml`), overridable by custom YAML or CLI args.
 1. **Ready-made accelerate configs** for DDP and DeepSpeed ZeRO-1/3 (+ CPU offload).
-1. **Flexible checkpoint interval** You can now specify save intervals in hours (e.g., `6h` to save every 6 hours), making scheduled checkpointing easy and intuitive.
+1. **Flexible checkpoint interval** — save on a wall-clock schedule (e.g. `6h`) instead of a step count.
+1. **Weighted dataset mixtures** via a per-dataset `weight:` (upsample, downsample, or drop) instead of listing the same path N times.
+1. **Composable GRPO rewards** — TRL builtins or dotted paths (judge / string-match / shaping); returning `None` skips a sample so several rewards can share one labeled mixture.
+1. **GRPO dynamic sampling** (`off` / `mask` / `resample`) — drop or refill zero-advantage groups so they don't waste a backward pass.
 
 # How to Run
 
@@ -85,14 +88,16 @@ $ python sft.py \
 DDP for speed, DeepSpeed ZeRO to save memory (ZeRO-1 and ZoRO-3 are supported):
 
 ```bash
-$ accelerate launch --config_file accelerate_configs/multi_gpu.yaml \
-    --num_processes 2 \
-    sft.py
+$ accelerate launch \
+  --config_file accelerate_configs/multi_gpu.yaml \
+  --num_processes 2 \
+  sft.py
 
-$ accelerate launch --config_file accelerate_configs/zero1.yaml \
-    --num_processes 2 \
-    sft.py \
-    --config configs/SFT/qwen3-0.6B-sft.yaml
+$ accelerate launch \
+  --config_file accelerate_configs/zero1.yaml \
+  --num_processes 2 \
+  sft.py \
+  --config configs/SFT/qwen3-0.6B-sft.yaml
 ```
 
 ## Multi-Nodes
