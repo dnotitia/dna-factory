@@ -20,8 +20,12 @@ from trl import (
 
 from dna_factory.dnotitia_arguments import DnotitiaArguments
 from dna_factory.dnotitia_dpo_trainer import DnotitiaDPOTrainer
-from dna_factory.dnotitia_trainer_commons import create_model_kwargs
-from dna_factory.training_runner import TrainingSpec, cli_main, run_training
+from dna_factory.training_runner import (
+    TrainingSpec,
+    cli_main,
+    create_model_kwargs,
+    run_training,
+)
 
 # Initialize logger
 logger = logging.getLogger(__name__)

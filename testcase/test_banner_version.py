@@ -1,5 +1,5 @@
 """
-Test cases for the banner version lookup in dna_factory/dnotitia_trainer_commons.py
+Test cases for the banner version lookup in dna_factory/training_runner.py
 
 The banner version is read from pyproject.toml (single source of truth).
 """
@@ -12,7 +12,7 @@ from pathlib import Path
 # Add parent directory to path to import dna_factory
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from dna_factory.dnotitia_trainer_commons import (
+from dna_factory.training_runner import (
     get_dna_factory_version,
     print_dna_factory_banner,
 )

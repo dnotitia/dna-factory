@@ -17,8 +17,12 @@ from trl.scripts.utils import DatasetConfig
 
 from dna_factory.dnotitia_arguments import DnotitiaArguments
 from dna_factory.dnotitia_grpo_trainer import DnotitiaGRPOTrainer
-from dna_factory.dnotitia_trainer_commons import resolve_trust_remote_code
-from dna_factory.training_runner import TrainingSpec, cli_main, run_training
+from dna_factory.training_runner import (
+    TrainingSpec,
+    cli_main,
+    resolve_trust_remote_code,
+    run_training,
+)
 
 logger = logging.getLogger(__name__)
 
