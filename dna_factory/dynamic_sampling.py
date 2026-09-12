@@ -1,20 +1,27 @@
 """Zero-advantage group handling for GRPO (DAPO dynamic sampling).
 
 A prompt whose rollouts all score the same has advantage 0 on every row and contributes
-nothing to the loss, but TRL still runs its forward/backward.
+nothing to the policy loss, but TRL still runs its forward and backward.
 
-  mask      truncate all-dead micro-batches to one token; drops their compute
-  resample  keep informative groups, generate more until the batch is full
+  mask      truncate all-dead micro-batches to a two-token stub, dropping their compute
+  resample  keep informative groups and generate more until the batch is full
 
-`resample` changes the gradient by design — swapping dead rows for informative ones is the
-point. `mask` leaves it untouched only while a dead row truly contributes nothing: beta == 0,
-no entropy bonus, no router auxiliary loss. The dapo normalizer is `num_items_in_batch`, a
-scalar fixed when the batch is scored, so truncation does not rescale the surviving rows.
+`resample` changes the gradient by design: replacing dead rows with informative ones is the
+point. `mask` leaves it untouched only while a dead row truly contributes nothing, which
+requires beta == 0, no entropy bonus and no router auxiliary loss; the trainer refuses the
+other combinations rather than silently dropping their gradient. The dapo normalizer
+`num_items_in_batch` is a scalar fixed when the batch is scored, so truncation does not
+rescale the surviving rows.
+
+Every collective this module adds is gated on `_all_ranks_agree`, so all ranks enter it or
+none do. Ranks routinely disagree about how many of their rows are dead, so an ungated
+collective here deadlocks against the parameter all-gathers in `compute_loss`.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 import torch
@@ -64,6 +71,7 @@ _UNSUPPORTED_KEYS = (
 # split/shuffle helpers move any batch-dim entry along with its row, so it stays aligned.
 DEAD_KEY = "_dyn_dead"
 # Per-row token count behind the dapo normalizer, taken before a refill replaces the rows.
+# Only `resample` writes and reads it; `mask` never needs it.
 LEN_KEY = "_dyn_len"
 
 
@@ -79,24 +87,13 @@ def row_lengths(batch: dict[str, Any]) -> torch.Tensor:
     return loss_mask.sum(dim=1)
 
 
-def dead_row_mask(advantages: torch.Tensor) -> torch.Tensor:
-    """Rows with zero advantage — the fallback for when group context is unavailable.
-
-    Only exact zeros count. A group whose rollouts all scored the same centres on its own mean,
-    so its advantages are exactly 0 whatever the reward scale, and a tolerance buys nothing while
-    costing real gradients: under `scale_rewards: none` an informative group can sit entirely
-    below any fixed epsilon.
-    """
-    return advantages == 0
-
-
 def groups_are_aligned(advantages: torch.Tensor, num_generations: int) -> bool:
     """Can this local batch be reshaped into whole groups?
 
     Advantages are mean-centred within their group, so a correctly aligned reshape has every row
     of every group summing to zero. A local batch that starts mid-group — which happens when
-    per_device_train_batch_size is not a multiple of num_generations, since TRL splits a group
-    across ranks — fails that check.
+    `per_device_train_batch_size * steps_per_generation` is not a multiple of num_generations,
+    since TRL splits a group across ranks — fails that check.
     """
     n = advantages.shape[0]
     if num_generations < 2 or n < num_generations or n % num_generations:
@@ -111,14 +108,29 @@ def dead_group_mask(advantages: torch.Tensor, num_generations: int) -> torch.Ten
 
     Groups, not rows, are the unit DAPO filters on. A row's own advantage is zero whenever its
     reward equals the group mean, which happens inside perfectly informative groups when the
-    reward has few distinct levels — a three-tier abstention group averaging exactly 0.5 zeroes
-    all of its 0.5 rows. Judging by group std keeps those rows and keeps groups intact.
+    reward takes few distinct values. Judging by group std keeps those rows.
 
-    Rows arrive here in sampler order, before `_prepare_inputs` shuffles them. Falls back to
-    per-row when the local batch does not line up with group boundaries.
+    Rows arrive here in sampler order, before `_prepare_inputs` shuffles them.
+
+    There is deliberately no per-row fallback for a batch that does not fold into whole groups:
+    filtering on `advantages == 0` would discard the informative rows described above, silently
+    and for the rest of the run. `_require_rank_batch_holds_whole_groups` settles the divisibility
+    half of the precondition at construction, so reaching the raise below means a startup
+    invariant was violated. That half is a pure function of config and fires identically on every
+    rank, so the process group dies together rather than hanging.
     """
     if not groups_are_aligned(advantages, num_generations):
-        return dead_row_mask(advantages)
+        n = advantages.shape[0]
+        raise ValueError(
+            f"dynamic sampling cannot fold {n} rows into groups of {num_generations}: "
+            + (f"{n} % {num_generations} != 0"
+               if n % num_generations or n < num_generations
+               else "the reshape divides, but the groups do not sum to zero, so rows from "
+                    "different prompts are being folded into the same group")
+            + ". Group-normalised advantages must sum to zero within each group; see "
+              "`_require_rank_batch_holds_whole_groups` for the configuration this is supposed "
+              "to have guaranteed."
+        )
     std = advantages.view(-1, num_generations).std(dim=1)
     return (std <= 1e-6).repeat_interleave(num_generations)
 
@@ -149,27 +161,55 @@ def check_supported(batch: dict[str, Any]) -> None:
             )
 
 
-def truncate_if_all_dead(inputs: dict[str, Any], stub_len: int = 1) -> tuple[dict[str, Any], bool]:
-    """Shorten the completion axis of a micro-batch whose rows are all dead.
+def truncate_if_all_dead(
+    inputs: dict[str, Any], stub_len: int = 2, zero_mask: bool = False
+) -> tuple[dict[str, Any], bool]:
+    """Shrink a micro-batch whose rows are all dead to a stub, prompt and completion alike.
 
-    Only when every row is dead — a rectangular tensor cannot be shortened for some rows and
-    not others. With per_device_train_batch_size=1 that is every dead row.
+    Only when EVERY row is dead, because a rectangular tensor cannot be shortened for some rows
+    and not others. Skipping the forward instead is not an option: deadness differs per rank, so
+    a rank returning early would leave ZeRO-3's collectives without their partners, and agreeing
+    globally to skip almost never fires (`dead_fraction ** num_processes`). Every rank runs a
+    forward; the aim is to make it cheap.
 
-    Deadness comes from `DEAD_KEY`, decided per group when the batch was scored; a row's own
-    advantage is consulted only if that flag is missing. The returned dict is always a new one
-    with `DEAD_KEY` removed, and the tensors are never edited in place: TRL buffers these
-    micro-batches and hands the same objects back on every inner iteration.
+    Deadness comes from `DEAD_KEY`, decided per group when the batch was scored. The returned
+    dict is always new, with `DEAD_KEY` removed, and no tensor is edited in place: TRL buffers
+    these micro-batches and hands the same objects back on every inner iteration.
+
+    `stub_len` is 2 rather than 1 to avoid a TRL branch, not to save compute (cutting to 1 saves
+    no more than cutting to 2). TRL reads a token axis of length 1 as the signal that
+    `importance_sampling_level == "sequence"` and skips mask normalization, which would put the
+    stub's meaningless position straight into `entropy`, and into `kl` when beta != 0. As of TRL
+    1.12.0 the branch lives in the `masked_seq_mean` and `global_masked_mean` closures of
+    `_compute_loss`; it has been renamed before, so check for the behaviour rather than the name.
+
+    `zero_mask` is off by default because zeroing the mask is neither necessary nor free. Every
+    row here is dead, so `advantages` is exactly 0 and `per_token_loss` is 0 whatever the mask
+    says; meanwhile TRL builds the forward's attention mask as
+    `cat([prompt_mask, completion_mask])`, so a zeroed completion mask drops those positions out
+    of attention and leaves the logits there undefined. Turn it on only when `beta != 0`, where
+    `beta * per_token_kl` is added AFTER the advantage multiply and a live mask would let it
+    reach the loss.
+
+    With the mask live, `entropy` and `sampling_logp_difference` are measured over the surviving
+    tokens instead of the whole completion: a truncated sample of a real quantity rather than a
+    well-formed average over an undefined forward.
     """
     stripped = {k: v for k, v in inputs.items() if k != DEAD_KEY}
     cm = inputs.get("completion_mask")
     if cm is None or cm.dim() < 2:
         return stripped, False
     flags = inputs.get(DEAD_KEY)
-    if flags is not None:
-        all_dead = bool(flags.bool().all())
-    else:
-        adv = inputs.get("advantages")
-        all_dead = adv is not None and bool(dead_row_mask(adv).all())
+    if flags is None:
+        # Deriving deadness from `advantages == 0` here would be wrong for the same reason the
+        # per-row rule is: a row inside an informative group can sit exactly on the group mean.
+        raise KeyError(
+            f"{DEAD_KEY!r} is missing from this micro-batch, so its rows carry no group-level "
+            f"deadness. It is set once per generation in `_generate_and_score_completions` and "
+            f"rides along through TRL's shuffle and split; a batch without it did not come "
+            f"through that path."
+        )
+    all_dead = bool(flags.bool().all())
     keep = max(int(stub_len), 1)
     if not all_dead or keep >= cm.shape[1]:
         return stripped, False
@@ -177,7 +217,23 @@ def truncate_if_all_dead(inputs: dict[str, Any], stub_len: int = 1) -> tuple[dic
         t = stripped.get(key)
         if isinstance(t, torch.Tensor) and t.dim() >= 2 and t.shape[1] == cm.shape[1]:
             stripped[key] = t[:, :keep].clone()
-    stripped["completion_mask"] = torch.zeros_like(cm[:, :keep])
+    # The prompt is forwarded too: `_compute_loss` builds `input_ids` as
+    # cat([prompt_ids, completion_ids]) and attends over the whole thing, keeping logits only for
+    # the last `logits_to_keep` positions. Shortening the completion alone therefore still pays
+    # for every prompt token. Nothing about a dead row's output is read, so the prompt carries no
+    # more meaning here than the completion does.
+    #
+    # Prompts are LEFT-padded, so the real tokens sit at the end and the tail is what to keep.
+    # Keeping the tail also leaves prompt and completion contiguous, which is the layout the
+    # position ids assume.
+    pm = inputs.get("prompt_mask")
+    if isinstance(pm, torch.Tensor) and pm.dim() >= 2 and pm.shape[1] > keep:
+        for key in _PROMPT_KEYS:
+            t = stripped.get(key)
+            if isinstance(t, torch.Tensor) and t.dim() >= 2 and t.shape[1] == pm.shape[1]:
+                stripped[key] = t[:, -keep:].clone()
+    if zero_mask:
+        stripped["completion_mask"] = torch.zeros_like(cm[:, :keep])
     return stripped, True
 
 
@@ -196,6 +252,48 @@ def take_rows(batch: dict[str, Any], idx: torch.Tensor) -> dict[str, Any]:
             out[key] = [val[i] for i in idx.tolist()]
             continue
         out[key] = val
+    return out
+
+
+def concat_chunks(chunks: list[dict[str, Any]]) -> dict[str, Any]:
+    """Undo `split_tensor_dict` for a run of consecutive chunks.
+
+    No padding is needed, unlike `concat_batches`: these chunks came from one split of one already
+    padded batch, so every row-indexed tensor shares its width. Scalars are per-batch values that
+    the split copied into every chunk (`num_items_in_batch` is the one that matters), so the first
+    chunk's copy is the batch's value and is carried through unchanged.
+    """
+    out: dict[str, Any] = {}
+    first = chunks[0]
+    n = first["advantages"].shape[0]
+    for key, val in first.items():
+        if isinstance(val, torch.Tensor) and val.dim() >= 1 and val.shape[0] == n:
+            out[key] = torch.cat([c[key] for c in chunks], dim=0)
+        elif isinstance(val, list) and len(val) == n:
+            out[key] = [row for c in chunks for row in c[key]]
+        else:
+            out[key] = val
+    return out
+
+
+def split_rows(batch: dict[str, Any], num_chunks: int, chunk_size: int) -> list[dict[str, Any]]:
+    """Split back into `num_chunks` dicts of `chunk_size` rows, matching split_tensor_dict's shape.
+
+    Scalars and anything not row-indexed are shared by reference, exactly as TRL's own split does.
+    """
+    n = batch["advantages"].shape[0]
+    out = []
+    for i in range(num_chunks):
+        lo, hi = i * chunk_size, (i + 1) * chunk_size
+        chunk: dict[str, Any] = {}
+        for key, val in batch.items():
+            if isinstance(val, torch.Tensor) and val.dim() >= 1 and val.shape[0] == n:
+                chunk[key] = val[lo:hi]
+            elif isinstance(val, list) and len(val) == n:
+                chunk[key] = val[lo:hi]
+            else:
+                chunk[key] = val
+        out.append(chunk)
     return out
 
 
@@ -246,14 +344,15 @@ class DynamicSamplingMixin:
         self.dynamic_sampling = normalize_mode(dynamic_sampling)
         self.dynamic_sampling_max_rounds = max(int(dynamic_sampling_max_rounds), 0)
         self._resample_iter = None
-        self._warned_unaligned = False
+        self._truncation_is_lossless = True
+        self._warned_regroup = False
         self._warned_short = False
-        self._lengths_verified = False
         if self.dynamic_sampling != "off":
             logger.info("dynamic sampling: mode=%s max_rounds=%d",
                         self.dynamic_sampling, self.dynamic_sampling_max_rounds)
-            # Terms that put gradient on a zero-advantage row. Truncating such a row drops that
-            # gradient, so `mask` stops being a pure compute saving whenever one is enabled.
+            self._require_rank_batch_holds_whole_groups()
+            # Terms that put gradient on a zero-advantage row. `mask` drops that gradient, so it
+            # stops being a pure compute saving the moment one of them is on.
             extra = []
             if getattr(self.args, "beta", 0.0):
                 extra.append(f"beta={self.args.beta}")
@@ -261,10 +360,26 @@ class DynamicSamplingMixin:
                 extra.append("entropy bonus")
             if getattr(self, "aux_loss_enabled", False):
                 extra.append("router auxiliary loss")
+            if extra and self.dynamic_sampling == "mask":
+                raise ValueError(
+                    f"dynamic_sampling='mask' is incompatible with {', '.join(extra)}. `mask` "
+                    f"rests on a dead row contributing exactly 0 to the loss, which holds for the "
+                    f"policy term alone: beta * per_token_kl is added AFTER the advantage "
+                    f"multiply, and the entropy and router terms do not go through the advantage "
+                    f"at all. A dead row still carries their gradient, so truncating it would drop "
+                    f"that gradient on whatever fraction of the batch is dead. Use "
+                    f"dynamic_sampling='resample', where every row surviving the refill keeps its "
+                    f"full gradient, or set the terms above to zero."
+                )
+            # `resample` normally leaves no dead row to truncate, but its refill can come up short
+            # and then it falls back to the original batch. Truncating there would drop the same
+            # gradient `mask` was just refused for, so switch truncation off entirely instead.
+            self._truncation_is_lossless = not extra
             if extra:
-                logger.warning(
-                    "dynamic sampling with %s: dead rows still carry gradient that masking "
-                    "drops, so the result is not identical to a run with it off.",
+                logger.info(
+                    "dynamic sampling 'resample' with %s: truncation of dead micro-batches is "
+                    "disabled, because a dead row still carries gradient from these terms. A "
+                    "short refill costs its full forward instead of dropping that gradient.",
                     ", ".join(extra),
                 )
         if self.dynamic_sampling == "resample" and _is_iterable_dataset(self.train_dataset):
@@ -276,6 +391,34 @@ class DynamicSamplingMixin:
                 "dynamic_sampling='resample' does not support streaming datasets. "
                 "Use dynamic_sampling='mask', or load the dataset without streaming."
             )
+
+    def _require_rank_batch_holds_whole_groups(self) -> None:
+        """Refuse a configuration whose per-rank scored batch cannot be reshaped into groups.
+
+        `dead_group_mask` folds one rank's scored batch with `view(-1, num_generations)`, and that
+        rank holds `per_device_train_batch_size * steps_per_generation` rows. TRL validates only the
+        GLOBAL generation batch (`generation_batch_size % num_generations == 0`), which does not
+        imply the per-rank slice divides: `pd=3, spg=9, procs=7, num_generations=7` gives a global
+        189 that TRL accepts while each rank holds 27, and 27 % 7 != 0. Folding that batch mixes
+        rows from different prompts into one group, whose std then means nothing.
+
+        The condition is a pure function of config, so settle it here, before any GPU time, rather
+        than leaving it to `dead_group_mask` after a generation has been paid for.
+        """
+        pd = self.args.per_device_train_batch_size
+        spg = self.args.steps_per_generation
+        rows_per_rank = pd * spg
+        if rows_per_rank % self.num_generations == 0:
+            return
+        raise ValueError(
+            f"dynamic_sampling={self.dynamic_sampling!r} needs each rank's scored batch to hold "
+            f"whole rollout groups, but per_device_train_batch_size({pd}) * "
+            f"steps_per_generation({spg}) = {rows_per_rank} is not a multiple of "
+            f"num_generations({self.num_generations}). TRL only checks the global generation batch, "
+            f"so this configuration is accepted upstream and would then fold rows from different "
+            f"prompts into the same group here. Raise or lower one of the three so the product "
+            f"divides."
+        )
 
     def _log_dyn(self, metrics):
         mode = "train" if self.model.training else "eval"
@@ -321,15 +464,7 @@ class DynamicSamplingMixin:
         return next(self._resample_iter)
 
     def _keep_informative_groups(self, scored):
-        adv = scored["advantages"]
-        if not groups_are_aligned(adv, self.num_generations) and not self._warned_unaligned:
-            logger.warning(
-                "dynamic sampling: local batch of %d does not align with num_generations=%d, "
-                "falling back to per-row filtering; groups may be split across ranks.",
-                adv.shape[0], self.num_generations,
-            )
-            self._warned_unaligned = True
-        keep = informative_group_mask(adv, self.num_generations)
+        keep = informative_group_mask(scored["advantages"], self.num_generations)
         return take_rows(scored, keep.nonzero(as_tuple=True)[0])
 
     def _resample_until_full(self, scored):
@@ -357,8 +492,7 @@ class DynamicSamplingMixin:
             # Use the original batch; its dead rows are truncated per micro-batch in
             # _prepare_inputs and contribute nothing either way.
             if not self._warned_short:
-                # Once only: on a pool this hits often it would be one line per step, and
-                # dyn/refilled already records every occurrence.
+                # Once only; `dyn/refilled` records every occurrence per step.
                 self._warned_short = True
                 logger.warning(
                     "dynamic sampling: %d/%d informative rows after %d rounds, using the batch "
@@ -378,32 +512,14 @@ class DynamicSamplingMixin:
         return out
 
     def _score(self, batch):
-        """Score a batch and record each row's token count for the dapo normalizer."""
-        scored = super()._generate_and_score_completions(batch)
-        scored[LEN_KEY] = row_lengths(scored)
-        self._verify_lengths(scored)
-        return scored
+        """Score a batch, recording each row's token count when the refill will need it.
 
-    def _verify_lengths(self, scored):
-        """Check once that LEN_KEY sums to TRL's own `num_items_in_batch`.
-
-        A refill has to rebuild that denominator for its new rows, and getting it wrong rescales
-        the whole loss. What goes into it is TRL's decision and has changed across versions, so
-        it is checked against the value TRL computed for the same rows rather than assumed.
+        LEN_KEY is only consumed by `_resample_until_full`, so `mask` does not pay for it.
         """
-        if self._lengths_verified:
-            return
-        self._lengths_verified = True
-        want = scored.get("num_items_in_batch")
-        if want is None:
-            return
-        got = self.accelerator.gather(scored[LEN_KEY].sum().reshape(1)).sum()
-        if int(got) != int(want):
-            logger.warning(
-                "dynamic sampling: completion-token count %d does not match TRL's %d; "
-                "the dapo normalizer will be off by that ratio after a refill.",
-                int(got), int(want),
-            )
+        scored = super()._generate_and_score_completions(batch)
+        if self.dynamic_sampling == "resample":
+            scored[LEN_KEY] = row_lengths(scored)
+        return scored
 
     def _generate_and_score_completions(self, generation_batch):
         if self.dynamic_sampling == "off" or not self.model.training:
@@ -416,13 +532,91 @@ class DynamicSamplingMixin:
         dead = dead_group_mask(scored["advantages"], self.num_generations)
         scored[DEAD_KEY] = dead
         self._log_dyn({"dyn/dead_frac": dead.float().mean().item()})
+        if os.environ.get("DYN_LOG_PER_RANK"):
+            # `dyn/dead_frac` goes through `self._metrics`, which only rank 0 reports, so it says
+            # nothing about whether ranks disagree. Set this to see each rank's own count, which
+            # is what a test of the distributed paths has to exercise.
+            #
+            # WARNING and not INFO on purpose: `TrainingArguments.log_level_replica` defaults to
+            # "warning", so INFO is dropped on every rank but 0, precisely the ranks this line
+            # exists to observe.
+            logger.warning("dyn/per-rank rank=%d dead=%d/%d",
+                           self.accelerator.process_index, int(dead.sum()), dead.numel())
         return scored
 
+    def _regroup_dead_rows(self) -> bool:
+        """Rearrange the freshly built buffer so dead rows land in whole micro-batches.
+
+        Truncation needs EVERY row of a micro-batch to be dead, because a rectangular tensor cannot
+        be shortened per row. TRL shuffles the scored batch before splitting it, which scatters dead
+        rows, so at per_device_train_batch_size > 1 an all-dead micro-batch is a coincidence:
+        `dead_fraction ** pd`, i.e. 12.5% at pd=4 and 0.4% at pd=8 for a dead fraction of 0.5.
+
+        Sorting within one optimizer step's slice fixes that without changing what that step trains
+        on. A step consumes `gradient_accumulation_steps` consecutive buffer entries, and under
+        `loss_type='dapo'` its loss is `(per_token_loss * mask).sum() / num_items_in_batch` with a
+        normalizer fixed at scoring time: a sum over exactly those rows, so permuting them inside
+        the slice leaves the accumulated gradient identical. ('grpo' averages per row and divides
+        by ga, the same uniform average, so it is invariant too.)
+
+        Sorting across the WHOLE generation batch would not be. Dead rows would pile into the first
+        slices and a step could come out entirely dead, taking an optimizer step on a zero gradient
+        while the optimizer's moments decay and the LR schedule advances.
+
+        Returns True when the buffer was rearranged.
+        """
+        buf = self._buffered_inputs
+        ga = self.current_gradient_accumulation_steps
+        if not buf or ga <= 1 or len(buf) % ga:
+            # Windows that straddle generations cannot be reasoned about this way; leave them be.
+            if not self._warned_regroup and buf and len(buf) % ga:
+                self._warned_regroup = True
+                logger.warning(
+                    "dynamic sampling: steps_per_generation(%d) is not a multiple of "
+                    "gradient_accumulation_steps(%d), so an optimizer step straddles two "
+                    "generations and dead rows cannot be regrouped; truncation stays coincidental.",
+                    len(buf), ga,
+                )
+            return False
+
+        moved = False
+        for start in range(0, len(buf), ga):
+            window = buf[start:start + ga]
+            flags = [c.get(DEAD_KEY) for c in window]
+            if any(f is None for f in flags):
+                continue
+            dead = torch.cat([f.reshape(-1) for f in flags])
+            if bool(dead.all()) or not bool(dead.any()):
+                continue  # already uniform; nothing to gain
+            order = torch.argsort(dead.int(), descending=True, stable=True)
+            merged = concat_chunks(window)
+            rows = merged["advantages"].shape[0]
+            regrouped = take_rows(merged, order.to(merged["advantages"].device))
+            buf[start:start + ga] = split_rows(regrouped, ga, rows // ga)
+            moved = True
+        return moved
+
     def _prepare_inputs(self, generation_batch):
-        inputs = super()._prepare_inputs(generation_batch)
         if self.dynamic_sampling == "off" or not self.model.training:
-            return inputs
-        inputs, did = truncate_if_all_dead(inputs)
-        if did:
-            self._log_dyn({"dyn/truncated_microbatches": 1.0})
+            return super()._prepare_inputs(generation_batch)
+
+        # Read the same condition TRL uses, before it runs, so we know whether the call below
+        # rebuilds the buffer. Reaching into `_buffered_inputs` afterwards is the only coupling to
+        # TRL's internals here; its own body stays untouched, which is what keeps this working
+        # across versions where a copied `_prepare_inputs` would silently drift.
+        generate_every = self.args.steps_per_generation * self.num_iterations
+        fresh = self._step % generate_every == 0 or self._buffered_inputs is None
+
+        inputs = super()._prepare_inputs(generation_batch)
+
+        if fresh and self.args.per_device_train_batch_size > 1 and self._truncation_is_lossless:
+            if self._regroup_dead_rows():
+                # super() already handed back the pre-sort chunk; re-read the sorted one.
+                inputs = self._buffered_inputs[self._step % self.args.steps_per_generation]
+                self._log_dyn({"dyn/regrouped_generations": 1.0})
+
+        if self._truncation_is_lossless:
+            inputs, did = truncate_if_all_dead(inputs)
+            if did:
+                self._log_dyn({"dyn/truncated_microbatches": 1.0})
         return inputs
