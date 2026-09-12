@@ -72,7 +72,8 @@ $ python sft.py \
   --dataset_name dnotitia/Reasoning_R1_Kor_completion_25k_sharegpt_v1 \
   --num_train_epochs 2
 
-$ python sft.py --config configs/SFT/qwen3-0.6B-sft.yaml
+$ python sft.py \
+  --config configs/SFT/qwen3-0.6B-sft.yaml
 
 $ python sft.py \
   --config configs/SFT/qwen3-0.6B-sft.yaml \
