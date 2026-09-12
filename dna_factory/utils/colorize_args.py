@@ -1,6 +1,7 @@
-import pprint
-import yaml
 import os
+import pprint
+
+import yaml
 
 
 def parse_user_args(args):

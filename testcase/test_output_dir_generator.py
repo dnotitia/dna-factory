@@ -31,8 +31,14 @@ class TestGenerateAutoOutputDir:
         dnotitia_args = SimpleNamespace()
 
         result = generate_auto_output_dir(
-            model_name, user_args, script_args, training_args,
-            model_args, dataset_mixture_args, dnotitia_args, "SFT"
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "SFT",
         )
 
         # Should just be model name + SFT
@@ -50,8 +56,14 @@ class TestGenerateAutoOutputDir:
         dnotitia_args = SimpleNamespace()
 
         result = generate_auto_output_dir(
-            model_name, user_args, script_args, training_args,
-            model_args, dataset_mixture_args, dnotitia_args, "SFT"
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "SFT",
         )
 
         # Should extract only the part after the slash
@@ -60,17 +72,25 @@ class TestGenerateAutoOutputDir:
     def test_with_multiple_user_args(self):
         """Test with multiple user-specified arguments"""
         model_name = "test/model"
-        user_args = {'learning_rate', 'per_device_train_batch_size', 'num_train_epochs'}
+        user_args = {"learning_rate", "per_device_train_batch_size", "num_train_epochs"}
 
         script_args = SimpleNamespace()
-        training_args = SimpleNamespace(learning_rate=0.001, per_device_train_batch_size=32, num_train_epochs=10)
+        training_args = SimpleNamespace(
+            learning_rate=0.001, per_device_train_batch_size=32, num_train_epochs=10
+        )
         model_args = SimpleNamespace()
         dataset_mixture_args = SimpleNamespace()
         dnotitia_args = SimpleNamespace()
 
         result = generate_auto_output_dir(
-            model_name, user_args, script_args, training_args,
-            model_args, dataset_mixture_args, dnotitia_args, "SFT"
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "SFT",
         )
 
         assert "model-SFT" in result
@@ -81,7 +101,7 @@ class TestGenerateAutoOutputDir:
     def test_gradient_accumulation_steps_abbreviation(self):
         """Test that gradient_accumulation_steps is abbreviated to steps"""
         model_name = "test/model"
-        user_args = {'gradient_accumulation_steps'}
+        user_args = {"gradient_accumulation_steps"}
 
         script_args = SimpleNamespace()
         training_args = SimpleNamespace(gradient_accumulation_steps=16)
@@ -90,8 +110,14 @@ class TestGenerateAutoOutputDir:
         dnotitia_args = SimpleNamespace()
 
         result = generate_auto_output_dir(
-            model_name, user_args, script_args, training_args,
-            model_args, dataset_mixture_args, dnotitia_args, "SFT"
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "SFT",
         )
 
         assert result == "model-SFT.steps-16"
@@ -100,50 +126,62 @@ class TestGenerateAutoOutputDir:
     def test_excludes_output_dir_arg(self):
         """Test that output_dir is excluded from auto-generated name"""
         model_name = "test/model"
-        user_args = {'output_dir', 'learning_rate'}
+        user_args = {"output_dir", "learning_rate"}
 
         script_args = SimpleNamespace()
-        training_args = SimpleNamespace(output_dir='/some/path', learning_rate=0.001)
+        training_args = SimpleNamespace(output_dir="/some/path", learning_rate=0.001)
         model_args = SimpleNamespace()
         dataset_mixture_args = SimpleNamespace()
         dnotitia_args = SimpleNamespace()
 
         result = generate_auto_output_dir(
-            model_name, user_args, script_args, training_args,
-            model_args, dataset_mixture_args, dnotitia_args, "SFT"
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "SFT",
         )
 
         # Should not contain output_dir
-        assert 'output_dir' not in result
-        assert '/some/path' not in result
+        assert "output_dir" not in result
+        assert "/some/path" not in result
         # Should contain learning_rate
-        assert 'lr-0.001' in result
+        assert "lr-0.001" in result
 
     def test_excludes_model_name_or_path_arg(self):
         """Test that model_name_or_path is excluded from auto-generated name"""
         model_name = "test/model"
-        user_args = {'model_name_or_path', 'num_train_epochs'}
+        user_args = {"model_name_or_path", "num_train_epochs"}
 
         script_args = SimpleNamespace()
         training_args = SimpleNamespace(num_train_epochs=5)
-        model_args = SimpleNamespace(model_name_or_path='test/model')
+        model_args = SimpleNamespace(model_name_or_path="test/model")
         dataset_mixture_args = SimpleNamespace()
         dnotitia_args = SimpleNamespace()
 
         result = generate_auto_output_dir(
-            model_name, user_args, script_args, training_args,
-            model_args, dataset_mixture_args, dnotitia_args, "SFT"
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "SFT",
         )
 
         # Should not contain model_name_or_path
-        assert 'model-name-or-path' not in result
+        assert "model-name-or-path" not in result
         # Should contain epochs
-        assert 'ep-5' in result
+        assert "ep-5" in result
 
     def test_with_boolean_values(self):
         """Test with boolean argument values"""
         model_name = "test/model"
-        user_args = {'use_lora', 'gradient_checkpointing'}
+        user_args = {"use_lora", "gradient_checkpointing"}
 
         script_args = SimpleNamespace()
         training_args = SimpleNamespace(gradient_checkpointing=True)
@@ -152,18 +190,24 @@ class TestGenerateAutoOutputDir:
         dnotitia_args = SimpleNamespace()
 
         result = generate_auto_output_dir(
-            model_name, user_args, script_args, training_args,
-            model_args, dataset_mixture_args, dnotitia_args, "SFT"
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "SFT",
         )
 
         # Boolean should be lowercase
-        assert 'use_lora-false' in result
-        assert 'grad-true' in result
+        assert "use_lora-false" in result
+        assert "grad-true" in result
 
     def test_with_list_values(self):
         """Test with list argument values"""
         model_name = "test/model"
-        user_args = {'layers'}
+        user_args = {"layers"}
 
         script_args = SimpleNamespace(layers=[1, 2, 3])
         training_args = SimpleNamespace()
@@ -172,17 +216,23 @@ class TestGenerateAutoOutputDir:
         dnotitia_args = SimpleNamespace()
 
         result = generate_auto_output_dir(
-            model_name, user_args, script_args, training_args,
-            model_args, dataset_mixture_args, dnotitia_args, "SFT"
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "SFT",
         )
 
         # List should be joined with dashes
-        assert 'layers-1-2-3' in result
+        assert "layers-1-2-3" in result
 
     def test_with_tuple_values(self):
         """Test with tuple argument values"""
         model_name = "test/model"
-        user_args = {'dimensions'}
+        user_args = {"dimensions"}
 
         script_args = SimpleNamespace(dimensions=(256, 512))
         training_args = SimpleNamespace()
@@ -191,20 +241,34 @@ class TestGenerateAutoOutputDir:
         dnotitia_args = SimpleNamespace()
 
         result = generate_auto_output_dir(
-            model_name, user_args, script_args, training_args,
-            model_args, dataset_mixture_args, dnotitia_args, "SFT"
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "SFT",
         )
 
-        assert 'dimensions-256-512' in result
+        assert "dimensions-256-512" in result
 
     def test_complex_output_dir_name(self):
         """Test generating a complex output directory name with many parameters"""
         model_name = "HuggingFace/Qwen3-0.6B"
         user_args = {
-            'learning_rate', 'per_device_train_batch_size', 'num_train_epochs',
-            'use_lora', 'lora_rank', 'gradient_checkpointing',
-            'max_length', 'packing', 'assistant_only_loss',
-            'debug_first_n_batches', 'run_name', 'use_liger_kernel',
+            "learning_rate",
+            "per_device_train_batch_size",
+            "num_train_epochs",
+            "use_lora",
+            "lora_rank",
+            "gradient_checkpointing",
+            "max_length",
+            "packing",
+            "assistant_only_loss",
+            "debug_first_n_batches",
+            "run_name",
+            "use_liger_kernel",
         }
 
         script_args = SimpleNamespace()
@@ -219,27 +283,32 @@ class TestGenerateAutoOutputDir:
             run_name="test",
             use_liger_kernel=True,
         )
-        model_args = SimpleNamespace(
-            use_lora=True,
-            lora_rank=8
-        )
+        model_args = SimpleNamespace(use_lora=True, lora_rank=8)
         dataset_mixture_args = SimpleNamespace()
         dnotitia_args = SimpleNamespace(
             debug_first_n_batches=10,
         )
 
         result = generate_auto_output_dir(
-            model_name, user_args, script_args, training_args,
-            model_args, dataset_mixture_args, dnotitia_args, "SFT"
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "SFT",
         )
 
-        assert ('Qwen3-0.6B-SFT.run-test.max-16000.pack-true.ao_loss-true.ep-3.bs-16.lr-0.0001.'
-                'grad-true.liger-true.debug-10.use_lora-true.lora_rank-8') == result
+        assert (
+            "Qwen3-0.6B-SFT.run-test.max-16000.pack-true.ao_loss-true.ep-3.bs-16.lr-0.0001."
+            "grad-true.liger-true.debug-10.use_lora-true.lora_rank-8"
+        ) == result
 
     def test_datasets_with_multiple_datasets(self):
         """Test with multiple datasets to check that count is shown instead of full names"""
         model_name = "dnotitia/Qwen3-4B"
-        user_args = {'datasets'}
+        user_args = {"datasets"}
 
         # Create mock dataset objects
         dataset1 = SimpleNamespace(path="dnotitia/dpo_claude3.5-sonnet_15k_v3")
@@ -250,12 +319,20 @@ class TestGenerateAutoOutputDir:
         script_args = SimpleNamespace()
         training_args = SimpleNamespace()
         model_args = SimpleNamespace()
-        dataset_mixture_args = SimpleNamespace(datasets=[dataset1, dataset2, dataset3, dataset4])
+        dataset_mixture_args = SimpleNamespace(
+            datasets=[dataset1, dataset2, dataset3, dataset4]
+        )
         dnotitia_args = SimpleNamespace()
 
         result = generate_auto_output_dir(
-            model_name, user_args, script_args, training_args,
-            model_args, dataset_mixture_args, dnotitia_args, "DPO"
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "DPO",
         )
 
         # Should show organization name and count instead of full dataset names
@@ -267,7 +344,7 @@ class TestGenerateAutoOutputDir:
     def test_distillation_teacher_model(self):
         """Test the DISTILL training type and the teacher model abbreviation"""
         model_name = "dnotitia/Qwen3-0.6B"
-        user_args = {'teacher_model_name_or_path', 'beta', 'max_completion_length'}
+        user_args = {"teacher_model_name_or_path", "beta", "max_completion_length"}
 
         script_args = SimpleNamespace()
         training_args = SimpleNamespace(
@@ -280,13 +357,21 @@ class TestGenerateAutoOutputDir:
         dnotitia_args = SimpleNamespace()
 
         result = generate_auto_output_dir(
-            model_name, user_args, script_args, training_args,
-            model_args, dataset_mixture_args, dnotitia_args, "DISTILL"
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "DISTILL",
         )
 
         # The '/' in the teacher id is normalized to '-', as for every other value
-        assert result == "Qwen3-0.6B-DISTILL.teacher-dnotitia-Qwen3-1.7B.mcl-512.beta-1.0"
+        assert (
+            result == "Qwen3-0.6B-DISTILL.teacher-dnotitia-Qwen3-1.7B.mcl-512.beta-1.0"
+        )
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

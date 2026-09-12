@@ -15,9 +15,8 @@ import pytest
 # Add parent directory to path to import dna_factory
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import dna_factory.rewards.my_rewards as my_rewards
 from dna_factory import rewards
-from dna_factory.rewards import safe_accuracy_reward
+from dna_factory.rewards import my_rewards, safe_accuracy_reward
 
 
 def _completions(*contents):
@@ -29,7 +28,7 @@ class TestSafeAccuracyReward:
 
     def test_referenced_by_dotted_path(self):
         """grpo.py resolves dotted paths via getattr: dna_factory.rewards.X must exist."""
-        assert getattr(rewards, "safe_accuracy_reward") is safe_accuracy_reward
+        assert rewards.safe_accuracy_reward is safe_accuracy_reward
         assert safe_accuracy_reward.__name__ == "safe_accuracy_reward"
 
     def test_fast_path_matches_upstream(self, monkeypatch):

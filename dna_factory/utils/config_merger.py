@@ -1,7 +1,8 @@
 import os
 import tempfile
-import yaml
 from pathlib import Path
+
+import yaml
 
 
 def merge_config_files(default_config_path, user_config_path=None):

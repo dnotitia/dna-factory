@@ -60,8 +60,7 @@ def _normalize(text):
     if text is None:
         return None
     text = re.sub(r"\s+", " ", text.strip()).lower()
-    if text.endswith("."):
-        text = text[:-1]
+    text = text.removesuffix(".")
     text = re.sub(r"(?<=\d),(?=\d)", "", text)
     for prefix in ("\\$", "$"):
         if text.startswith(prefix):

@@ -1,13 +1,19 @@
 from datasets import Dataset
-from trl import SFTTrainer, SFTConfig
 from transformers import AutoTokenizer
+from trl import SFTConfig, SFTTrainer
 
 ds = Dataset.from_list(
     [
-        {"messages": [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "world"}]}
+        {
+            "messages": [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "world"},
+            ]
+        }
         for _ in range(10)
     ]
 )
+
 
 # Load tokenizer and set up chat template with generation keyword
 tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-0.6B")

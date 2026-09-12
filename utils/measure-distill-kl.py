@@ -11,6 +11,7 @@ with the same prompts/seed to see whether training moved the objective on unseen
         --student ./my-distilled-checkpoint --tokenizer dnotitia/Qwen3-1.7B \
         --teacher dnotitia/Qwen3-1.7B                                    # after
 """
+
 import argparse
 
 import torch
@@ -48,13 +49,17 @@ def main():
     tok.padding_side = "left"
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
-    eos_ids = tok.eos_token_id if isinstance(tok.eos_token_id, list) else [tok.eos_token_id]
+    eos_ids = (
+        tok.eos_token_id if isinstance(tok.eos_token_id, list) else [tok.eos_token_id]
+    )
     if tok.pad_token_id is not None:
         eos_ids = list({*eos_ids, tok.pad_token_id})
 
     ds = load_dataset(args.dataset, split=args.split).select(range(args.num_prompts))
     texts = [
-        tok.apply_chat_template(ex["prompt"], tokenize=False, add_generation_prompt=True)
+        tok.apply_chat_template(
+            ex["prompt"], tokenize=False, add_generation_prompt=True
+        )
         for ex in ds
     ]
 
@@ -67,8 +72,10 @@ def main():
 
     kl_sum, tok_count, len_sum = 0.0, 0, 0
     for start in range(0, len(texts), args.batch_size):
-        batch_texts = texts[start:start + args.batch_size]
-        enc = tok(batch_texts, return_tensors="pt", padding=True, add_special_tokens=False).to("cuda")
+        batch_texts = texts[start : start + args.batch_size]
+        enc = tok(
+            batch_texts, return_tensors="pt", padding=True, add_special_tokens=False
+        ).to("cuda")
         prompt_len = enc["input_ids"].shape[1]
 
         torch.manual_seed(args.seed + start)
@@ -89,8 +96,8 @@ def main():
         t_logits = teacher(input_ids=out, attention_mask=attention_mask).logits
         # logits at position i predict token i+1, so the completion tokens are predicted from
         # positions [prompt_len - 1, ..., end - 1]
-        s_logits = s_logits[:, prompt_len - 1:-1].float() / args.temperature
-        t_logits = t_logits[:, prompt_len - 1:-1].float() / args.temperature
+        s_logits = s_logits[:, prompt_len - 1 : -1].float() / args.temperature
+        t_logits = t_logits[:, prompt_len - 1 : -1].float() / args.temperature
 
         s_logprobs = F.log_softmax(s_logits, dim=-1)
         t_logprobs = F.log_softmax(t_logits, dim=-1)

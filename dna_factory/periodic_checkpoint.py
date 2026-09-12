@@ -65,7 +65,9 @@ def parse_duration_to_seconds(value) -> float:
     if value is None:
         return 0.0
     if isinstance(value, bool):
-        raise ValueError(f"Invalid duration {value!r}: expected seconds or a string like '6h'.")
+        raise ValueError(
+            f"Invalid duration {value!r}: expected seconds or a string like '6h'."
+        )
     if isinstance(value, (int, float)):
         if value < 0:
             raise ValueError(f"Invalid duration {value!r}: must be non-negative.")

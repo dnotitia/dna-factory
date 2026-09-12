@@ -39,6 +39,7 @@ def normalize_mode(mode) -> str:
         raise ValueError(f"dynamic_sampling must be one of {MODES}, got {mode!r}")
     return mode.lower()
 
+
 # TRL left-pads prompts and right-pads completions. Padding on the wrong side inserts a gap
 # between prompt and completion that shifts positions and breaks the stored logps.
 _PROMPT_KEYS = ("prompt_ids", "prompt_mask")
@@ -123,19 +124,23 @@ def dead_group_mask(advantages: torch.Tensor, num_generations: int) -> torch.Ten
         n = advantages.shape[0]
         raise ValueError(
             f"dynamic sampling cannot fold {n} rows into groups of {num_generations}: "
-            + (f"{n} % {num_generations} != 0"
-               if n % num_generations or n < num_generations
-               else "the reshape divides, but the groups do not sum to zero, so rows from "
-                    "different prompts are being folded into the same group")
+            + (
+                f"{n} % {num_generations} != 0"
+                if n % num_generations or n < num_generations
+                else "the reshape divides, but the groups do not sum to zero, so rows from "
+                "different prompts are being folded into the same group"
+            )
             + ". Group-normalised advantages must sum to zero within each group; see "
-              "`_require_rank_batch_holds_whole_groups` for the configuration this is supposed "
-              "to have guaranteed."
+            "`_require_rank_batch_holds_whole_groups` for the configuration this is supposed "
+            "to have guaranteed."
         )
     std = advantages.view(-1, num_generations).std(dim=1)
     return (std <= 1e-6).repeat_interleave(num_generations)
 
 
-def informative_group_mask(advantages: torch.Tensor, num_generations: int) -> torch.Tensor:
+def informative_group_mask(
+    advantages: torch.Tensor, num_generations: int
+) -> torch.Tensor:
     return ~dead_group_mask(advantages, num_generations)
 
 
@@ -147,6 +152,7 @@ def _is_iterable_dataset(dataset) -> bool:
         return True
     try:
         from datasets import IterableDataset, IterableDatasetDict
+
         return isinstance(dataset, (IterableDataset, IterableDatasetDict))
     except ImportError:
         return False
@@ -230,7 +236,11 @@ def truncate_if_all_dead(
     if isinstance(pm, torch.Tensor) and pm.dim() >= 2 and pm.shape[1] > keep:
         for key in _PROMPT_KEYS:
             t = stripped.get(key)
-            if isinstance(t, torch.Tensor) and t.dim() >= 2 and t.shape[1] == pm.shape[1]:
+            if (
+                isinstance(t, torch.Tensor)
+                and t.dim() >= 2
+                and t.shape[1] == pm.shape[1]
+            ):
                 stripped[key] = t[:, -keep:].clone()
     if zero_mask:
         stripped["completion_mask"] = torch.zeros_like(cm[:, :keep])
@@ -276,7 +286,9 @@ def concat_chunks(chunks: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def split_rows(batch: dict[str, Any], num_chunks: int, chunk_size: int) -> list[dict[str, Any]]:
+def split_rows(
+    batch: dict[str, Any], num_chunks: int, chunk_size: int
+) -> list[dict[str, Any]]:
     """Split back into `num_chunks` dicts of `chunk_size` rows, matching split_tensor_dict's shape.
 
     Scalars and anything not row-indexed are shared by reference, exactly as TRL's own split does.
@@ -287,9 +299,13 @@ def split_rows(batch: dict[str, Any], num_chunks: int, chunk_size: int) -> list[
         lo, hi = i * chunk_size, (i + 1) * chunk_size
         chunk: dict[str, Any] = {}
         for key, val in batch.items():
-            if isinstance(val, torch.Tensor) and val.dim() >= 1 and val.shape[0] == n:
-                chunk[key] = val[lo:hi]
-            elif isinstance(val, list) and len(val) == n:
+            if (
+                isinstance(val, torch.Tensor)
+                and val.dim() >= 1
+                and val.shape[0] == n
+                or isinstance(val, list)
+                and len(val) == n
+            ):
                 chunk[key] = val[lo:hi]
             else:
                 chunk[key] = val
@@ -297,7 +313,9 @@ def split_rows(batch: dict[str, Any], num_chunks: int, chunk_size: int) -> list[
     return out
 
 
-def concat_batches(a: dict[str, Any], b: dict[str, Any], pad_token_id: int = 0) -> dict[str, Any]:
+def concat_batches(
+    a: dict[str, Any], b: dict[str, Any], pad_token_id: int = 0
+) -> dict[str, Any]:
     """Concatenate two scored batches along rows.
 
     Prompt tensors are left-padded, completion tensors right-padded, matching TRL's layout so
@@ -308,7 +326,11 @@ def concat_batches(a: dict[str, Any], b: dict[str, Any], pad_token_id: int = 0) 
         if key not in b:
             continue
         va, vb = a[key], b[key]
-        if isinstance(va, torch.Tensor) and isinstance(vb, torch.Tensor) and va.dim() >= 1:
+        if (
+            isinstance(va, torch.Tensor)
+            and isinstance(vb, torch.Tensor)
+            and va.dim() >= 1
+        ):
             if va.dim() >= 2 and vb.dim() >= 2 and va.shape[1] != vb.shape[1]:
                 width = max(va.shape[1], vb.shape[1])
                 left = key in _PROMPT_KEYS
@@ -339,7 +361,9 @@ class DynamicSamplingMixin:
         class MyTrainer(DynamicSamplingMixin, GRPOTrainer): ...
     """
 
-    def __init__(self, *args, dynamic_sampling="off", dynamic_sampling_max_rounds=2, **kwargs):
+    def __init__(
+        self, *args, dynamic_sampling="off", dynamic_sampling_max_rounds=2, **kwargs
+    ):
         super().__init__(*args, **kwargs)
         self.dynamic_sampling = normalize_mode(dynamic_sampling)
         self.dynamic_sampling_max_rounds = max(int(dynamic_sampling_max_rounds), 0)
@@ -348,8 +372,11 @@ class DynamicSamplingMixin:
         self._warned_regroup = False
         self._warned_short = False
         if self.dynamic_sampling != "off":
-            logger.info("dynamic sampling: mode=%s max_rounds=%d",
-                        self.dynamic_sampling, self.dynamic_sampling_max_rounds)
+            logger.info(
+                "dynamic sampling: mode=%s max_rounds=%d",
+                self.dynamic_sampling,
+                self.dynamic_sampling_max_rounds,
+            )
             self._require_rank_batch_holds_whole_groups()
             # Terms that put gradient on a zero-advantage row. `mask` drops that gradient, so it
             # stops being a pure compute saving the moment one of them is on.
@@ -382,7 +409,9 @@ class DynamicSamplingMixin:
                     "short refill costs its full forward instead of dropping that gradient.",
                     ", ".join(extra),
                 )
-        if self.dynamic_sampling == "resample" and _is_iterable_dataset(self.train_dataset):
+        if self.dynamic_sampling == "resample" and _is_iterable_dataset(
+            self.train_dataset
+        ):
             # The refill dataloader is built from a RepeatSampler, and samplers do not apply to
             # IterableDataset. TRL instead wraps iterable data with repeat_iterable_dataset so each
             # prompt appears num_generations times; without that the refill batch would group
@@ -428,7 +457,10 @@ class DynamicSamplingMixin:
     def _all_ranks_agree(self, value: int) -> int:
         """All-reduce sum. _generate_and_score_completions gathers internally, so every rank
         must call it the same number of times; the refill loop's exit is decided globally."""
-        if not torch.distributed.is_available() or not torch.distributed.is_initialized():
+        if (
+            not torch.distributed.is_available()
+            or not torch.distributed.is_initialized()
+        ):
             return value
         t = torch.tensor([value], device=self.accelerator.device, dtype=torch.long)
         torch.distributed.all_reduce(t, op=torch.distributed.ReduceOp.SUM)
@@ -451,15 +483,18 @@ class DynamicSamplingMixin:
 
     def _next_resample_batch(self):
         if self._resample_iter is None:
+
             def cyclic():
                 while True:
                     yield from self._get_dataloader(
                         dataset=self.train_dataset,
                         description="Resample",
-                        batch_size=self._train_batch_size * self.args.steps_per_generation,
+                        batch_size=self._train_batch_size
+                        * self.args.steps_per_generation,
                         sampler_fn=self._get_resample_sampler,
                         is_training=True,
                     )
+
             self._resample_iter = cyclic()
         return next(self._resample_iter)
 
@@ -475,7 +510,10 @@ class DynamicSamplingMixin:
 
         while rounds < self.dynamic_sampling_max_rounds:
             have = pool["advantages"].shape[0]
-            if self._all_ranks_agree(int(have >= target)) == self.accelerator.num_processes:
+            if (
+                self._all_ranks_agree(int(have >= target))
+                == self.accelerator.num_processes
+            ):
                 break
             extra = self._score(self._next_resample_batch())
             good = self._keep_informative_groups(extra)
@@ -487,7 +525,9 @@ class DynamicSamplingMixin:
         # took the fallback would not join it. Deciding per rank hangs the run whenever ranks end
         # up with different numbers of informative rows, which is the normal case.
         have = pool["advantages"].shape[0]
-        all_filled = self._all_ranks_agree(int(have >= target)) == self.accelerator.num_processes
+        all_filled = (
+            self._all_ranks_agree(int(have >= target)) == self.accelerator.num_processes
+        )
         if not all_filled:
             # Use the original batch; its dead rows are truncated per micro-batch in
             # _prepare_inputs and contribute nothing either way.
@@ -497,7 +537,9 @@ class DynamicSamplingMixin:
                 logger.warning(
                     "dynamic sampling: %d/%d informative rows after %d rounds, using the batch "
                     "as-is. Logged once; dyn/refilled tracks it per step.",
-                    have, target, rounds,
+                    have,
+                    target,
+                    rounds,
                 )
             self._log_dyn({"dyn/gen_rounds": float(rounds + 1), "dyn/refilled": 0.0})
             return scored
@@ -540,8 +582,12 @@ class DynamicSamplingMixin:
             # WARNING and not INFO on purpose: `TrainingArguments.log_level_replica` defaults to
             # "warning", so INFO is dropped on every rank but 0, precisely the ranks this line
             # exists to observe.
-            logger.warning("dyn/per-rank rank=%d dead=%d/%d",
-                           self.accelerator.process_index, int(dead.sum()), dead.numel())
+            logger.warning(
+                "dyn/per-rank rank=%d dead=%d/%d",
+                self.accelerator.process_index,
+                int(dead.sum()),
+                dead.numel(),
+            )
         return scored
 
     def _regroup_dead_rows(self) -> bool:
@@ -575,13 +621,14 @@ class DynamicSamplingMixin:
                     "dynamic sampling: steps_per_generation(%d) is not a multiple of "
                     "gradient_accumulation_steps(%d), so an optimizer step straddles two "
                     "generations and dead rows cannot be regrouped; truncation stays coincidental.",
-                    len(buf), ga,
+                    len(buf),
+                    ga,
                 )
             return False
 
         moved = False
         for start in range(0, len(buf), ga):
-            window = buf[start:start + ga]
+            window = buf[start : start + ga]
             flags = [c.get(DEAD_KEY) for c in window]
             if any(f is None for f in flags):
                 continue
@@ -592,7 +639,7 @@ class DynamicSamplingMixin:
             merged = concat_chunks(window)
             rows = merged["advantages"].shape[0]
             regrouped = take_rows(merged, order.to(merged["advantages"].device))
-            buf[start:start + ga] = split_rows(regrouped, ga, rows // ga)
+            buf[start : start + ga] = split_rows(regrouped, ga, rows // ga)
             moved = True
         return moved
 
@@ -609,11 +656,14 @@ class DynamicSamplingMixin:
 
         inputs = super()._prepare_inputs(generation_batch)
 
-        if fresh and self.args.per_device_train_batch_size > 1 and self._truncation_is_lossless:
-            if self._regroup_dead_rows():
-                # super() already handed back the pre-sort chunk; re-read the sorted one.
-                inputs = self._buffered_inputs[self._step % self.args.steps_per_generation]
-                self._log_dyn({"dyn/regrouped_generations": 1.0})
+        if (
+            fresh
+            and self.args.per_device_train_batch_size > 1
+            and self._truncation_is_lossless
+        ) and self._regroup_dead_rows():
+            # super() already handed back the pre-sort chunk; re-read the sorted one.
+            inputs = self._buffered_inputs[self._step % self.args.steps_per_generation]
+            self._log_dyn({"dyn/regrouped_generations": 1.0})
 
         if self._truncation_is_lossless:
             inputs, did = truncate_if_all_dead(inputs)

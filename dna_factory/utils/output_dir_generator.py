@@ -87,7 +87,7 @@ def generate_auto_output_dir(
     auto_dir_parts = []
 
     # First, add parameters in the order they appear in PARAM_ABBREVIATIONS
-    for arg_name in PARAM_ABBREVIATIONS.keys():
+    for arg_name in PARAM_ABBREVIATIONS:
         if arg_name in user_args_dict:
             arg_value = user_args_dict[arg_name]
 

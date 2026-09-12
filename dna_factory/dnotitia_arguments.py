@@ -13,28 +13,34 @@ class DnotitiaArguments:
     )
     dynamic_sampling: str = field(
         default="off",
-        metadata={"help": (
-            "Handling of GRPO prompt groups whose rollouts all scored the same (zero advantage). "
-            "'off': train on them as-is. "
-            "'mask': skip their compute by truncating all-dead micro-batches to one token; "
-            "leaves the gradient unchanged while beta=0 and no entropy/router-aux loss is used. "
-            "'resample': refill the batch with informative groups from extra generation rounds, "
-            "which changes the gradient by design. Not supported with streaming datasets."
-        )}
+        metadata={
+            "help": (
+                "Handling of GRPO prompt groups whose rollouts all scored the same (zero advantage). "
+                "'off': train on them as-is. "
+                "'mask': skip their compute by truncating all-dead micro-batches to one token; "
+                "leaves the gradient unchanged while beta=0 and no entropy/router-aux loss is used. "
+                "'resample': refill the batch with informative groups from extra generation rounds, "
+                "which changes the gradient by design. Not supported with streaming datasets."
+            )
+        },
     )
     dynamic_sampling_max_rounds: int = field(
         default=2,
-        metadata={"help": "Extra generation rounds allowed by dynamic_sampling='resample'."}
+        metadata={
+            "help": "Extra generation rounds allowed by dynamic_sampling='resample'."
+        },
     )
     periodic_save_seconds: str = field(
         default="0",
-        metadata={"help": (
-            "Wall-clock checkpoint interval: human-friendly durations ('6h', '30m', "
-            "'90s', '1d', combined '1h30m') or plain seconds ('21600'); "
-            "'0'/'off' disables it. The trainer only saves on step counts, so this "
-            "callback sets should_save when the interval elapses and the normal save "
-            "path (including save_total_limit rotation) handles the rest. Works with "
-            "save_strategy='no', which then leaves periodic saves as the only "
-            "checkpoint source."
-        )}
+        metadata={
+            "help": (
+                "Wall-clock checkpoint interval: human-friendly durations ('6h', '30m', "
+                "'90s', '1d', combined '1h30m') or plain seconds ('21600'); "
+                "'0'/'off' disables it. The trainer only saves on step counts, so this "
+                "callback sets should_save when the interval elapses and the normal save "
+                "path (including save_total_limit rotation) handles the rest. Works with "
+                "save_strategy='no', which then leaves periodic saves as the only "
+                "checkpoint source."
+            )
+        },
     )

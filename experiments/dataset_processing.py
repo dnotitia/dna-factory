@@ -1,18 +1,18 @@
-from transformers import AutoTokenizer
-from trl import SFTTrainer, SFTConfig, apply_chat_template
-from datasets import load_dataset
 import multiprocessing
 
+from datasets import load_dataset
+from trl import SFTConfig, SFTTrainer
+
 # Load and inspect dataset structure (only first 10 samples for quick inspection)
-dataset = load_dataset("cerebras/Synth-Long-SFT32K", split='train_convqa_raft')
+dataset = load_dataset("cerebras/Synth-Long-SFT32K", split="train_convqa_raft")
 
 
 # Function to preprocess the dataset - convert 'conversations' to 'messages'
 def preprocess_dataset(example):
     """Convert conversations format to messages format for training"""
-    if 'conversations' in example:
+    if "conversations" in example:
         # Rename conversations to messages
-        example['messages'] = example.pop('conversations')
+        example["messages"] = example.pop("conversations")
     return example
 
 
@@ -24,8 +24,7 @@ trainer = SFTTrainer(
     model="Qwen/Qwen3-0.6B",
     train_dataset=dataset,
     args=SFTConfig(
-        per_device_train_batch_size=1,
-        dataset_num_proc=multiprocessing.cpu_count()
+        per_device_train_batch_size=1, dataset_num_proc=multiprocessing.cpu_count()
     ),
 )
 

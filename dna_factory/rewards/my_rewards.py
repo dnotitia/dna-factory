@@ -50,9 +50,7 @@ ccp_judge = make_judge_reward(
     only_label="ccp",
     name="ccp_judge",
 )
-ccp_judge.__doc__ = (
-    "only_label=ccp; example_judge_rubric_safety.md. YAML: dna_factory.rewards.ccp_judge"
-)
+ccp_judge.__doc__ = "only_label=ccp; example_judge_rubric_safety.md. YAML: dna_factory.rewards.ccp_judge"
 rlvr_judge = make_judge_reward(
     str(_PROMPTS_DIR / "example_judge_rubric_reasoning.md"),
     only_label="rlvr",
