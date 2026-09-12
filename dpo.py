@@ -66,20 +66,20 @@ def preprocess_thinking_data(example):
     return updated_fields
 
 
-def load_models(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
+def load_models(
+    script_args, training_args, model_args, dnotitia_args, ctx, train_logger
+):
     # Model init kwargs
     model_kwargs = create_model_kwargs(model_args, training_args, dnotitia_args)
 
     # Create model
     model = AutoModelForCausalLM.from_pretrained(
-        model_args.model_name_or_path,
-        **model_kwargs
+        model_args.model_name_or_path, **model_kwargs
     )
 
     # Create reference model (DPO-specific)
     ref_model = AutoModelForCausalLM.from_pretrained(
-        model_args.model_name_or_path,
-        **model_kwargs
+        model_args.model_name_or_path, **model_kwargs
     )
     # Set reference model to evaluation mode (no gradient computation needed)
     ref_model.eval()
@@ -101,7 +101,13 @@ SPEC = TrainingSpec(
     trainer_module="dna_factory.dnotitia_dpo_trainer",
     script_file=__file__,
     defaults_yaml="configs/_defaults-DPO.yaml",
-    dataclass_types=(ScriptArguments, DPOConfig, ModelConfig, DatasetMixtureConfig, DnotitiaArguments),
+    dataclass_types=(
+        ScriptArguments,
+        DPOConfig,
+        ModelConfig,
+        DatasetMixtureConfig,
+        DnotitiaArguments,
+    ),
     load_models=load_models,
     load_mixture=load_mixture,
     postprocess_dataset=postprocess_dataset,
@@ -109,9 +115,23 @@ SPEC = TrainingSpec(
 )
 
 
-def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_args, user_specified_args=None):
-    return run_training(SPEC, script_args, training_args, model_args,
-                        dataset_mixture_args, dnotitia_args, user_specified_args)
+def main(
+    script_args,
+    training_args,
+    model_args,
+    dataset_mixture_args,
+    dnotitia_args,
+    user_specified_args=None,
+):
+    return run_training(
+        SPEC,
+        script_args,
+        training_args,
+        model_args,
+        dataset_mixture_args,
+        dnotitia_args,
+        user_specified_args,
+    )
 
 
 if __name__ == "__main__":

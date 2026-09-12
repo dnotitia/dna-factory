@@ -69,7 +69,9 @@ class LabeledDatasetMixtureConfig(DatasetMixtureConfig):
 
     datasets: list[LabeledDatasetConfig] = field(
         default_factory=list,
-        metadata={"help": "List of (labeled) dataset configurations to include in the mixture."},
+        metadata={
+            "help": "List of (labeled) dataset configurations to include in the mixture."
+        },
     )
 
     def __post_init__(self):
@@ -126,7 +128,9 @@ def _normalize_dataset_for_grpo(dataset, label):
 
         def split_messages(example):
             messages = example["messages"]
-            assistant_idxs = [i for i, m in enumerate(messages) if m["role"] == "assistant"]
+            assistant_idxs = [
+                i for i, m in enumerate(messages) if m["role"] == "assistant"
+            ]
             if assistant_idxs:
                 last = assistant_idxs[-1]
                 prompt_msgs = messages[:last]
@@ -135,7 +139,9 @@ def _normalize_dataset_for_grpo(dataset, label):
                 prompt_msgs = messages
                 expected = None
             return {
-                "prompt": [{"role": m["role"], "content": m["content"]} for m in prompt_msgs],
+                "prompt": [
+                    {"role": m["role"], "content": m["content"]} for m in prompt_msgs
+                ],
                 "expected_output": expected,
             }
 
@@ -145,7 +151,9 @@ def _normalize_dataset_for_grpo(dataset, label):
         def normalize_prompt(example):
             p = example["prompt"]
             msgs = p if isinstance(p, list) else [{"role": "user", "content": p}]
-            return {"prompt": [{"role": m["role"], "content": m["content"]} for m in msgs]}
+            return {
+                "prompt": [{"role": m["role"], "content": m["content"]} for m in msgs]
+            }
 
         dataset = dataset.map(normalize_prompt)
     else:
@@ -166,13 +174,17 @@ def get_dataset_with_schema_alignment(mixture_config):
     datasets_list = []
     for dataset_config in mixture_config.datasets:
         path = dataset_config.path
-        logger.info(f"Loading dataset for mixture: {path} (config name: {dataset_config.name})")
+        logger.info(
+            f"Loading dataset for mixture: {path} (config name: {dataset_config.name})"
+        )
         if os.path.isdir(path):
             dataset = ds.load_from_disk(path)
             if isinstance(dataset, DatasetDict):
                 dataset = dataset[dataset_config.split or "train"]
         else:
-            dataset = ds.load_dataset(path=path, name=dataset_config.name, split=dataset_config.split)
+            dataset = ds.load_dataset(
+                path=path, name=dataset_config.name, split=dataset_config.split
+            )
         label = getattr(dataset_config, "label", None) or path
         datasets_list.append(_normalize_dataset_for_grpo(dataset, label))
 
@@ -188,7 +200,9 @@ def get_dataset_with_schema_alignment(mixture_config):
     return DatasetDict({"train": combined})
 
 
-def setup_training_args(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
+def setup_training_args(
+    script_args, training_args, model_args, dnotitia_args, ctx, train_logger
+):
     ctx["reward_funcs"] = resolve_reward_funcs(script_args, training_args)
 
     # Model passed as string; init kwargs go through training_args.
@@ -201,7 +215,9 @@ def setup_training_args(script_args, training_args, model_args, dnotitia_args, c
     ctx["quantization_config"] = get_quantization_config(model_args)
 
 
-def load_models(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
+def load_models(
+    script_args, training_args, model_args, dnotitia_args, ctx, train_logger
+):
     return {"model": model_args.model_name_or_path}
 
 
@@ -209,7 +225,9 @@ def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
     return get_dataset_with_schema_alignment(dataset_mixture_args)
 
 
-def extra_trainer_kwargs(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
+def extra_trainer_kwargs(
+    script_args, training_args, model_args, dnotitia_args, ctx, train_logger
+):
     return {
         "reward_funcs": ctx["reward_funcs"],
         "quantization_config": ctx["quantization_config"],
@@ -225,7 +243,13 @@ SPEC = TrainingSpec(
     trainer_module="dna_factory.dnotitia_grpo_trainer",
     script_file=__file__,
     defaults_yaml="configs/_defaults-GRPO.yaml",
-    dataclass_types=(GRPOScriptArguments, GRPOConfig, ModelConfig, LabeledDatasetMixtureConfig, DnotitiaArguments),
+    dataclass_types=(
+        GRPOScriptArguments,
+        GRPOConfig,
+        ModelConfig,
+        LabeledDatasetMixtureConfig,
+        DnotitiaArguments,
+    ),
     # Disable DeepGEMM: vLLM 0.20.0 warmup crashes on Hopper/Blackwell; unneeded for bf16.
     extra_env={"VLLM_USE_DEEP_GEMM": "0"},
     setup_training_args=setup_training_args,
@@ -237,9 +261,23 @@ SPEC = TrainingSpec(
 )
 
 
-def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_args, user_specified_args=None):
-    return run_training(SPEC, script_args, training_args, model_args,
-                        dataset_mixture_args, dnotitia_args, user_specified_args)
+def main(
+    script_args,
+    training_args,
+    model_args,
+    dataset_mixture_args,
+    dnotitia_args,
+    user_specified_args=None,
+):
+    return run_training(
+        SPEC,
+        script_args,
+        training_args,
+        model_args,
+        dataset_mixture_args,
+        dnotitia_args,
+        user_specified_args,
+    )
 
 
 if __name__ == "__main__":

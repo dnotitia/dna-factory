@@ -33,9 +33,15 @@ def _normalize_dataset_for_distillation(dataset):
 
         def split_messages(example):
             messages = example["messages"]
-            assistant_idxs = [i for i, m in enumerate(messages) if m["role"] == "assistant"]
-            prompt_msgs = messages[:assistant_idxs[-1]] if assistant_idxs else messages
-            return {"prompt": [{"role": m["role"], "content": m["content"]} for m in prompt_msgs]}
+            assistant_idxs = [
+                i for i, m in enumerate(messages) if m["role"] == "assistant"
+            ]
+            prompt_msgs = messages[: assistant_idxs[-1]] if assistant_idxs else messages
+            return {
+                "prompt": [
+                    {"role": m["role"], "content": m["content"]} for m in prompt_msgs
+                ]
+            }
 
         return dataset.map(split_messages, remove_columns=dataset.column_names)
     elif "prompt" in feats:
@@ -43,7 +49,9 @@ def _normalize_dataset_for_distillation(dataset):
         def normalize_prompt(example):
             p = example["prompt"]
             msgs = p if isinstance(p, list) else [{"role": "user", "content": p}]
-            return {"prompt": [{"role": m["role"], "content": m["content"]} for m in msgs]}
+            return {
+                "prompt": [{"role": m["role"], "content": m["content"]} for m in msgs]
+            }
 
         return dataset.map(normalize_prompt, remove_columns=dataset.column_names)
     else:
@@ -61,13 +69,17 @@ def get_dataset_with_schema_alignment(mixture_config, seed=42):
     datasets_list = []
     for dataset_config in mixture_config.datasets:
         path = dataset_config.path
-        logger.info(f"Loading dataset for mixture: {path} (config name: {dataset_config.name})")
+        logger.info(
+            f"Loading dataset for mixture: {path} (config name: {dataset_config.name})"
+        )
         if os.path.isdir(path):
             dataset = ds.load_from_disk(path)
             if isinstance(dataset, DatasetDict):
                 dataset = dataset[dataset_config.split or "train"]
         else:
-            dataset = ds.load_dataset(path=path, name=dataset_config.name, split=dataset_config.split)
+            dataset = ds.load_dataset(
+                path=path, name=dataset_config.name, split=dataset_config.split
+            )
 
         if dataset_config.columns is not None:
             dataset = dataset.select_columns(dataset_config.columns)
@@ -87,7 +99,9 @@ def get_dataset_with_schema_alignment(mixture_config, seed=42):
     return DatasetDict({"train": combined})
 
 
-def setup_training_args(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
+def setup_training_args(
+    script_args, training_args, model_args, dnotitia_args, ctx, train_logger
+):
     if not training_args.teacher_model_name_or_path:
         raise ValueError(
             "On-policy distillation requires a teacher. Set `teacher_model_name_or_path` (it must share the "
@@ -109,15 +123,21 @@ def setup_training_args(script_args, training_args, model_args, dnotitia_args, c
     ctx["quantization_config"] = get_quantization_config(model_args)
 
 
-def load_models(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
+def load_models(
+    script_args, training_args, model_args, dnotitia_args, ctx, train_logger
+):
     return {"model": model_args.model_name_or_path}
 
 
 def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
-    return get_dataset_with_schema_alignment(dataset_mixture_args, seed=training_args.seed)
+    return get_dataset_with_schema_alignment(
+        dataset_mixture_args, seed=training_args.seed
+    )
 
 
-def extra_trainer_kwargs(script_args, training_args, model_args, dnotitia_args, ctx, train_logger):
+def extra_trainer_kwargs(
+    script_args, training_args, model_args, dnotitia_args, ctx, train_logger
+):
     return {
         "teacher_model": training_args.teacher_model_name_or_path,
         "quantization_config": ctx["quantization_config"],
@@ -131,8 +151,13 @@ SPEC = TrainingSpec(
     trainer_module="dna_factory.dnotitia_distillation_trainer",
     script_file=__file__,
     defaults_yaml="configs/_defaults-Distill.yaml",
-    dataclass_types=(ScriptArguments, DistillationConfig, ModelConfig, WeightedDatasetMixtureConfig,
-                     DnotitiaArguments),
+    dataclass_types=(
+        ScriptArguments,
+        DistillationConfig,
+        ModelConfig,
+        WeightedDatasetMixtureConfig,
+        DnotitiaArguments,
+    ),
     set_dataset_num_proc=False,
     # Disable DeepGEMM: vLLM 0.20.0 warmup crashes on Hopper/Blackwell; unneeded for bf16.
     extra_env={"VLLM_USE_DEEP_GEMM": "0"},
@@ -145,9 +170,23 @@ SPEC = TrainingSpec(
 )
 
 
-def main(script_args, training_args, model_args, dataset_mixture_args, dnotitia_args, user_specified_args=None):
-    return run_training(SPEC, script_args, training_args, model_args,
-                        dataset_mixture_args, dnotitia_args, user_specified_args)
+def main(
+    script_args,
+    training_args,
+    model_args,
+    dataset_mixture_args,
+    dnotitia_args,
+    user_specified_args=None,
+):
+    return run_training(
+        SPEC,
+        script_args,
+        training_args,
+        model_args,
+        dataset_mixture_args,
+        dnotitia_args,
+        user_specified_args,
+    )
 
 
 if __name__ == "__main__":
