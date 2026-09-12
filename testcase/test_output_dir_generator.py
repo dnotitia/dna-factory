@@ -78,6 +78,25 @@ class TestGenerateAutoOutputDir:
         assert "bs-32" in result
         assert "ep-10" in result
 
+    def test_gradient_accumulation_steps_abbreviation(self):
+        """Test that gradient_accumulation_steps is abbreviated to steps"""
+        model_name = "test/model"
+        user_args = {'gradient_accumulation_steps'}
+
+        script_args = SimpleNamespace()
+        training_args = SimpleNamespace(gradient_accumulation_steps=16)
+        model_args = SimpleNamespace()
+        dataset_mixture_args = SimpleNamespace()
+        dnotitia_args = SimpleNamespace()
+
+        result = generate_auto_output_dir(
+            model_name, user_args, script_args, training_args,
+            model_args, dataset_mixture_args, dnotitia_args, "SFT"
+        )
+
+        assert result == "model-SFT.steps-16"
+        assert "gradient_accumulation_steps" not in result
+
     def test_excludes_output_dir_arg(self):
         """Test that output_dir is excluded from auto-generated name"""
         model_name = "test/model"
