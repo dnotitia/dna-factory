@@ -202,7 +202,7 @@ class TestGenerateAutoOutputDir:
 
         # Boolean should be lowercase
         assert "use_lora-false" in result
-        assert "grad-true" in result
+        assert "gc-true" in result
 
     def test_with_list_values(self):
         """Test with list argument values"""
@@ -301,8 +301,8 @@ class TestGenerateAutoOutputDir:
         )
 
         assert (
-            "Qwen3-0.6B-SFT.run-test.max-16000.pack-true.ao_loss-true.ep-3.bs-16.lr-0.0001."
-            "grad-true.liger-true.debug-10.use_lora-true.lora_rank-8"
+            "Qwen3-0.6B-SFT.run-test.max-16000.pack-true.aoloss-true.ep-3.bs-16.lr-0.0001."
+            "gc-true.liger-true.debug-10.use_lora-true.lora_rank-8"
         ) == result
 
     def test_datasets_with_multiple_datasets(self):
@@ -369,7 +369,8 @@ class TestGenerateAutoOutputDir:
 
         # The '/' in the teacher id is normalized to '-', as for every other value
         assert (
-            result == "Qwen3-0.6B-DISTILL.teacher-dnotitia-Qwen3-1.7B.mcl-512.beta-1.0"
+            result
+            == "Qwen3-0.6B-DISTILL.teacher-dnotitia-Qwen3-1.7B.maxcl-512.beta-1.0"
         )
 
 
