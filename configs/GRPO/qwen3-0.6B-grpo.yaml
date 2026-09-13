@@ -1,7 +1,11 @@
 model_name_or_path: dnotitia/Qwen3-0.6B
-dataset_name: trl-lib/DeepMath-103K
 
 run_name: qwen3-0.6B-grpo
 
 num_generations: 8
-per_device_train_batch_size: 8
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+
+# Educational only. Too short for math: completions get truncated -> reward 0 -> most training fails
+max_completion_length: 4096
+vllm_max_model_length: 8192
