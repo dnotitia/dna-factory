@@ -322,10 +322,10 @@ def concat_batches(
     that prompt_ids + completion_ids stays contiguous and positions are preserved.
     """
     out: dict[str, Any] = {}
-    for key in a:
+    for key, va in a.items():
         if key not in b:
             continue
-        va, vb = a[key], b[key]
+        vb = b[key]
         if (
             isinstance(va, torch.Tensor)
             and isinstance(vb, torch.Tensor)

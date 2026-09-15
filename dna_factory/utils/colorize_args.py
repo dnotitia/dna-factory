@@ -57,7 +57,7 @@ def parse_yaml_config(config_file):
                                     collect_keys(value, full_key)
 
                     collect_keys(config_data)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - cosmetic only; a bad config must not abort the run
         # If there's an error reading the config file, just continue without adding yaml args
         print(f"Warning: Could not parse config file {config_file}: {e}")
 

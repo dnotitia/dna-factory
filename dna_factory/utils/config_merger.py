@@ -135,9 +135,9 @@ def merge_config_files(default_config_path, user_config_path=None):
                 allow_unicode=True,
                 sort_keys=False,
             )
-    except Exception as e:
+    except Exception:
         # Clean up temp file if writing fails
         os.unlink(temp_path)
-        raise e
+        raise
 
     return temp_path

@@ -254,22 +254,17 @@ def transform_type2(example):
             if role == "user":
                 # Remove /think and /no_think suffixes
                 updated["content"] = value.split(" /think")[0].split(" /no_think")[0]
-            elif role == "assistant":
-                # Process thinking tags
-                if "<think>" in value and "</think>" in value:
-                    thinking_part = (
-                        value.split("<think>")[1].split("</think>")[0].strip()
+            # Process thinking tags
+            elif role == "assistant" and "<think>" in value and "</think>" in value:
+                thinking_part = value.split("<think>")[1].split("</think>")[0].strip()
+                content_part = value.split("</think>")[1].strip()
+                # Remove <answer> tags if present
+                if "<answer>" in content_part and "</answer>" in content_part:
+                    content_part = (
+                        content_part.split("<answer>")[1].split("</answer>")[0].strip()
                     )
-                    content_part = value.split("</think>")[1].strip()
-                    # Remove <answer> tags if present
-                    if "<answer>" in content_part and "</answer>" in content_part:
-                        content_part = (
-                            content_part.split("<answer>")[1]
-                            .split("</answer>")[0]
-                            .strip()
-                        )
-                    updated["thinking"] = thinking_part
-                    updated["content"] = content_part
+                updated["thinking"] = thinking_part
+                updated["content"] = content_part
 
             new_messages.append(updated)
         return {"messages": new_messages}
@@ -282,7 +277,7 @@ def check_mode(dataset_name):
     dataset = load_dataset(dataset_name, split="train")
 
     print("Validating dataset format...")
-    is_valid, message, error_example = validate_dataset(dataset)
+    is_valid, message, _error_example = validate_dataset(dataset)
 
     if is_valid:
         print(f"\n{GREEN}✓ Valid{RESET}")

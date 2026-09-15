@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import ClassVar
 
 
 # Color formatter for different log levels
@@ -7,7 +8,7 @@ class ColoredFormatter(logging.Formatter):
     """Custom formatter to add colors to log levels"""
 
     # ANSI color codes
-    COLORS = {
+    COLORS: ClassVar[dict[str, str]] = {
         "DEBUG": "\033[36m",  # Cyan
         "INFO": "\033[37m",  # White
         "WARNING": "\033[33m",  # Yellow/Orange
