@@ -300,10 +300,10 @@ class TestGenerateAutoOutputDir:
             "SFT",
         )
 
-        assert (
+        assert result == (
             "Qwen3-0.6B-SFT.run-test.max-16000.pack-true.aoloss-true.ep-3.bs-16.lr-0.0001."
             "gc-true.liger-true.debug-10.use_lora-true.lora_rank-8"
-        ) == result
+        )
 
     def test_datasets_with_multiple_datasets(self):
         """Test with multiple datasets to check that count is shown instead of full names"""

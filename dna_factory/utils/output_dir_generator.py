@@ -75,7 +75,7 @@ def generate_auto_output_dir(
 
     # Create a unified dictionary of all user-specified arguments
     user_args_dict = {}
-    for prefix, args_dict in all_args:
+    for _, args_dict in all_args:
         for arg_name, arg_value in args_dict.items():
             if arg_name in user_specified_args and arg_name not in [
                 "output_dir",

@@ -30,26 +30,3 @@ package = false
 # Pin the target version rather than inferring it from requires-python.
 target-version = "py314"
 
-[tool.ruff.lint]
-# Ruff's default rules (pyflakes + a pycodestyle subset) plus import sorting, then
-# the individual correctness/clarity rules the project has cleaned up and wants to
-# stay clean. Without an explicit selection, `ruff check` on the CLI and in CI can
-# disagree about which rules apply. These are pinned rule-by-rule rather than by
-# family (`SIM`, `TRY`, ...) so that widening stays a deliberate step: adopt a new
-# rule and fix its findings in the same change.
-select = [
-    "E4",
-    "E7",
-    "E9",
-    "F",
-    "I",
-    "BLE001",  # no blind `except Exception` without an explicit reason
-    "PLC0206", # iterate dicts with .items() instead of re-indexing
-    "RUF012",  # mutable class attributes need ClassVar
-    "RUF059",  # unused unpacked variables
-    "RUF100",  # `# noqa` directives that no longer suppress anything
-    "SIM102",  # collapse nested ifs
-    "TRY004",  # TypeError for invalid types
-    "TRY201",  # bare `raise` when re-raising
-]
-

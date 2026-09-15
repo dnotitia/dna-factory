@@ -17,7 +17,7 @@ def merge_config_files(default_config_path, user_config_path=None):
         str: Path to the temporary merged config file
     """
     # Load default config
-    with open(default_config_path, "r", encoding="utf-8") as f:
+    with open(default_config_path, encoding="utf-8") as f:
         default_config = yaml.safe_load(f) or {}
 
     # Start with default config
@@ -28,7 +28,7 @@ def merge_config_files(default_config_path, user_config_path=None):
     if user_config_path:
         if not Path(user_config_path).exists():
             raise FileNotFoundError(f"--config file not found: {user_config_path}")
-        with open(user_config_path, "r", encoding="utf-8") as f:
+        with open(user_config_path, encoding="utf-8") as f:
             user_config = yaml.safe_load(f) or {}
 
         # Deep merge user config into default config

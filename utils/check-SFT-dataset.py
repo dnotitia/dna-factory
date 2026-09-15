@@ -18,7 +18,7 @@ RESET = "\033[0m"
   {
     'role': 'user',
     'content': '당신은 누구입니까? /think'
-  }, 
+  },
   {
     'role': 'assistant',
     'content': '<think>\nOkay, I need to answer the question "당신은 누구입니까?" which means "Who are you?" in Korean.\n</think>\n\n저는 **DNA 2.0**입니다. 디노티시아(Dnotitia Inc.)에서 개발한 최신 대형 언어 모델(LLM)로, 한국어와 영어 처리에 최적화된 이중 언어 특화 모델입니다.'
@@ -31,7 +31,7 @@ RESET = "\033[0m"
   {
     'role': 'user',
     'content': '당신은 누구입니까?'
-  }, 
+  },
   {
     'role': 'assistant',
     'thinking': 'Okay, I need to answer the question "당신은 누구입니까?" which means "Who are you?" in Korean.',
@@ -46,7 +46,7 @@ RESET = "\033[0m"
   {
     'from': 'user',
     'value': '당신은 누구입니까? /think'
-  }, 
+  },
   {
     'from': 'assistant',
     'value': '<think>\nOkay, I need to answer the question "당신은 누구입니까?" which means "Who are you?" in Korean.\n</think>\n\n저는 **DNA 2.0**입니다. 디노티시아(Dnotitia Inc.)에서 개발한 최신 대형 언어 모델(LLM)로, 한국어와 영어 처리에 최적화된 이중 언어 특화 모델입니다.'
@@ -59,7 +59,7 @@ RESET = "\033[0m"
   {
     'role': 'user',
     'content': '당신은 누구입니까?'
-  }, 
+  },
   {
     'role': 'assistant',
     'thinking': 'Okay, I need to answer the question "당신은 누구입니까?" which means "Who are you?" in Korean.',
