@@ -245,23 +245,16 @@ class TestMergeConfigFiles:
             os.unlink(user_path)
 
     def test_merge_with_nonexistent_user_config(self):
-        """Test merging when user config path doesn't exist"""
+        """Test that a missing explicit user config path raises FileNotFoundError"""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             default_config = {"key": "value"}
             yaml.safe_dump(default_config, f)
             default_path = f.name
 
         try:
-            # Use non-existent path
-            merged_path = merge_config_files(default_path, "/nonexistent/path.yaml")
-
-            with open(merged_path, "r") as f:
-                merged = yaml.safe_load(f)
-
-            # Should just return default config
-            assert merged == default_config
-
-            os.unlink(merged_path)
+            missing = "/nonexistent/path.yaml"
+            with pytest.raises(FileNotFoundError, match="--config file not found"):
+                merge_config_files(default_path, missing)
         finally:
             os.unlink(default_path)
 

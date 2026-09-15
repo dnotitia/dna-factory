@@ -23,8 +23,11 @@ def merge_config_files(default_config_path, user_config_path=None):
     # Start with default config
     merged_config = default_config.copy()
 
-    # If user config exists, merge it (user config overrides defaults)
-    if user_config_path and Path(user_config_path).exists():
+    # If a user config path was provided, it must exist.
+    # Silent fallback is only for the case where no --config was given.
+    if user_config_path:
+        if not Path(user_config_path).exists():
+            raise FileNotFoundError(f"--config file not found: {user_config_path}")
         with open(user_config_path, "r", encoding="utf-8") as f:
             user_config = yaml.safe_load(f) or {}
 
