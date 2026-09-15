@@ -10,6 +10,7 @@
   - [Advanced Usage](#advanced-usage)
   - [Multi-GPUs](#multi-gpus)
   - [Multi-Nodes](#multi-nodes)
+- [Development](#development)
 - [Acknowledgments](#acknowledgments)
 
 *"It Just Works!"*
@@ -103,6 +104,22 @@ $ accelerate launch \
 ## Multi-Nodes
 
 See [multi-nodes.md](docs/multi-nodes.md) for the master/worker launch commands.
+
+# Development
+
+```bash
+$ uv sync
+$ source .venv/bin/activate
+
+# Lint / format
+$ ruff check .
+$ ruff format .
+
+# Tests
+$ pytest testcase
+```
+
+Do not edit `configs/_defaults-*.yaml`; put model-specific overrides in `configs/{SFT,DPO,GRPO,Distill}/`.
 
 # Acknowledgments
 
