@@ -6,3 +6,6 @@ __pycache__
 # Exclusions for personal use
 Qwen3*/
 sangpark/
+
+# pytest JUnit report (written by CI)
+pytest.xml

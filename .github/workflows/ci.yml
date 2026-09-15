@@ -6,13 +6,24 @@ on:
       - main
   pull_request:
 
+# Superseded runs are useless: cancel them rather than let them queue behind
+# the dependency install, which dominates the job.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The job only reads the repository.
+permissions:
+  contents: read
+
+env:
+  FORCE_COLOR: "1"
+
 jobs:
   lint-and-test:
+    name: Lint and test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -22,19 +33,54 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
+          # Reuse the cache until the resolved dependency set changes.
+          cache-dependency-glob: uv.lock
 
       - name: Set up Python
         run: uv python install
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --frozen
 
-      - name: Run Ruff check
-        run: uv run ruff check .
-        continue-on-error: true
+      - name: Run Ruff lint
+        run: uv run ruff check --output-format=github .
 
       - name: Check Ruff formatting
-        run: uv run ruff format --check .
+        run: uv run ruff format --check --diff .
 
       - name: Run tests
-        run: uv run pytest testcase
+        run: uv run pytest testcase --junit-xml=pytest.xml
+
+      - name: Summarize test results
+        # Report the outcome even when the tests fail, but not on a cancelled run.
+        if: success() || failure()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          report = Path("pytest.xml")
+          if not report.exists():
+              print("Test report missing - pytest did not get far enough to write one.")
+              raise SystemExit
+
+          suite = ET.parse(report).getroot().find("testsuite")
+          counts = {k: int(suite.get(k, 0)) for k in ("tests", "failures", "errors", "skipped")}
+          passed = counts["tests"] - counts["failures"] - counts["errors"] - counts["skipped"]
+          ok = counts["failures"] == 0 and counts["errors"] == 0
+
+          print(f"### {'Tests passed' if ok else 'Tests failed'}\n")
+          print("| Passed | Failed | Errors | Skipped | Time |")
+          print("| -----: | -----: | -----: | ------: | ---: |")
+          print(
+              f"| {passed} | {counts['failures']} | {counts['errors']} "
+              f"| {counts['skipped']} | {float(suite.get('time', 0)):.1f}s |"
+          )
+
+          for case in suite.iter("testcase"):
+              for bad in list(case.findall("failure")) + list(case.findall("error")):
+                  print(f"\n**{case.get('classname')}.{case.get('name')}**\n")
+                  print("```")
+                  print((bad.get("message") or "").strip()[:800])
+                  print("```")
+          PY

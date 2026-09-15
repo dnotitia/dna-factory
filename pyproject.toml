@@ -25,3 +25,15 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[tool.ruff]
+# Pin the target version rather than inferring it from requires-python.
+target-version = "py314"
+
+[tool.ruff.lint]
+# Ruff's default rules (pyflakes + a pycodestyle subset) plus import sorting.
+# Without an explicit selection, `ruff check` on the CLI and in CI can disagree
+# about which rules apply. Widen this list deliberately, fixing the findings in
+# the same change.
+select = ["E4", "E7", "E9", "F", "I"]
+
