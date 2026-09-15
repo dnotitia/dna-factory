@@ -133,3 +133,17 @@ This project is made possible thanks to:
 <img width="40%" src="./assets/nipaLogo.png" alt="NIPA 정보통신산업진흥원" />
 
 - NIPA 오픈소스 지원 프로그램 <https://www.nipa.kr>
+
+
+### check-GRPO-dataset.py
+
+Validates prompt-only datasets used by `grpo.py` and `distill.py`.
+
+```bash
+python utils/check-GRPO-dataset.py --dataset_name <name_or_path> [--config <name>] [--split <split>] [--require-solution]
+```
+
+The dataset must expose either a `prompt` column (string or conversational) or a
+`messages` column whose last turn has `role == "user"`. With `--require-solution`,
+the script also checks for the `solution` column used by `accuracy_reward`
+(see `docs/grpo-rewards.md`).

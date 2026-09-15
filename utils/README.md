@@ -57,3 +57,10 @@ python utils/measure-distill-kl.py \
     --student ./my-distilled-checkpoint --tokenizer dnotitia/Qwen3-1.7B \
     --teacher dnotitia/Qwen3-1.7B
 ```
+
+### check-GRPO-dataset.py
+
+Validates prompt-only datasets used by grpo.py and distill.py.
+
+    python utils/check-GRPO-dataset.py --dataset_name <name_or_path> [--config <name>] [--split <split>] [--require-solution]
+
