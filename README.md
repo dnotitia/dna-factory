@@ -3,6 +3,13 @@
 
 ![](./assets/dna-factory.png)
 
+*"It Just Works!"*
+
+A lightweight, opinionated stack for LLM Post-Training on Hugging Face TRL + DeepSpeed.
+Four trainers share one setup/train/save path: **SFT** on instruction or conversation data,
+**DPO** on chosen vs rejected pairs, **GRPO** as online RL scored by reward functions,
+and **On-Policy Distillation** where a frozen teacher grades the student's own tokens.
+
 - [News](#news)
 - [Design Principles](#design-principles)
 - [Key Features](#key-features)
@@ -12,10 +19,6 @@
   - [Multi-Nodes](#multi-nodes)
 - [Development](#development)
 - [Acknowledgments](#acknowledgments)
-
-*"It Just Works!"*
-
-LLM Post-Training (SFT / DPO / GRPO / On-Policy Distillation) on HuggingFace TRL + DeepSpeed.
 
 # News
 
