@@ -105,7 +105,7 @@ def get_dna_factory_version(script_file_path):
             if parent == current:
                 return None
             current = parent
-    except Exception:
+    except Exception:  # noqa: BLE001 - best-effort version lookup, never fatal
         return None
 
 

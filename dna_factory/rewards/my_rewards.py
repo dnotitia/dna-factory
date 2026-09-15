@@ -94,7 +94,7 @@ def safe_accuracy_reward(
             log_extra=log_extra,
             **kwargs,
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - sympy/mpmath raise arbitrary types on poisoned input
         _warn_once(
             "safe_accuracy_reward:batch_fallback",
             f"safe_accuracy_reward: upstream accuracy_reward raised {type(e).__name__} "
@@ -106,7 +106,7 @@ def safe_accuracy_reward(
             rewards.append(
                 _hf_accuracy_reward(completions=[completion], solution=[sol])[0]
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - one poisoned sample must not kill the batch
             rewards.append(None)
     return rewards
 

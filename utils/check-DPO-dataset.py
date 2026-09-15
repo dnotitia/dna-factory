@@ -128,18 +128,20 @@ def validate_dataset(dataset):
             return False, error_msg, example
 
         # Optional: Check that chosen and rejected have the same user prompts
-        if len(chosen) > 0 and len(rejected) > 0:
-            if chosen[0].get("role") == "user" and rejected[0].get("role") == "user":
-                if chosen[0].get("content") != rejected[0].get("content"):
-                    print(
-                        f"\n[WARNING] Row {idx}: 'chosen' and 'rejected' have different user prompts"
-                    )
-                    print(
-                        f"{YELLOW}Chosen prompt:{RESET} {chosen[0].get('content')[:100]}..."
-                    )
-                    print(
-                        f"{YELLOW}Rejected prompt:{RESET} {rejected[0].get('content')[:100]}..."
-                    )
+        if (
+            len(chosen) > 0
+            and len(rejected) > 0
+            and chosen[0].get("role") == "user"
+            and rejected[0].get("role") == "user"
+            and chosen[0].get("content") != rejected[0].get("content")
+        ):
+            print(
+                f"\n[WARNING] Row {idx}: 'chosen' and 'rejected' have different user prompts"
+            )
+            print(f"{YELLOW}Chosen prompt:{RESET} {chosen[0].get('content')[:100]}...")
+            print(
+                f"{YELLOW}Rejected prompt:{RESET} {rejected[0].get('content')[:100]}..."
+            )
 
     return True, "All checks passed", None
 
@@ -197,7 +199,7 @@ def check_mode(dataset_name):
     dataset = load_dataset(dataset_name, split="train")
 
     print("Validating dataset format...")
-    is_valid, message, error_example = validate_dataset(dataset)
+    is_valid, message, _error_example = validate_dataset(dataset)
 
     if is_valid:
         print(f"\n{GREEN}✓ Valid{RESET}")

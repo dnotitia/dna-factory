@@ -65,7 +65,9 @@ def parse_duration_to_seconds(value) -> float:
     if value is None:
         return 0.0
     if isinstance(value, bool):
-        raise ValueError(
+        # Bools are bad *values* here, not a distinct type error; the only caller
+        # funnels every rejection through `except ValueError`.
+        raise ValueError(  # noqa: TRY004
             f"Invalid duration {value!r}: expected seconds or a string like '6h'."
         )
     if isinstance(value, (int, float)):

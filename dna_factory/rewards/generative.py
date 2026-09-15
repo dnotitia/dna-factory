@@ -146,7 +146,7 @@ async def _judge_one(semaphore, judge_input):
                             f"{response.choices[0].finish_reason!r}). Output tail: {output_tail!r}"
                         )
                 return score
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - any judge/transport failure is retryable
                 if attempt == max_retries:
                     logger.warning(
                         f"Judge request failed after {max_retries + 1} attempts: {e}"
