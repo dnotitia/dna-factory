@@ -35,6 +35,20 @@ Conversion types:
 
 - `type1`: source `{prompt, chosen, rejected}` (plain strings) → message-based format.
 
+## check-GRPO-dataset.py
+
+Validates prompt-only datasets used by `grpo.py` and `distill.py`.
+
+```bash
+python utils/check-GRPO-dataset.py <name_or_path> \
+    [--config <name>] [--split <split>] [--require-solution]
+```
+
+The dataset must expose either a `prompt` column (string or conversational) or a
+`messages` column whose last turn has `role == "user"`. With `--require-solution`,
+it also checks for the `solution` column used by `accuracy_reward`
+(see `docs/grpo-rewards.md`).
+
 ## check-vllm-version.sh
 
 Shows the vLLM range your installed TRL supports (needed for GRPO `--use_vllm true`).
@@ -57,17 +71,3 @@ python utils/measure-distill-kl.py \
     --student ./my-distilled-checkpoint --tokenizer dnotitia/Qwen3-1.7B \
     --teacher dnotitia/Qwen3-1.7B
 ```
-
-## check-GRPO-dataset.py
-
-Validates prompt-only datasets used by `grpo.py` and `distill.py`.
-
-```bash
-python utils/check-GRPO-dataset.py <name_or_path> \
-    [--config <name>] [--split <split>] [--require-solution]
-```
-
-The dataset must expose either a `prompt` column (string or conversational) or a
-`messages` column whose last turn has `role == "user"`. With `--require-solution`,
-it also checks for the `solution` column used by `accuracy_reward`
-(see `docs/grpo-rewards.md`).
