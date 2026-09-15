@@ -6,13 +6,17 @@ on:
       - main
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  lint-and-test:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
@@ -20,7 +24,7 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install 3.14
+        run: uv python install
 
       - name: Install dependencies
         run: uv sync

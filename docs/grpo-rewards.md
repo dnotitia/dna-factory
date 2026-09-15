@@ -47,8 +47,9 @@ Shaping instances hard-code a length bound of **4096**. Rebuild them if the reci
 A reward function is any callable with this signature:
 
 ```python
-def my_reward(prompts, completions, completion_ids, log_metric=None, **kwargs) -> list[float | None]:
-    ...
+def my_reward(
+    prompts, completions, completion_ids, log_metric=None, **kwargs
+) -> list[float | None]: ...
 ```
 
 - `GRPOTrainer` (`_calculate_rewards` in `trl/trainer/grpo_trainer.py`) calls every entry in `reward_funcs` with `prompts`, `completions`, `completion_ids`, plus **every other column present in the dataset** (everything except `prompt`, `completion`, `completion_ids`) forwarded as a keyword argument, one value per sample. A reward that doesn't care about an extra column can simply not declare it — `**kwargs` swallows the rest.
@@ -91,7 +92,10 @@ Hence the pattern used throughout this repo: define configured instances in `my_
 from dna_factory.rewards import make_judge_reward
 
 persona_judge = make_judge_reward(
-    "path/to/rubric.txt", only_label="persona", reference_column="expected_output", name="persona_judge"
+    "path/to/rubric.txt",
+    only_label="persona",
+    reference_column="expected_output",
+    name="persona_judge",
 )
 ```
 
@@ -249,10 +253,16 @@ from trl.rewards import (
     get_soft_overlong_punishment,
 )
 
-cosine_scaled_reward = get_cosine_scaled_reward(max_len=4096)  # needs `solution` + math_verify
-repetition_penalty_reward = get_repetition_penalty_reward(ngram_size=3, max_penalty=-1.0)
+cosine_scaled_reward = get_cosine_scaled_reward(
+    max_len=4096
+)  # needs `solution` + math_verify
+repetition_penalty_reward = get_repetition_penalty_reward(
+    ngram_size=3, max_penalty=-1.0
+)
 # soft_punish_cache = max_completion_length // 5
-soft_overlong_penalty = get_soft_overlong_punishment(max_completion_len=4096, soft_punish_cache=819)
+soft_overlong_penalty = get_soft_overlong_punishment(
+    max_completion_len=4096, soft_punish_cache=819
+)
 ```
 
 ```yaml
@@ -277,8 +287,9 @@ Same order as `reward_funcs`. Each reward is evaluated per-sample, multiplied by
 ## Writing your own
 
 ```python
-def my_reward(prompts, completions, completion_ids, log_metric=None, **kwargs) -> list[float | None]:
-    ...
+def my_reward(
+    prompts, completions, completion_ids, log_metric=None, **kwargs
+) -> list[float | None]: ...
 ```
 
 - Return `None` to exclude a sample from this reward (not `0.0`).
