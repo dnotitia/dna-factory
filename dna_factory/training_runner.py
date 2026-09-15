@@ -584,7 +584,7 @@ def cli_main(spec, argv=None):
             config_path = spec.defaults_yaml
     else:
         config_path = spec.defaults_yaml
-    full_args = ["--config", config_path] + cli_args
+    full_args = ["--config", config_path, *cli_args]
 
     # Parse arguments
     (script_args, training_args, model_args, dataset_mixture_args, dnotitia_args, _) = (

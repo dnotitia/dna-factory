@@ -44,7 +44,7 @@ def parse_yaml_config(config_file):
     yaml_args = set()
     try:
         if os.path.exists(config_file):
-            with open(config_file, "r", encoding="utf-8") as f:
+            with open(config_file, encoding="utf-8") as f:
                 config_data = yaml.safe_load(f)
                 if config_data:
                     # Recursively collect all keys from nested dictionaries

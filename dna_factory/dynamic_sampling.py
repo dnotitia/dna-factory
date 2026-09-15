@@ -300,12 +300,8 @@ def split_rows(
         chunk: dict[str, Any] = {}
         for key, val in batch.items():
             if (
-                isinstance(val, torch.Tensor)
-                and val.dim() >= 1
-                and val.shape[0] == n
-                or isinstance(val, list)
-                and len(val) == n
-            ):
+                isinstance(val, torch.Tensor) and val.dim() >= 1 and val.shape[0] == n
+            ) or (isinstance(val, list) and len(val) == n):
                 chunk[key] = val[lo:hi]
             else:
                 chunk[key] = val

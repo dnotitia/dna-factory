@@ -101,7 +101,7 @@ def _to_text(message_or_text):
 def _parse_score(text: str):
     """Parse the judge's trailing 'Score: N' (0-10) and binarize at a fixed threshold of 7."""
     # Drop the judge's own thinking block, then expect a 'Score: N' line with N an integer 0-10.
-    visible = text.split("</think>")[-1]
+    visible = text.rsplit("</think>", maxsplit=1)[-1]
     match = re.search(r"Score:\s*(\d{1,2})", visible)
     if match is None:
         return None
@@ -154,6 +154,7 @@ async def _judge_one(semaphore, judge_input):
                     return None
                 # Exponential backoff: 1s, 2s, 4s, ...
                 await asyncio.sleep(2**attempt)
+    return None
 
 
 def _log_judge_metrics(log_metric, scores, elapsed, prefix):

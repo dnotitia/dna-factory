@@ -38,7 +38,7 @@ class TestMergeConfigFiles:
             merged_path = merge_config_files(default_path, user_config_path=None)
 
             # Read merged config
-            with open(merged_path, "r") as f:
+            with open(merged_path) as f:
                 merged = yaml.safe_load(f)
 
             # Should be identical to default config
@@ -73,7 +73,7 @@ class TestMergeConfigFiles:
             merged_path = merge_config_files(default_path, user_path)
 
             # Read merged config
-            with open(merged_path, "r") as f:
+            with open(merged_path) as f:
                 merged = yaml.safe_load(f)
 
             # User values should override defaults
@@ -114,7 +114,7 @@ class TestMergeConfigFiles:
             merged_path = merge_config_files(default_path, user_path)
 
             # Read merged config
-            with open(merged_path, "r") as f:
+            with open(merged_path) as f:
                 merged = yaml.safe_load(f)
 
             # Check nested overrides
@@ -151,7 +151,7 @@ class TestMergeConfigFiles:
         try:
             merged_path = merge_config_files(default_path, user_path)
 
-            with open(merged_path, "r") as f:
+            with open(merged_path) as f:
                 merged = yaml.safe_load(f)
 
             # User override should work at deep level
@@ -191,7 +191,7 @@ class TestMergeConfigFiles:
         try:
             merged_path = merge_config_files(default_path, user_path)
 
-            with open(merged_path, "r") as f:
+            with open(merged_path) as f:
                 merged = yaml.safe_load(f)
 
             # Check datasets list merge by id
@@ -228,7 +228,7 @@ class TestMergeConfigFiles:
         try:
             merged_path = merge_config_files(default_path, user_path)
 
-            with open(merged_path, "r") as f:
+            with open(merged_path) as f:
                 merged = yaml.safe_load(f)
 
             # All keys should be present
@@ -271,7 +271,7 @@ class TestMergeConfigFiles:
         try:
             merged_path = merge_config_files(default_path, user_path)
 
-            with open(merged_path, "r") as f:
+            with open(merged_path) as f:
                 merged = yaml.safe_load(f)
 
             # Should be empty or None
@@ -298,7 +298,7 @@ class TestMergeConfigFiles:
             merged_path = merge_config_files(default_path, user_path)
 
             # Should be able to load without error
-            with open(merged_path, "r") as f:
+            with open(merged_path) as f:
                 merged = yaml.safe_load(f)
 
             assert isinstance(merged, dict)
@@ -327,7 +327,7 @@ class TestMergeConfigFiles:
         try:
             merged_path = merge_config_files(default_path, user_path)
 
-            with open(merged_path, "r", encoding="utf-8") as f:
+            with open(merged_path, encoding="utf-8") as f:
                 merged = yaml.safe_load(f)
 
             assert merged["message"] == "환영합니다"
@@ -355,7 +355,7 @@ class TestMergeConfigFiles:
             # Should be a yaml file
             assert merged_path.endswith(".yaml")
             # Should be able to read it
-            with open(merged_path, "r") as f:
+            with open(merged_path) as f:
                 content = yaml.safe_load(f)
                 assert content is not None
 
