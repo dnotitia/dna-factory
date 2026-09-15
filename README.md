@@ -85,7 +85,7 @@ $ python sft.py \
 
 ## Multi-GPUs
 
-DDP for speed, DeepSpeed ZeRO to save memory (ZeRO-1 and ZoRO-3 are supported):
+DDP for speed, DeepSpeed ZeRO to save memory (ZeRO-1 and ZeRO-3 are supported):
 
 ```bash
 $ accelerate launch \
