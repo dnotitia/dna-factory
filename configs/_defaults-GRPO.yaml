@@ -74,7 +74,7 @@ do_eval: false
 # Modified chat-template models: https://huggingface.co/collections/dnotitia/qwen3-modified-chat-template
 model_name_or_path: dnotitia/Qwen3-0.6B
 dtype: bfloat16  # Renamed from `torch_dtype` in newer PyTorch versions
-attn_implementation: sdpa  # vllm-flash-attn3 is faster but has no B200 (sm100) kernels yet
+attn_implementation: kernels-community/flash-attn2  # FA2 has B200 (sm100) kernels; vllm-flash-attn3 does not yet
 
 trust_remote_code: false
 
