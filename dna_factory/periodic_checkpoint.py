@@ -21,6 +21,8 @@ Wired in `grpo.py` from `DnotitiaArguments.periodic_save_seconds`, parsed with
 import re
 import time
 
+import torch
+import torch.distributed as dist
 from transformers import TrainerCallback
 
 _UNIT_TO_SECONDS = {
@@ -114,6 +116,15 @@ class PeriodicCheckpointCallback(TrainerCallback):
     The clock also resets on every `on_save`, so the interval means "at least this
     long between any two checkpoints", whether the other one came from this callback
     or from the regular step-based schedule.
+
+    Distributed runs take the decision on rank 0 and broadcast it. Every rank keeps
+    its own wall clock and saving pulls them apart: only rank 0 writes the model and
+    optimizer, so its `on_save` fires seconds (minutes for a big model) after the
+    other ranks', and from then on it trips the interval a step later than they do.
+    A per-rank decision therefore ends up saving on different steps, and a rank
+    inside `_save_checkpoint` while the others train on posts a different sequence
+    of collectives -- the job deadlocks until the NCCL watchdog tears it down
+    (`save_strategy="no"` leaves no step-based schedule to keep the ranks honest).
     """
 
     def __init__(self, interval_seconds: float):
@@ -128,10 +139,29 @@ class PeriodicCheckpointCallback(TrainerCallback):
         self._last_save = time.monotonic()
         return control
 
+    def _agreed(self, due: bool) -> bool:
+        """Replace the local verdict with rank 0's so all ranks save on one step."""
+        if not (dist.is_available() and dist.is_initialized()):
+            return due
+        if dist.get_world_size() < 2:
+            return due
+        # NCCL only moves CUDA tensors; gloo is happy with CPU ones.
+        device = (
+            torch.device("cuda", torch.cuda.current_device())
+            if "nccl" in str(dist.get_backend()) and torch.cuda.is_available()
+            else torch.device("cpu")
+        )
+        flag = torch.tensor([int(due)], dtype=torch.int32, device=device)
+        dist.broadcast(flag, src=0)
+        return bool(flag.item())
+
     def on_step_end(self, args, state, control, **kwargs):
+        # `_agreed` is a collective, so every rank has to reach it on the same
+        # steps: the early return below may only look at rank-invariant state.
         if state.global_step <= 0 or self._last_save is None:
             return control
-        if time.monotonic() - self._last_save >= self.interval_seconds:
+        due = time.monotonic() - self._last_save >= self.interval_seconds
+        if self._agreed(due):
             control.should_save = True
             self._last_save = time.monotonic()
         return control

@@ -86,6 +86,94 @@ class TestPeriodicCheckpointCallback:
         assert out.should_save is False
 
 
+class _FakeDist:
+    """Stand-in for `torch.distributed`: `broadcast` hands out rank 0's verdict."""
+
+    def __init__(self, world_size=8, rank0_due=True, backend="nccl"):
+        self.world_size = world_size
+        self.rank0_due = rank0_due
+        self.backend = backend
+        self.broadcasts = 0
+
+    def is_available(self):
+        return True
+
+    def is_initialized(self):
+        return True
+
+    def get_world_size(self):
+        return self.world_size
+
+    def get_backend(self):
+        return self.backend
+
+    def broadcast(self, tensor, src=0):
+        self.broadcasts += 1
+        tensor.fill_(int(self.rank0_due))
+
+
+class TestRankAgreement:
+    """The save step must come from rank 0, not from each rank's own clock."""
+
+    @staticmethod
+    def _callback(monkeypatch, fake, now):
+        monkeypatch.setattr(pc.time, "monotonic", lambda: now[0])
+        monkeypatch.setattr(pc, "dist", fake)
+        cb = PeriodicCheckpointCallback(3600)
+        state, control = _fresh()
+        cb.on_train_begin(None, state, control)
+        state.global_step = 5
+        return cb, state, control
+
+    def test_follower_does_not_save_when_rank0_is_not_due(self, monkeypatch):
+        """The skew that deadlocked a run: a follower trips the interval first."""
+        fake = _FakeDist(rank0_due=False)
+        now = [1000.0]
+        cb, state, control = self._callback(monkeypatch, fake, now)
+
+        now[0] += 3600.0  # this rank is due, rank 0 (slower to finish its save) is not
+        out = cb.on_step_end(None, state, control)
+        assert out.should_save is False
+        assert fake.broadcasts == 1
+
+        # The clock was left alone, so the rank still saves on rank 0's step.
+        fake.rank0_due = True
+        out = cb.on_step_end(None, state, out)
+        assert out.should_save is True
+
+    def test_follower_saves_when_rank0_is_due(self, monkeypatch):
+        """A lagging local clock must not keep a rank out of rank 0's save."""
+        fake = _FakeDist(rank0_due=True)
+        now = [1000.0]
+        cb, state, control = self._callback(monkeypatch, fake, now)
+
+        now[0] += 10.0  # nowhere near the interval on this rank
+        out = cb.on_step_end(None, state, control)
+        assert out.should_save is True
+        assert cb._last_save == now[0]  # timer reset together with the others
+
+    def test_broadcasts_on_every_step(self, monkeypatch):
+        """The broadcast is a collective: it may not be skipped on quiet steps."""
+        fake = _FakeDist(rank0_due=False)
+        now = [1000.0]
+        cb, state, control = self._callback(monkeypatch, fake, now)
+
+        for _ in range(3):
+            now[0] += 1.0
+            cb.on_step_end(None, state, control)
+        assert fake.broadcasts == 3
+
+    def test_single_process_skips_the_broadcast(self, monkeypatch):
+        fake = _FakeDist(world_size=1, rank0_due=False)
+        now = [1000.0]
+        cb, state, control = self._callback(monkeypatch, fake, now)
+
+        now[0] += 3600.0
+        out = cb.on_step_end(None, state, control)
+        assert out.should_save is True  # local verdict stands
+        assert fake.broadcasts == 0
+
+
 class TestParseDurationToSeconds:
     """Test cases for parse_duration_to_seconds"""
 
