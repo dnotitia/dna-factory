@@ -11,6 +11,7 @@ persona_judge, ccp_judge, rlvr_judge) live in my_rewards.py.
 """
 
 import asyncio
+import functools
 import logging
 import os
 import re
@@ -64,6 +65,15 @@ def _resolve_template_source(rubric_file, default_loader):
         with open(rubric_file) as f:
             return f.read()
     return default_loader()
+
+
+@functools.lru_cache
+def _get_template(rubric_file, reference_column):
+    """Load and cache a rubric template in the current worker process."""
+    default_loader = (
+        _load_default_reference_prompt if reference_column else _load_default_prompt
+    )
+    return _resolve_template_source(rubric_file, default_loader)
 
 
 async def _get_client_and_model():
@@ -208,6 +218,55 @@ def _build_judge_inputs(template, prompts, completions, references, labels, only
     return judge_inputs, skip_mask
 
 
+async def _judge_reward(
+    prompts,
+    completions,
+    completion_ids,
+    log_metric=None,
+    *,
+    rubric_file,
+    only_label,
+    reference_column,
+    name,
+    **kwargs,
+):
+    template = _get_template(rubric_file, reference_column)
+    labels = kwargs.get("label")
+    if only_label is not None and labels is None:
+        _warn_once(
+            f"{name}:missing_label",
+            f"{name}: only_label={only_label!r} is set but no dataset in this mixture "
+            "has a 'label' column (grpo.py's mixture loader injects one automatically for every "
+            "dataset — check how this dataset was loaded). Scoring nothing (all None).",
+        )
+        return [None] * len(prompts)
+
+    references = None
+    if "{reference}" in template:
+        ref_col = reference_column or "solution"
+        references = kwargs.get(ref_col)
+        if references is None:
+            _warn_once(
+                f"{name}:missing_reference",
+                f"{name}: this rubric is reference-guided but no dataset in this mixture "
+                f"has a '{ref_col}' column (set reference_column to match your dataset). Columns "
+                f"forwarded by the trainer: {sorted(kwargs.keys())}. Scoring nothing (all None).",
+            )
+            return [None] * len(prompts)
+
+    judge_inputs, _ = _build_judge_inputs(
+        template, prompts, completions, references, labels, only_label
+    )
+    semaphore = asyncio.Semaphore(16)  # max in-flight judge requests per process
+
+    start_time = time.monotonic()
+    scores = await asyncio.gather(*[_judge_one(semaphore, ji) for ji in judge_inputs])
+    elapsed = time.monotonic() - start_time
+
+    _log_judge_metrics(log_metric, scores, elapsed, prefix=name)
+    return scores
+
+
 def make_judge_reward(
     rubric_file=None, only_label=None, reference_column=None, name=None
 ):
@@ -228,56 +287,12 @@ def make_judge_reward(
     See docs/grpo-rewards.md for the contract.
     """
     resolved_name = name or (f"judge_{only_label}" if only_label else "judge_reward")
-    state = {"template": None}
-
-    def _template():
-        if state["template"] is None:
-            default_loader = (
-                _load_default_reference_prompt
-                if reference_column
-                else _load_default_prompt
-            )
-            state["template"] = _resolve_template_source(rubric_file, default_loader)
-        return state["template"]
-
-    async def judge(prompts, completions, completion_ids, log_metric=None, **kwargs):
-        template = _template()
-        labels = kwargs.get("label")
-        if only_label is not None and labels is None:
-            _warn_once(
-                f"{resolved_name}:missing_label",
-                f"{resolved_name}: only_label={only_label!r} is set but no dataset in this mixture "
-                "has a 'label' column (grpo.py's mixture loader injects one automatically for every "
-                "dataset — check how this dataset was loaded). Scoring nothing (all None).",
-            )
-            return [None] * len(prompts)
-
-        references = None
-        if "{reference}" in template:
-            ref_col = reference_column or "solution"
-            references = kwargs.get(ref_col)
-            if references is None:
-                _warn_once(
-                    f"{resolved_name}:missing_reference",
-                    f"{resolved_name}: this rubric is reference-guided but no dataset in this mixture "
-                    f"has a '{ref_col}' column (set reference_column to match your dataset). Columns "
-                    f"forwarded by the trainer: {sorted(kwargs.keys())}. Scoring nothing (all None).",
-                )
-                return [None] * len(prompts)
-
-        judge_inputs, _ = _build_judge_inputs(
-            template, prompts, completions, references, labels, only_label
-        )
-        semaphore = asyncio.Semaphore(16)  # max in-flight judge requests per process
-
-        start_time = time.monotonic()
-        scores = await asyncio.gather(
-            *[_judge_one(semaphore, ji) for ji in judge_inputs]
-        )
-        elapsed = time.monotonic() - start_time
-
-        _log_judge_metrics(log_metric, scores, elapsed, prefix=resolved_name)
-        return scores
-
-    judge.__name__ = resolved_name
-    return judge
+    reward = functools.partial(
+        _judge_reward,
+        rubric_file=rubric_file,
+        only_label=only_label,
+        reference_column=reference_column,
+        name=resolved_name,
+    )
+    reward.__name__ = resolved_name
+    return reward

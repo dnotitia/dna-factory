@@ -356,6 +356,10 @@ class TrainingSpec:
     # Hooks. All receive (script_args, training_args, model_args, dnotitia_args, ctx, logger)
     # unless noted; `dataset_mixture_args` replaces `model_args`/`dnotitia_args` for load_mixture.
     set_dataset_num_proc: bool = True
+    pass_eval_dataset: bool = True
+    pass_debug_batches: bool = True
+    pass_peft_config: bool = True
+    strict_args: bool = False
     extra_env: dict = field(default_factory=dict)
     setup_training_args: Callable | None = (
         None  # validate + fill training_args (model_init_kwargs, ...)
@@ -367,6 +371,9 @@ class TrainingSpec:
         None  # (dataset_mixture_args, training_args, ctx, logger) -> DatasetDict
     )
     postprocess_dataset: Callable | None = None  # (dataset, ctx, logger) -> dataset
+    postprocess_tokenizer: Callable | None = (
+        None  # (tokenizer, ctx, logger) -> tokenizer
+    )
     trainer_cls: type | None = None
     extra_trainer_kwargs: Callable | None = None  # -> dict merged into trainer kwargs
 
@@ -475,6 +482,9 @@ def run_training(
         trust_remote_code=resolve_trust_remote_code(model_args, training_args),
         use_fast=True,
     )
+    tokenizer = _default(
+        tokenizer, spec.postprocess_tokenizer, tokenizer, ctx, train_logger
+    )
 
     # Load the dataset
     if dataset_mixture_args.datasets:
@@ -521,14 +531,19 @@ def run_training(
     trainer_kwargs = {
         "args": training_args,
         "train_dataset": dataset[script_args.dataset_train_split],
-        "eval_dataset": dataset[script_args.dataset_test_split]
-        if training_args.eval_strategy != "no"
-        else None,
         "processing_class": tokenizer,
-        "peft_config": get_peft_config(model_args),
-        "debug_first_n_batches": dnotitia_args.debug_first_n_batches,
         "callbacks": callbacks or None,
     }
+    if spec.pass_eval_dataset:
+        trainer_kwargs["eval_dataset"] = (
+            dataset[script_args.dataset_test_split]
+            if training_args.eval_strategy != "no"
+            else None
+        )
+    if spec.pass_debug_batches:
+        trainer_kwargs["debug_first_n_batches"] = dnotitia_args.debug_first_n_batches
+    if spec.pass_peft_config:
+        trainer_kwargs["peft_config"] = get_peft_config(model_args)
     trainer_kwargs.update(models_kwargs)
     trainer_kwargs.update(
         _default(
@@ -565,6 +580,11 @@ def cli_main(spec, argv=None):
 
     # Get arguments with load default YAML configuration
     cli_args = list(sys.argv[1:] if argv is None else argv)
+    cli_args = [
+        part
+        for arg in cli_args
+        for part in (arg.split("=", 1) if arg.startswith("--config=") else [arg])
+    ]
 
     # Parse user-specified arguments before adding defaults
     user_specified_args = parse_user_args(cli_args)
@@ -584,12 +604,22 @@ def cli_main(spec, argv=None):
             config_path = spec.defaults_yaml
     else:
         config_path = spec.defaults_yaml
+    # The merged config replaces the original --config, which strict parsing would reject.
+    if user_has_config:
+        del cli_args[config_index : config_index + 2]
     full_args = ["--config", config_path, *cli_args]
 
     # Parse arguments
-    (script_args, training_args, model_args, dataset_mixture_args, dnotitia_args, _) = (
-        parser.parse_args_and_config(full_args, return_remaining_strings=True)
-    )
+    (
+        script_args,
+        training_args,
+        model_args,
+        dataset_mixture_args,
+        dnotitia_args,
+        remaining,
+    ) = parser.parse_args_and_config(full_args, return_remaining_strings=True)
+    if spec.strict_args and remaining:
+        raise ValueError(f"Unsupported {spec.name} arguments: {' '.join(remaining)}")
 
     # Run the main function
     return run_training(

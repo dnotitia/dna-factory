@@ -11,24 +11,22 @@ def parse_user_args(args):
     while i < len(args):
         arg = args[i]
         if arg.startswith("--"):
-            # Remove '--' prefix and convert to field name format
-            field_name = arg[2:].replace("-", "_")
+            # `--name=value` carries its value in the same token, `--name value` in the next one.
+            name, inline, inline_value = arg[2:].partition("=")
+            field_name = name.replace("-", "_")
             user_specified_args.add(field_name)
 
-            # Special handling for --config option
-            if (
-                field_name == "config"
-                and i + 1 < len(args)
-                and not args[i + 1].startswith("--")
-            ):
-                config_file = args[i + 1]
-                # Parse the YAML config file and add its keys to user_specified_args
-                yaml_args = parse_yaml_config(config_file)
-                user_specified_args.update(yaml_args)
-
-            # Skip the next argument if it's a value (not starting with --)
-            if i + 1 < len(args) and not args[i + 1].startswith("--"):
+            if inline:
+                value = inline_value
+            elif i + 1 < len(args) and not args[i + 1].startswith("--"):
+                value = args[i + 1]
                 i += 1
+            else:
+                value = None
+
+            # Keys of a user-supplied config file count as user-specified too
+            if field_name == "config" and value:
+                user_specified_args.update(parse_yaml_config(value))
         elif arg.startswith("-") and len(arg) > 1:
             # Handle short options like -n, -v, etc.
             field_name = arg[1:]

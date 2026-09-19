@@ -1,0 +1,44 @@
+# AsyncGRPO has a separate schema; do not inherit _defaults-GRPO.yaml.
+# Reference: https://huggingface.co/docs/trl/async_grpo_trainer
+grpo_execution: async
+dataset_name: trl-lib/DeepMath-103K
+reward_funcs:
+  - dna_factory.rewards.safe_accuracy_reward
+  - dna_factory.rewards.boxed_match_reward
+model_name_or_path: dnotitia/Qwen3-0.6B
+dtype: bfloat16
+# TRL's AsyncGRPOTrainer hardcodes flash-attn3 internally, but that build has no sm100/B200
+# kernels; dna_factory/async_grpo.py overrides it so this value (flash-attn2) is actually used.
+attn_implementation: kernels-community/flash-attn2
+trust_remote_code: false
+output_dir: auto
+seed: 42
+log_level: info
+vllm_server_base_url: http://localhost:8000
+num_generations: 8
+max_completion_length: 2048
+temperature: 1.0
+epsilon: 0.2
+max_inflight_tasks: -1  # if -1, default value will be `max_staleness × per_device_train_batch_size × gradient_accumulation_steps × num_processes`
+max_staleness: 4
+weight_sync_steps: 1
+token_budget: null  # if null, default value will be vllm's `--max-model-len`. Recommended to leave it as null
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 4
+max_steps: 100
+learning_rate: 1.0e-6
+lr_scheduler_type: constant
+bf16: true
+gradient_checkpointing: true
+use_liger_kernel: false
+logging_steps: 1
+report_to: [none]
+save_strategy: steps
+save_steps: 50
+save_total_limit: 3
+periodic_save_seconds: 6h
+ignore_data_skip: true
+eval_strategy: 'no'
+do_eval: false
+debug_first_n_batches: 0
+dynamic_sampling: 'off'  # when AsyncGRPO is used, dynamic sampling must be set off! they are not compatible yet
