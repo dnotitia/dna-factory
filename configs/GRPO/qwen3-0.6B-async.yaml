@@ -1,0 +1,4 @@
+grpo_execution: async
+model_name_or_path: dnotitia/Qwen3-0.6B
+vllm_server_base_url: http://localhost:8000
+max_steps: 100
