@@ -356,6 +356,7 @@ class TrainingSpec:
     # Hooks. All receive (script_args, training_args, model_args, dnotitia_args, ctx, logger)
     # unless noted; `dataset_mixture_args` replaces `model_args`/`dnotitia_args` for load_mixture.
     set_dataset_num_proc: bool = True
+    strict_args: bool = False
     extra_env: dict = field(default_factory=dict)
     setup_training_args: Callable | None = (
         None  # validate + fill training_args (model_init_kwargs, ...)
@@ -565,6 +566,11 @@ def cli_main(spec, argv=None):
 
     # Get arguments with load default YAML configuration
     cli_args = list(sys.argv[1:] if argv is None else argv)
+    cli_args = [
+        part
+        for arg in cli_args
+        for part in (arg.split("=", 1) if arg.startswith("--config=") else [arg])
+    ]
 
     # Parse user-specified arguments before adding defaults
     user_specified_args = parse_user_args(cli_args)
@@ -584,12 +590,22 @@ def cli_main(spec, argv=None):
             config_path = spec.defaults_yaml
     else:
         config_path = spec.defaults_yaml
+    # The merged config replaces the original --config, which strict parsing would reject.
+    if user_has_config:
+        del cli_args[config_index : config_index + 2]
     full_args = ["--config", config_path, *cli_args]
 
     # Parse arguments
-    (script_args, training_args, model_args, dataset_mixture_args, dnotitia_args, _) = (
-        parser.parse_args_and_config(full_args, return_remaining_strings=True)
-    )
+    (
+        script_args,
+        training_args,
+        model_args,
+        dataset_mixture_args,
+        dnotitia_args,
+        remaining,
+    ) = parser.parse_args_and_config(full_args, return_remaining_strings=True)
+    if spec.strict_args and remaining:
+        raise ValueError(f"Unsupported {spec.name} arguments: {' '.join(remaining)}")
 
     # Run the main function
     return run_training(
