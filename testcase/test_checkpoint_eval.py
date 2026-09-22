@@ -181,7 +181,7 @@ class TestVllmArgs:
     def test_reads_the_default_parallel_sizes(self):
         """The shipped default pairs --data-parallel-size 2 with two eval_devices."""
         tokens, _ = split_vllm_args(
-            "--max-model-len 32768 --gpu-memory-utilization 0.85 --data-parallel-size 2"
+            "--max-model-len 32768 --data-parallel-size 2"
         )
         assert parallel_device_count(tokens) == 2
 

@@ -25,7 +25,7 @@ eval_tasks:                  # Inspect registry names, or local task files
   - evals/kmmlu_pro.py
   - evals/kmmlu_redux.py
 eval_devices: "0,1"          # CUDA_VISIBLE_DEVICES for the eval vLLM server
-eval_vllm_args: "--max-model-len 32768 --gpu-memory-utilization 0.85 --data-parallel-size 2"
+eval_vllm_args: "--max-model-len 32768 --data-parallel-size 2"
 eval_max_connections: 40     # inspect eval --max-connections
 eval_max_tokens: 16000       # inspect eval --max-tokens
 ```
@@ -51,7 +51,7 @@ CUDA_VISIBLE_DEVICES=0,1 \
 vllm serve <output_dir>/_eval_staging/checkpoint-1776 \
   --served-model-name Qwen3-4B-SFT-checkpoint-1776 \
   --port 8000 \
-  --max-model-len 32768 --gpu-memory-utilization 0.85 --data-parallel-size 2
+  --max-model-len 32768 --data-parallel-size 2
 
 # then, once /health answers, once per task:
 OPENAI_API_KEY=dna-factory-local \
@@ -100,7 +100,7 @@ The default is two GPUs, `0,1`, with `--data-parallel-size 2`: one full replica 
 
 ```yaml
 eval_devices: "7"
-eval_vllm_args: "--max-model-len 32768 --gpu-memory-utilization 0.85"
+eval_vllm_args: "--max-model-len 32768"
 ```
 
 Changing one and not the other is warned about at startup, rather than left for vLLM to reject at the first checkpoint hours later.

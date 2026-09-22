@@ -83,7 +83,7 @@ class DnotitiaArguments:
     )
     eval_vllm_args: str = field(
         default=(
-            "--max-model-len 32768 --gpu-memory-utilization 0.85 --data-parallel-size 2"
+            "--max-model-len 32768 --data-parallel-size 2"
         ),
         metadata={
             "help": (
