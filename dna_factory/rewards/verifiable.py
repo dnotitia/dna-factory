@@ -7,6 +7,7 @@ builds one reward; the concrete instances (e.g. `boxed_match_reward`) live in my
 Contract: docs/grpo-rewards.md.
 """
 
+import functools
 import re
 
 from .generative import _to_text, _warn_once
@@ -75,6 +76,49 @@ def _normalize(text):
     return text.strip()
 
 
+def _string_match_reward(
+    prompts,
+    completions,
+    completion_ids,
+    log_metric=None,
+    *,
+    answer_column,
+    extractor,
+    only_label,
+    name,
+    **kwargs,
+):
+    extract = _EXTRACTORS[extractor]
+    labels = kwargs.get("label")
+    golds = kwargs.get(answer_column)
+    if only_label is not None and labels is None:
+        _warn_once(
+            f"{name}:missing_label",
+            f"{name}: only_label={only_label!r} is set but no dataset in this mixture "
+            "has a 'label' column (grpo.py's mixture loader injects one automatically for every "
+            "dataset — check how this dataset was loaded). Scoring nothing (all None).",
+        )
+        return [None] * len(prompts)
+
+    scores = []
+    for i in range(len(prompts)):
+        if only_label is not None and labels[i] != only_label:
+            scores.append(None)
+            continue
+        gold_raw = golds[i] if golds is not None else None
+        gold_text = _to_text(gold_raw) if gold_raw is not None else None
+        if gold_text is None or not gold_text.strip():
+            scores.append(None)
+            continue
+        gold_extracted = extract(gold_text)
+        gold_norm = _normalize(
+            gold_extracted if gold_extracted is not None else gold_text
+        )
+        completion_norm = _normalize(extract(_to_text(completions[i])))
+        scores.append(1.0 if completion_norm == gold_norm else 0.0)
+    return scores
+
+
 def make_string_match_reward(
     answer_column="solution", extractor="boxed", only_label=None, name=None
 ):
@@ -96,38 +140,13 @@ def make_string_match_reward(
         raise ValueError(
             f"Unknown extractor {extractor!r}; choose from {sorted(_EXTRACTORS)}"
         )
-    extract = _EXTRACTORS[extractor]
     resolved_name = name or f"string_match_{extractor}"
-
-    def reward(prompts, completions, completion_ids, log_metric=None, **kwargs):
-        labels = kwargs.get("label")
-        golds = kwargs.get(answer_column)
-        if only_label is not None and labels is None:
-            _warn_once(
-                f"{resolved_name}:missing_label",
-                f"{resolved_name}: only_label={only_label!r} is set but no dataset in this mixture "
-                "has a 'label' column (grpo.py's mixture loader injects one automatically for every "
-                "dataset — check how this dataset was loaded). Scoring nothing (all None).",
-            )
-            return [None] * len(prompts)
-
-        scores = []
-        for i in range(len(prompts)):
-            if only_label is not None and labels[i] != only_label:
-                scores.append(None)
-                continue
-            gold_raw = golds[i] if golds is not None else None
-            gold_text = _to_text(gold_raw) if gold_raw is not None else None
-            if gold_text is None or not gold_text.strip():
-                scores.append(None)
-                continue
-            gold_extracted = extract(gold_text)
-            gold_norm = _normalize(
-                gold_extracted if gold_extracted is not None else gold_text
-            )
-            completion_norm = _normalize(extract(_to_text(completions[i])))
-            scores.append(1.0 if completion_norm == gold_norm else 0.0)
-        return scores
-
+    reward = functools.partial(
+        _string_match_reward,
+        answer_column=answer_column,
+        extractor=extractor,
+        only_label=only_label,
+        name=resolved_name,
+    )
     reward.__name__ = resolved_name
     return reward

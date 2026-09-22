@@ -83,6 +83,47 @@ class TestParseUserArgs:
         finally:
             os.unlink(config_path)
 
+    def test_parse_long_options_with_equals(self):
+        """Test that --name=value yields the same field names as --name value"""
+        args = ["--learning_rate=0.001", "--batch_size=32"]
+        result = parse_user_args(args)
+        assert "learning_rate" in result
+        assert "batch_size" in result
+
+    def test_parse_options_with_dashes_and_equals(self):
+        """Test that only the option name is dash-converted, never the value"""
+        args = ["--per-device-batch-size=32", "--learning-rate=3e-5"]
+        result = parse_user_args(args)
+        assert "per_device_batch_size" in result
+        assert "learning_rate" in result
+        assert not any("=" in name for name in result)
+        assert "3e_5" not in str(result)
+
+    def test_parse_equals_and_space_forms_are_equivalent(self):
+        """Test that both CLI forms produce identical results"""
+        spaced = parse_user_args(["--learning_rate", "0.001", "--packing", "true"])
+        equals = parse_user_args(["--learning_rate=0.001", "--packing=true"])
+        assert spaced == equals
+
+    def test_parse_config_file_option_with_equals(self):
+        """Test that --config=path also pulls in the config file's keys"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write("model_name: test\n")
+            config_path = f.name
+
+        try:
+            result = parse_user_args([f"--config={config_path}", "--batch_size=32"])
+            assert "config" in result
+            assert "model_name" in result
+            assert "batch_size" in result
+        finally:
+            os.unlink(config_path)
+
+    def test_parse_config_without_value(self):
+        """Test that a valueless --config does not crash"""
+        assert parse_user_args(["--config"]) == {"config"}
+        assert parse_user_args(["--config="]) == {"config"}
+
     def test_empty_args(self):
         """Test with empty arguments list"""
         args = []

@@ -1,11 +1,13 @@
 """GRPO training script. Shared setup/train/save flow lives in dna_factory/training_runner.py."""
 
+import argparse
 import importlib
 import logging
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
+import yaml
 from trl import (
     DatasetMixtureConfig,
     GRPOConfig,
@@ -30,6 +32,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class GRPOScriptArguments(ScriptArguments):
     """GRPO script args: reward model + reward funcs (see docs/grpo-rewards.md)."""
+
+    grpo_execution: str = field(
+        default="sync", metadata={"help": "GRPO execution mode: sync or async."}
+    )
 
     reward_model_name_or_path: str | None = field(
         default=None,
@@ -270,7 +276,7 @@ def main(
     user_specified_args=None,
 ):
     return run_training(
-        SPEC,
+        get_spec(script_args.grpo_execution),
         script_args,
         training_args,
         model_args,
@@ -280,5 +286,103 @@ def main(
     )
 
 
+def resolve_grpo_execution(argv):
+    """Select defaults/config class before full parsing; CLI takes precedence over YAML."""
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("--config")
+    parser.add_argument(
+        "--grpo_execution", "--grpo-execution", choices=("sync", "async")
+    )
+    selected, _ = parser.parse_known_args(argv)
+    config = {}
+    if selected.config:
+        with open(selected.config, encoding="utf-8") as handle:
+            config = yaml.safe_load(handle) or {}
+    mode = selected.grpo_execution or config.get("grpo_execution", "sync")
+    if mode not in ("sync", "async"):
+        raise ValueError(f"grpo_execution must be 'sync' or 'async', got {mode!r}")
+    return mode
+
+
+def get_spec(mode):
+    if mode == "sync":
+        return SPEC
+    if mode != "async":
+        raise ValueError(f"Unknown GRPO execution mode: {mode!r}")
+    from trl.experimental.async_grpo import AsyncGRPOTrainer
+
+    from dna_factory.async_grpo import DnotitiaAsyncGRPOConfig
+
+    return replace(
+        SPEC,
+        name="AsyncGRPO",
+        output_dir_tag="ASYNCGRPO",
+        trainer_type="AsyncGRPO",
+        trainer_module="trl.experimental.async_grpo",
+        defaults_yaml="configs/_defaults-AsyncGRPO.yaml",
+        dataclass_types=(
+            GRPOScriptArguments,
+            DnotitiaAsyncGRPOConfig,
+            ModelConfig,
+            LabeledDatasetMixtureConfig,
+            DnotitiaArguments,
+        ),
+        set_dataset_num_proc=False,
+        pass_eval_dataset=False,
+        pass_debug_batches=False,
+        pass_peft_config=False,
+        strict_args=True,
+        setup_training_args=setup_async_training_args,
+        postprocess_tokenizer=postprocess_async_tokenizer,
+        trainer_cls=AsyncGRPOTrainer,
+        extra_trainer_kwargs=async_trainer_kwargs,
+    )
+
+
+def setup_async_training_args(
+    script_args, training_args, model_args, dnotitia_args, ctx, train_logger
+):
+    from dna_factory.async_grpo import (
+        apply_attn_implementation_override,
+        validate_async_args,
+        validate_completion_length_against_server,
+    )
+
+    validate_async_args(script_args, training_args, model_args, dnotitia_args)
+    # TRL hardcodes flash-attn3 in AsyncGRPOTrainer, which has no sm100 build.
+    apply_attn_implementation_override(model_args.attn_implementation)
+    validate_completion_length_against_server(training_args, train_logger)
+    ctx["reward_funcs"] = resolve_reward_funcs(script_args, training_args)
+    training_args.dtype = model_args.dtype
+    training_args.model_init_kwargs = {
+        **(training_args.model_init_kwargs or {}),
+        "revision": model_args.model_revision,
+        "trust_remote_code": resolve_trust_remote_code(model_args, training_args),
+        "dtype": model_args.dtype,
+    }
+    train_logger.info(
+        "AsyncGRPO: single training GPU; server=%s, max_inflight_tasks=%s, "
+        "max_staleness=%s, token_budget=%s",
+        training_args.vllm_server_base_url,
+        training_args.max_inflight_tasks,
+        training_args.max_staleness,
+        training_args.token_budget,
+    )
+
+
+def async_trainer_kwargs(
+    script_args, training_args, model_args, dnotitia_args, ctx, train_logger
+):
+    return {"reward_funcs": ctx["reward_funcs"]}
+
+
+def postprocess_async_tokenizer(tokenizer, ctx, train_logger):
+    """Give the tokenizer a response template TRL's chat-template matching would miss."""
+    from dna_factory.async_grpo import apply_response_template_override
+
+    apply_response_template_override(tokenizer)
+    return tokenizer
+
+
 if __name__ == "__main__":
-    cli_main(SPEC)
+    cli_main(get_spec(resolve_grpo_execution(sys.argv[1:])))
