@@ -82,9 +82,7 @@ class DnotitiaArguments:
         },
     )
     eval_vllm_args: str = field(
-        default=(
-            "--max-model-len 32768 --data-parallel-size 2"
-        ),
+        default=("--max-model-len 32768 --data-parallel-size 2"),
         metadata={
             "help": (
                 "Extra flags appended to `vllm serve <checkpoint>` for the eval server. "
