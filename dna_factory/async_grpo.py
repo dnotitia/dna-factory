@@ -196,7 +196,7 @@ def _poll_server_max_model_len(base_url, train_logger):
             response = requests.get(f"{base_url}/v1/models", timeout=5)
             response.raise_for_status()
             return response.json()["data"][0]["max_model_len"]
-        except requests.RequestException, ValueError, KeyError, IndexError:
+        except (requests.RequestException, ValueError, KeyError, IndexError):
             continue
     train_logger.warning(
         "AsyncGRPO: could not reach the vLLM server at %s to check max_completion_length "

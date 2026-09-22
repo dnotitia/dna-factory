@@ -600,7 +600,7 @@ def cli_main(spec, argv=None):
                 user_config_path = cli_args[config_index + 1]
 
             config_path = merge_config_files(spec.defaults_yaml, user_config_path)
-        except ValueError, IndexError:
+        except (ValueError, IndexError):
             config_path = spec.defaults_yaml
     else:
         config_path = spec.defaults_yaml
