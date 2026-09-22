@@ -11,7 +11,7 @@ dependencies = [
     "deepspeed==0.19.7",
     "inspect-ai==0.3.266",
     "inspect-evals==0.21.0",
-    "kernels==0.17.1",
+    "kernels==0.16.1",
     "liger-kernel==0.8.3",
     "math-verify==0.9.0",
     "peft==0.21.0",
