@@ -56,5 +56,5 @@ eval_tasks:                # registry names, or local task files (resolved again
   - evals/kmmlu_redux.py
 eval_devices: "0,1"        # CUDA_VISIBLE_DEVICES for the eval vLLM server; must match --data-parallel-size below
 eval_vllm_args: "--max-model-len 32768 --gpu-memory-utilization 0.85 --data-parallel-size 2"  # extra `vllm serve` flags
-eval_max_connections: 40   # inspect eval --max-connections; scaled to the two data-parallel replicas above
+eval_max_connections: 40   # inspect eval --max-connections
 eval_max_tokens: 16000     # inspect eval --max-tokens
