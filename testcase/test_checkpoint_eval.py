@@ -28,7 +28,9 @@ from dna_factory.checkpoint_eval import (
     extract_scores,
     find_free_port,
     normalize_eval_tasks,
+    parallel_device_count,
     read_eval_scores,
+    read_int_flag,
     resolve_task,
     served_model_tag,
     served_name_for_step,
@@ -175,6 +177,35 @@ class TestVllmArgs:
     def test_empty(self):
         assert split_vllm_args("") == ([], None)
         assert split_vllm_args(None) == ([], None)
+
+    def test_reads_the_default_parallel_sizes(self):
+        """The shipped default pairs --data-parallel-size 2 with two eval_devices."""
+        tokens, _ = split_vllm_args(
+            "--max-model-len 32768 --gpu-memory-utilization 0.85 --data-parallel-size 2"
+        )
+        assert parallel_device_count(tokens) == 2
+
+    @pytest.mark.parametrize(
+        ("spec", "expected"),
+        [
+            ("", 1),
+            ("--data-parallel-size 4", 4),
+            ("-dp 2", 2),
+            ("--tensor-parallel-size=8", 8),
+            ("-tp 2 -pp 2", 4),
+            ("--data-parallel-size 2 --tensor-parallel-size 4", 8),
+            # vLLM gets to reject its own malformed flags; this only feeds a warning.
+            ("--data-parallel-size auto", 1),
+        ],
+    )
+    def test_parallel_device_count(self, spec, expected):
+        tokens, _ = split_vllm_args(spec)
+        assert parallel_device_count(tokens) == expected
+
+    def test_read_int_flag_takes_the_last_occurrence(self):
+        tokens, _ = split_vllm_args("-dp 2 --data-parallel-size 4")
+        assert read_int_flag(tokens, "--data-parallel-size", "-dp") == 4
+        assert read_int_flag(tokens, "--missing", default=7) == 7
 
 
 class TestChildEnv:
@@ -718,8 +749,8 @@ class TestBuildCallback:
         dnotitia = SimpleNamespace(
             eval_on_checkpoint=True,
             eval_tasks=["inspect_evals/mmlu_pro"],
-            eval_devices="7",
-            eval_vllm_args="--max-model-len 32768",
+            eval_devices="0,1",
+            eval_vllm_args="--max-model-len 32768 --data-parallel-size 2",
             eval_max_connections=20,
             eval_max_tokens=16000,
         )
@@ -762,14 +793,19 @@ class TestBuildCallback:
             training, model, dnotitia, train_logger
         )
         assert callback.tasks == ["inspect_evals/mmlu_pro"]
-        assert callback.devices == "7"
+        assert callback.devices == "0,1"
         assert callback.model_tag == "run"
-        assert callback.vllm_args == ["--max-model-len", "32768"]
+        assert callback.vllm_args == [
+            "--max-model-len",
+            "32768",
+            "--data-parallel-size",
+            "2",
+        ]
         assert warnings == []
 
     def test_warns_when_eval_devices_overlap_training(self, monkeypatch):
         monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
-        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1,7")
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "1,2,3")
         warnings = []
         train_logger = SimpleNamespace(
             info=lambda *a, **k: None, warning=lambda *a, **k: warnings.append(a[0])
@@ -777,6 +813,29 @@ class TestBuildCallback:
         training, model, dnotitia = self._args()
         build_checkpoint_eval_callback(training, model, dnotitia, train_logger)
         assert any("overlaps the training devices" in w for w in warnings)
+
+    def test_warns_when_devices_and_parallel_sizes_disagree(self, monkeypatch):
+        """Overriding eval_devices but not --data-parallel-size is the easy mistake."""
+        monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+        monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+        warnings = []
+        train_logger = SimpleNamespace(
+            info=lambda *a, **k: None, warning=lambda *a, **k: warnings.append(a[0])
+        )
+        training, model, dnotitia = self._args(eval_devices="7")
+        build_checkpoint_eval_callback(training, model, dnotitia, train_logger)
+        assert any("multiply out to" in w for w in warnings)
+
+    def test_no_mismatch_warning_for_the_shipped_defaults(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+        monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+        warnings = []
+        train_logger = SimpleNamespace(
+            info=lambda *a, **k: None, warning=lambda *a, **k: warnings.append(a[0])
+        )
+        training, model, dnotitia = self._args()
+        build_checkpoint_eval_callback(training, model, dnotitia, train_logger)
+        assert warnings == []
 
     def test_warns_when_wandb_is_not_a_reporting_backend(self, monkeypatch):
         monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")

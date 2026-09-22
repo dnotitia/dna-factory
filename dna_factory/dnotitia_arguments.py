@@ -54,7 +54,8 @@ class DnotitiaArguments:
                 "eval_devices, run eval_tasks against it with Inspect, and log the scores to "
                 "the live W&B run at the checkpoint's global_step. Runs in a background "
                 "thread on rank 0 only -- training never waits for it, and an eval failure "
-                "is a warning, never a crash. Requires eval_devices."
+                "is a warning, never a crash. With the defaults below, turning this on is "
+                "the only change needed; point eval_devices at GPUs training does not use."
             )
         },
     )
@@ -70,21 +71,28 @@ class DnotitiaArguments:
         },
     )
     eval_devices: str = field(
-        default="",
+        default="0,1",
         metadata={
             "help": (
-                "CUDA_VISIBLE_DEVICES for the eval vLLM server, e.g. '0,1'. Required when "
-                "eval_on_checkpoint is true: training already owns its GPUs, so the eval "
-                "server needs devices of its own rather than silently OOM-ing the run."
+                "CUDA_VISIBLE_DEVICES for the eval vLLM server. Two GPUs by default, to "
+                "match the --data-parallel-size 2 in eval_vllm_args: change one and change "
+                "the other. Must not overlap the devices training runs on -- training "
+                "already owns its GPUs, and a server sharing them OOMs the run."
             )
         },
     )
     eval_vllm_args: str = field(
-        default="--max-model-len 32768 --gpu-memory-utilization 0.85",
+        default=(
+            "--max-model-len 32768 --gpu-memory-utilization 0.85 --data-parallel-size 2"
+        ),
         metadata={
             "help": (
                 "Extra flags appended to `vllm serve <checkpoint>` for the eval server. "
-                "A --port here pins the port; otherwise a free one is picked from 8000 up."
+                "Data parallel by default: one full replica per GPU, which is what an eval "
+                "wants (many independent samples) -- use --tensor-parallel-size instead for "
+                "a model too big for one GPU. The parallel sizes must multiply out to the "
+                "number of devices in eval_devices. A --port here pins the port; otherwise "
+                "a free one is picked from 8000 up."
             )
         },
     )

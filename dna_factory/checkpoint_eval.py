@@ -265,16 +265,44 @@ def find_free_port(start=_PORT_SCAN_START, count=_PORT_SCAN_COUNT):
     raise RuntimeError(f"No free port in [{start}, {start + count}).")
 
 
+def read_int_flag(tokens, *names, default=None):
+    """Value of the last `--flag N` / `--flag=N` among `names`, or `default`.
+
+    Returns `default` for a flag whose value isn't an integer, since reading these
+    only ever feeds a warning -- vLLM is the one that gets to reject its own flags.
+    """
+    value = default
+    for index, token in enumerate(tokens):
+        if token in names and index + 1 < len(tokens):
+            candidate = tokens[index + 1]
+        elif any(token.startswith(f"{name}=") for name in names):
+            candidate = token.split("=", 1)[1]
+        else:
+            continue
+        try:
+            value = int(candidate)
+        except ValueError:
+            continue
+    return value
+
+
 def split_vllm_args(vllm_args):
     """Split the extra `vllm serve` flags, and pull out an explicit `--port`."""
     tokens = shlex.split(vllm_args or "")
-    port = None
-    for index, token in enumerate(tokens):
-        if token == "--port" and index + 1 < len(tokens):
-            port = int(tokens[index + 1])
-        elif token.startswith("--port="):
-            port = int(token.split("=", 1)[1])
-    return tokens, port
+    return tokens, read_int_flag(tokens, "--port")
+
+
+def parallel_device_count(tokens):
+    """GPUs `vllm serve` will claim for the parallel sizes in `tokens`.
+
+    vLLM multiplies its parallel dimensions out and expects exactly that many visible
+    devices, so this is what `eval_devices` has to supply.
+    """
+    return (
+        read_int_flag(tokens, "--data-parallel-size", "-dp", default=1)
+        * read_int_flag(tokens, "--tensor-parallel-size", "-tp", default=1)
+        * read_int_flag(tokens, "--pipeline-parallel-size", "-pp", default=1)
+    )
 
 
 def _child_env(**overrides):
@@ -741,6 +769,23 @@ def build_checkpoint_eval_callback(
             devices,
             training_devices,
             ",".join(sorted(overlap)),
+        )
+
+    # The defaults pair two devices with --data-parallel-size 2, so overriding one and
+    # not the other is an easy mistake -- and one vLLM would otherwise only report at
+    # the first checkpoint, hours in.
+    vllm_tokens, _ = split_vllm_args(getattr(dnotitia_args, "eval_vllm_args", "") or "")
+    device_count = len([d for d in devices.split(",") if d.strip()])
+    wanted = parallel_device_count(vllm_tokens)
+    if wanted != device_count:
+        train_logger.warning(
+            "Checkpoint eval: eval_devices lists %d GPU(s) (%s) but the parallel sizes "
+            "in eval_vllm_args multiply out to %d. vLLM wants exactly as many visible "
+            "devices as that product, so it will most likely refuse to start. Match "
+            "--data-parallel-size (or --tensor-parallel-size) to eval_devices.",
+            device_count,
+            devices,
+            wanted,
         )
 
     if "wandb" not in (training_args.report_to or []):

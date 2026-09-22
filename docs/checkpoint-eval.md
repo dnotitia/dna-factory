@@ -8,15 +8,24 @@ Off by default. Nothing changes for an existing config until `eval_on_checkpoint
 
 ## Configuration
 
+Everything but the switch already has a working default, so turning it on is the whole
+setup — as long as GPUs 0 and 1 are not the ones you train on:
+
+```bash
+python sft.py --config configs/SFT/qwen3-4bexpr.yaml --eval_on_checkpoint true
+```
+
+These are the defaults it runs with (`configs/_defaults-*.yaml`):
+
 ```yaml
-eval_on_checkpoint: true     # master switch (default: false)
+eval_on_checkpoint: false    # master switch — the only one you have to set
 eval_tasks:                  # Inspect registry names, or local task files
   - inspect_evals/mmlu_pro
   - inspect_evals/gpqa_diamond
   - evals/kmmlu_pro.py
   - evals/kmmlu_redux.py
-eval_devices: "0,1"          # CUDA_VISIBLE_DEVICES for the eval vLLM server (required)
-eval_vllm_args: "--max-model-len 32768 --gpu-memory-utilization 0.85"
+eval_devices: "0,1"          # CUDA_VISIBLE_DEVICES for the eval vLLM server
+eval_vllm_args: "--max-model-len 32768 --gpu-memory-utilization 0.85 --data-parallel-size 2"
 eval_max_connections: 20     # inspect eval --max-connections
 eval_max_tokens: 16000       # inspect eval --max-tokens
 ```
@@ -25,7 +34,8 @@ The fields live in `DnotitiaArguments` next to `periodic_save_seconds`, so YAML 
 
 ```bash
 python sft.py --config configs/SFT/qwen3-4bexpr.yaml \
-  --eval_on_checkpoint true --eval_devices 6,7
+  --eval_on_checkpoint true \
+  --eval_devices 6,7
 ```
 
 All four entry points (`sft.py`, `dpo.py`, `grpo.py`, `distill.py`) get this, because it is wired in the shared runner.
@@ -41,7 +51,7 @@ CUDA_VISIBLE_DEVICES=0,1 \
 vllm serve <output_dir>/_eval_staging/checkpoint-1776 \
   --served-model-name Qwen3-4B-SFT-checkpoint-1776 \
   --port 8000 \
-  --max-model-len 32768 --gpu-memory-utilization 0.85
+  --max-model-len 32768 --gpu-memory-utilization 0.85 --data-parallel-size 2
 
 # then, once /health answers, once per task:
 OPENAI_API_KEY=dna-factory-local \
@@ -82,9 +92,20 @@ This is not cosmetic. An eval finishes minutes to hours after the checkpoint it 
 
 ## GPU placement
 
-The eval server needs devices of its own. Training already owns its GPUs, and an eval server sharing them is an OOM waiting to happen — several hours in, which is the worst time to find out. So `eval_devices` is required when the switch is on, `eval_on_checkpoint: true` without it is a startup error, and an overlap with the training process's `CUDA_VISIBLE_DEVICES` is a loud warning at startup.
+The eval server needs devices of its own. Training already owns its GPUs, and an eval server sharing them is an OOM waiting to happen — several hours in, which is the worst time to find out. So an overlap between `eval_devices` and the training process's `CUDA_VISIBLE_DEVICES` is a loud warning at startup, and an empty `eval_devices` with the switch on is a startup error.
 
-`eval_devices` is read as physical device ids: it is set verbatim in the server's environment, independent of whatever `CUDA_VISIBLE_DEVICES` the trainer was launched with. Size it for the *model*, not for training — `eval_vllm_args` carries `--tensor-parallel-size` and friends if one GPU isn't enough.
+The default is two GPUs, `0,1`, with `--data-parallel-size 2`: one full replica per GPU, round-robining the samples. That is the right shape for an eval, which is many independent requests rather than one large one — use `--tensor-parallel-size` instead when the model doesn't fit on a single GPU.
+
+**`eval_devices` and the parallel sizes have to agree.** vLLM multiplies its parallel dimensions out and expects exactly that many visible devices, so dropping to one eval GPU means dropping `--data-parallel-size` too:
+
+```yaml
+eval_devices: "7"
+eval_vllm_args: "--max-model-len 32768 --gpu-memory-utilization 0.85"
+```
+
+Changing one and not the other is warned about at startup, rather than left for vLLM to reject at the first checkpoint hours later.
+
+`eval_devices` is read as physical device ids: it is set verbatim in the server's environment, independent of whatever `CUDA_VISIBLE_DEVICES` the trainer was launched with.
 
 ## Guarantees
 
