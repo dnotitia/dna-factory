@@ -78,8 +78,6 @@ Each task becomes one metric, named after the task:
 eval/mmlu_pro   eval/gpqa_diamond   eval/kmmlu_pro   eval/kmmlu_redux
 ```
 
-with the standard error under `eval_stderr/<task>` so the four `eval/*` panels stay clean.
-
 They are logged against a dedicated `eval/step` x-axis, declared once with `define_metric`:
 
 ```python

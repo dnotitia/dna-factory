@@ -25,11 +25,11 @@ from dna_factory.checkpoint_eval import (
     _child_env,
     build_checkpoint_eval_callback,
     derive_task_name,
-    extract_scores,
+    extract_score,
     find_free_port,
     normalize_eval_tasks,
     parallel_device_count,
-    read_eval_scores,
+    read_eval_score,
     read_int_flag,
     resolve_task,
     served_model_tag,
@@ -318,7 +318,7 @@ def _results(scores, headline=None):
     )
 
 
-class TestExtractScores:
+class TestExtractScore:
     def test_prefers_the_headline_metric(self):
         from inspect_ai.log._log import HeadlineMetric
 
@@ -329,24 +329,24 @@ class TestExtractScores:
             ],
             headline=HeadlineMetric(scorer="choice", metric="accuracy"),
         )
-        assert extract_scores(SimpleNamespace(results=results)) == (0.61, 0.02)
+        assert extract_score(SimpleNamespace(results=results)) == 0.61
 
     def test_falls_back_to_accuracy(self):
         results = _results([_score("choice", {"accuracy": 0.42, "stderr": 0.01})])
-        assert extract_scores(SimpleNamespace(results=results)) == (0.42, 0.01)
+        assert extract_score(SimpleNamespace(results=results)) == 0.42
 
     def test_falls_back_to_mean_then_to_whatever_exists(self):
         results = _results([_score("custom", {"mean": 0.5})])
-        assert extract_scores(SimpleNamespace(results=results)) == (0.5, None)
+        assert extract_score(SimpleNamespace(results=results)) == 0.5
         results = _results([_score("custom", {"f1": 0.7})])
-        assert extract_scores(SimpleNamespace(results=results)) == (0.7, None)
+        assert extract_score(SimpleNamespace(results=results)) == 0.7
 
     def test_no_scores(self):
-        assert extract_scores(SimpleNamespace(results=_results([]))) == (None, None)
-        assert extract_scores(SimpleNamespace(results=None)) == (None, None)
+        assert extract_score(SimpleNamespace(results=_results([]))) is None
+        assert extract_score(SimpleNamespace(results=None)) is None
 
 
-class TestReadEvalScores:
+class TestReadEvalScore:
     """Round-trip through a real Inspect log file, as written on disk by `inspect eval`."""
 
     def test_reads_the_newest_log(self, tmp_path):
@@ -373,11 +373,11 @@ class TestReadEvalScores:
             ),
         )
         write_eval_log(log, str(tmp_path / "kmmlu_pro.eval"))
-        assert read_eval_scores(tmp_path) == (0.7345, 0.0123)
+        assert read_eval_score(tmp_path) == 0.7345
 
     def test_missing_log_raises(self, tmp_path):
         with pytest.raises(FileNotFoundError):
-            read_eval_scores(tmp_path)
+            read_eval_score(tmp_path)
 
 
 # A stand-in for `vllm serve`: answers /health after a delay, ignores everything else.
@@ -641,12 +641,7 @@ write_eval_log(
 
         assert logged == [
             (
-                {
-                    "eval/mmlu_pro": 0.5,
-                    "eval_stderr/mmlu_pro": 0.01,
-                    "eval/kmmlu_pro": 0.25,
-                    "eval_stderr/kmmlu_pro": 0.01,
-                },
+                {"eval/mmlu_pro": 0.5, "eval/kmmlu_pro": 0.25},
                 100,
             )
         ]

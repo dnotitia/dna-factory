@@ -321,8 +321,8 @@ def _tail(path, lines=_TAIL_LINES_ON_FAILURE):
     return "\n".join(content[-lines:]) or "<empty>"
 
 
-def extract_scores(eval_log):
-    """`(primary, stderr)` for one Inspect log, or `(None, None)`.
+def extract_score(eval_log):
+    """The primary score for one Inspect log, or `None`.
 
     Prefers the log's own headline metric -- the number `inspect view` shows -- and
     falls back to `accuracy`/`mean`/whatever the first scorer reports, so a task
@@ -331,7 +331,7 @@ def extract_scores(eval_log):
     results = getattr(eval_log, "results", None)
     scores = getattr(results, "scores", None) or []
     if not scores:
-        return None, None
+        return None
 
     headline = getattr(results, "headline", None)
     chosen = None
@@ -349,21 +349,17 @@ def extract_scores(eval_log):
         else:
             chosen = next(iter(metrics.values()), None)
 
-    stderr = scores[0].metrics.get("stderr")
-    return (
-        None if chosen is None else chosen.value,
-        None if stderr is None else stderr.value,
-    )
+    return None if chosen is None else chosen.value
 
 
-def read_eval_scores(log_dir):
-    """Read the newest Inspect log under `log_dir` and pull its scores out."""
+def read_eval_score(log_dir):
+    """Read the newest Inspect log under `log_dir` and pull its score out."""
     from inspect_ai.log import list_eval_logs, read_eval_log
 
     infos = list_eval_logs(str(log_dir), descending=True)
     if not infos:
         raise FileNotFoundError(f"Inspect wrote no log under {log_dir}.")
-    return extract_scores(read_eval_log(infos[0], header_only=True))
+    return extract_score(read_eval_log(infos[0], header_only=True))
 
 
 class VllmEvalServer:
@@ -604,7 +600,7 @@ class CheckpointEvalCallback(TrainerCallback):
             for task in self.tasks:
                 name = derive_task_name(task)
                 try:
-                    primary, stderr = self._run_task(task, server, eval_root / name)
+                    primary = self._run_task(task, server, eval_root / name)
                 except Exception as error:  # noqa: BLE001 - one bad task, not the set
                     self.logger.warning(
                         "Checkpoint eval: task %s failed at step %d: %s",
@@ -621,8 +617,6 @@ class CheckpointEvalCallback(TrainerCallback):
                     )
                     continue
                 metrics[f"eval/{name}"] = primary
-                if stderr is not None:
-                    metrics[f"eval_stderr/{name}"] = stderr
                 self.logger.info(
                     "Checkpoint eval: step %d, %s = %.4f", global_step, name, primary
                 )
@@ -681,7 +675,7 @@ class CheckpointEvalCallback(TrainerCallback):
                 f"`inspect eval {task}` exited with code {completed.returncode}. "
                 f"Last lines of {stdout_path}:\n{_tail(stdout_path)}"
             )
-        return read_eval_scores(log_dir)
+        return read_eval_score(log_dir)
 
     def _log_to_wandb(self, metrics, global_step):
         """Log the scores against a dedicated `eval/step` axis.
@@ -714,7 +708,6 @@ class CheckpointEvalCallback(TrainerCallback):
             if not self._wandb_axis_defined:
                 run.define_metric("eval/step")
                 run.define_metric("eval/*", step_metric="eval/step")
-                run.define_metric("eval_stderr/*", step_metric="eval/step")
                 self._wandb_axis_defined = True
             run.log({"eval/step": global_step, **metrics})
         except Exception as error:  # noqa: BLE001 - eval must never fail training
