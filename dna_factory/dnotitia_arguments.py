@@ -97,9 +97,14 @@ class DnotitiaArguments:
         },
     )
     eval_max_connections: int = field(
-        default=20,
+        default=40,
         metadata={
-            "help": "`inspect eval --max-connections`: concurrent requests to the eval server."
+            "help": (
+                "`inspect eval --max-connections`: concurrent requests in flight against "
+                "the eval server. Scaled to the two data-parallel replicas that "
+                "eval_vllm_args defaults to -- lower it alongside --data-parallel-size if "
+                "you serve the eval on fewer GPUs."
+            )
         },
     )
     eval_max_tokens: int = field(

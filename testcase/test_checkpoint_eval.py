@@ -622,7 +622,7 @@ write_eval_log(
             tasks=["inspect_evals/mmlu_pro", "evals/kmmlu_pro.py"],
             devices="7",
             vllm_args="--warmup 0",
-            max_connections=20,
+            max_connections=40,
             max_tokens=16000,
             model_tag="Qwen3-0.6B-Base",
         )
@@ -666,7 +666,7 @@ write_eval_log(
             "http://127.0.0.1:"
         )
         assert first[first.index("-M") + 1] == "responses_api=false"
-        assert first[first.index("--max-connections") + 1] == "20"
+        assert first[first.index("--max-connections") + 1] == "40"
         assert first[first.index("--max-tokens") + 1] == "16000"
         # Local task files are resolved to an absolute path for the subprocess.
         assert calls[1][1].endswith("evals/kmmlu_pro.py")
@@ -751,7 +751,7 @@ class TestBuildCallback:
             eval_tasks=["inspect_evals/mmlu_pro"],
             eval_devices="0,1",
             eval_vllm_args="--max-model-len 32768 --data-parallel-size 2",
-            eval_max_connections=20,
+            eval_max_connections=40,
             eval_max_tokens=16000,
         )
         for key, value in overrides.items():

@@ -26,7 +26,7 @@ eval_tasks:                  # Inspect registry names, or local task files
   - evals/kmmlu_redux.py
 eval_devices: "0,1"          # CUDA_VISIBLE_DEVICES for the eval vLLM server
 eval_vllm_args: "--max-model-len 32768 --gpu-memory-utilization 0.85 --data-parallel-size 2"
-eval_max_connections: 20     # inspect eval --max-connections
+eval_max_connections: 40     # inspect eval --max-connections
 eval_max_tokens: 16000       # inspect eval --max-tokens
 ```
 
@@ -59,7 +59,7 @@ inspect eval evals/kmmlu_pro.py \
   --model openai/Qwen3-4B-SFT-checkpoint-1776 \
   --model-base-url http://127.0.0.1:8000/v1 \
   -M responses_api=false \
-  --max-connections 20 --max-tokens 16000 \
+  --max-connections 40 --max-tokens 16000 \
   --log-dir <output_dir>/eval_logs/step-1776/kmmlu_pro
 ```
 
@@ -94,7 +94,7 @@ This is not cosmetic. An eval finishes minutes to hours after the checkpoint it 
 
 The eval server needs devices of its own. Training already owns its GPUs, and an eval server sharing them is an OOM waiting to happen — several hours in, which is the worst time to find out. So an overlap between `eval_devices` and the training process's `CUDA_VISIBLE_DEVICES` is a loud warning at startup, and an empty `eval_devices` with the switch on is a startup error.
 
-The default is two GPUs, `0,1`, with `--data-parallel-size 2`: one full replica per GPU, round-robining the samples. That is the right shape for an eval, which is many independent requests rather than one large one — use `--tensor-parallel-size` instead when the model doesn't fit on a single GPU.
+The default is two GPUs, `0,1`, with `--data-parallel-size 2`: one full replica per GPU, round-robining the samples. That is the right shape for an eval, which is many independent requests rather than one large one — use `--tensor-parallel-size` instead when the model doesn't fit on a single GPU. `eval_max_connections` (40) is sized to keep both replicas fed; serving the eval on fewer GPUs is a reason to bring it down too.
 
 **`eval_devices` and the parallel sizes have to agree.** vLLM multiplies its parallel dimensions out and expects exactly that many visible devices, so dropping to one eval GPU means dropping `--data-parallel-size` too:
 
