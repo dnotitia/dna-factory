@@ -15,7 +15,6 @@ and **On-Policy Distillation** where a frozen teacher grades the student's own t
 - [Design Principles](#design-principles)
 - [Key Features](#key-features)
 - [How to Run](#how-to-run)
-  - [AsyncGRPO](#asyncgrpo)
   - [Advanced Usage](#advanced-usage)
   - [Multi-GPUs](#multi-gpus)
   - [Multi-Nodes](#multi-nodes)
@@ -70,30 +69,6 @@ $ python grpo.py
 # On-Policy Distillation — student completions scored token-wise by a frozen teacher.
 $ python distill.py
 ```
-
-## AsyncGRPO
-
-For AsyncGRPO, we use the same `grpo.py` entry point, with only the rollouts (generation) decoupled asynchronously on its own GPU: the
-student policy (= target policy) trains on one GPU while an external vLLM server (= rollout policy = old policy in `trl`) generates on another.
-
-```bash
-$ CUDA_VISIBLE_DEVICES=1 VLLM_SERVER_DEV_MODE=1 vllm serve dnotitia/Qwen3-0.6B \
-  --logprobs-mode processed_logprobs \
-  --weight-transfer-config '{"backend":"nccl"}' \
-  --max-model-len 16384
-
-$ CUDA_VISIBLE_DEVICES=0 python grpo.py \
-  --config configs/GRPO/qwen3-0.6B-async.yaml \
-  --max_completion_length 8192
-```
-
-We limit our scope to single-GPU training for now (except for external vLLM GPU use), and a single-process full fine-tune as only FSDP2 is allowed for `trl` for now;
-DeepSpeed, FSDP, evaluation, dynamic sampling, PEFT and quantization are not allowed for now.
-
-`AsyncGRPO` is an experimental in `trl`, so there may be frequent update on this.
-
-See [docs/async-grpo.md](docs/async-grpo.md) for token-budget sizing, staleness
-metrics, resume behavior, and the measurements behind the defaults.
 
 ## Advanced Usage
 
