@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from dna_factory.checkpoint_eval import DEFAULT_EVAL_TASKS
+
 
 @dataclass
 class DnotitiaArguments:
@@ -43,4 +45,56 @@ class DnotitiaArguments:
                 "checkpoint source."
             )
         },
+    )
+    eval_on_checkpoint: bool = field(
+        default=False,
+        metadata={
+            "help": (
+                "Benchmark every checkpoint written during training: serve it with vLLM on "
+                "eval_devices, run eval_tasks against it with Inspect, and log the scores to "
+                "the live W&B run at the checkpoint's global_step. Runs in a background "
+                "thread on rank 0 only -- training never waits for it, and an eval failure "
+                "is a warning, never a crash. Requires eval_devices."
+            )
+        },
+    )
+    eval_tasks: list[str] = field(
+        default_factory=lambda: list(DEFAULT_EVAL_TASKS),
+        metadata={
+            "help": (
+                "Inspect tasks to run on each checkpoint: registry names "
+                "('inspect_evals/mmlu_pro') or local task files ('evals/kmmlu_pro.py', "
+                "resolved against the repo root when cwd does not have them). Each task "
+                "becomes one W&B metric, 'eval/<task>'."
+            )
+        },
+    )
+    eval_devices: str = field(
+        default="",
+        metadata={
+            "help": (
+                "CUDA_VISIBLE_DEVICES for the eval vLLM server, e.g. '0,1'. Required when "
+                "eval_on_checkpoint is true: training already owns its GPUs, so the eval "
+                "server needs devices of its own rather than silently OOM-ing the run."
+            )
+        },
+    )
+    eval_vllm_args: str = field(
+        default="--max-model-len 32768 --gpu-memory-utilization 0.85",
+        metadata={
+            "help": (
+                "Extra flags appended to `vllm serve <checkpoint>` for the eval server. "
+                "A --port here pins the port; otherwise a free one is picked from 8000 up."
+            )
+        },
+    )
+    eval_max_connections: int = field(
+        default=20,
+        metadata={
+            "help": "`inspect eval --max-connections`: concurrent requests to the eval server."
+        },
+    )
+    eval_max_tokens: int = field(
+        default=16000,
+        metadata={"help": "`inspect eval --max-tokens`: generation cap per sample."},
     )

@@ -22,6 +22,7 @@ and **On-Policy Distillation** where a frozen teacher grades the student's own t
 
 # News
 
+- Sep/22/2026 - **Checkpoint evaluation** — Inspect benchmarks on every checkpoint, logged to W&B.
 - Sep/02/2026 - **On-Policy Distillation** support.
 - Jun/05/2026 - **GRPO (Group Relative Policy Optimization)** support.
 - Oct/29/2025 - **DPO (Direct Preference Optimization)** support.
@@ -46,6 +47,7 @@ and **On-Policy Distillation** where a frozen teacher grades the student's own t
 1. **Composable GRPO rewards** — TRL builtins or dotted paths (judge / string-match / shaping); returning `None` skips a sample so several rewards can share one labeled mixture.
 1. **GRPO dynamic sampling** (`off` / `mask` / `resample`) — drop or refill zero-advantage groups so they don't waste a backward pass.
 1. **AsyncGRPO** — generation decoupled onto a separate vLLM GPU, with token-budget batching and staleness metrics; see [docs/async-grpo.md](docs/async-grpo.md).
+1. **Benchmarks on every checkpoint** — each checkpoint is served with vLLM on a spare GPU, scored with Inspect, and logged to the same W&B run, so eval curves land next to the loss curve while training keeps running; see [docs/checkpoint-eval.md](docs/checkpoint-eval.md).
 
 # How to Run
 
