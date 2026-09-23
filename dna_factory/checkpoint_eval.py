@@ -706,7 +706,7 @@ class CheckpointEvalCallback(TrainerCallback):
             return
         try:
             if not self._wandb_axis_defined:
-                run.define_metric("eval/step")
+                run.define_metric("eval/step", hidden=True)
                 run.define_metric("eval/*", step_metric="eval/step")
                 self._wandb_axis_defined = True
             run.log({"eval/step": global_step, **metrics})

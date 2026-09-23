@@ -81,12 +81,12 @@ eval/mmlu_pro   eval/gpqa_diamond   eval/kmmlu_pro   eval/kmmlu_redux
 They are logged against a dedicated `eval/step` x-axis, declared once with `define_metric`:
 
 ```python
-run.define_metric("eval/step")
+run.define_metric("eval/step", hidden=True)
 run.define_metric("eval/*", step_metric="eval/step")
 run.log({"eval/step": 1776, "eval/kmmlu_pro": 0.61})
 ```
 
-This is not cosmetic. An eval finishes minutes to hours after the checkpoint it scores, by which time the run's internal `_step` has moved well past it, and W&B silently drops a `log(step=...)` that goes backwards — the score would vanish. Logging the checkpoint's `global_step` as a *metric* and declaring it the x-axis puts the eval curves on the training step axis without either side waiting for the other.
+This is not cosmetic. An eval finishes minutes to hours after the checkpoint it scores, by which time the run's internal `_step` has moved well past it, and W&B silently drops a `log(step=...)` that goes backwards — the score would vanish. Logging the checkpoint's `global_step` as a *metric* and declaring it the x-axis puts the eval curves on the training step axis without either side waiting for the other. `hidden=True` keeps `eval/step` off the auto-charts; it is only the x-axis.
 
 ## GPU placement
 
