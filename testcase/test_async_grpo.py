@@ -1,5 +1,6 @@
 """CPU checks for the GRPO execution switch and AsyncGRPO support boundary."""
 
+import copy
 import inspect
 import logging
 import pickle
@@ -20,6 +21,17 @@ from dna_factory.async_grpo import (
     validate_async_args,
     validate_completion_length_against_server,
 )
+
+
+@pytest.fixture(autouse=True)
+def _skip_cuda_tf32_probe(monkeypatch):
+    """TrainingArguments.__post_init__ calls is_torch_tf32_available() whenever tf32 is set
+    (GRPO defaults have tf32: false), and that probes torch.cuda.current_device() — several
+    seconds of CUDA init. These tests never train on GPU.
+    """
+    monkeypatch.setattr(
+        "transformers.training_args.is_torch_tf32_available", lambda: False
+    )
 
 
 def parse_async(monkeypatch, extra=()):
@@ -278,16 +290,29 @@ def test_attn_override_forces_kwarg_into_from_pretrained(monkeypatch):
     assert calls[-1]["attn_implementation"] == "kernels-community/flash-attn2"
 
 
-@pytest.fixture
-def dnotitia_qwen3_tokenizer():
-    """Real, offline-cached tokenizer whose chat template triggers the upstream match failure
-    this module's `apply_response_template_override` tests exercise (see that function's
-    docstring in dna_factory/async_grpo.py). Loaded fresh per test, not module-scoped, because the
-    function under test mutates the tokenizer in place and several tests need a clean slate.
+@pytest.fixture(scope="module")
+def _dnotitia_qwen3_tokenizer():
+    """Load the real Qwen3 tokenizer once. The Hub snapshot is what makes
+    `apply_response_template_override` necessary (see that function's docstring); prefer the
+    local cache so each run is not a Hub round-trip.
     """
     from transformers import AutoTokenizer
 
-    return AutoTokenizer.from_pretrained("dnotitia/Qwen3-0.6B")
+    try:
+        return AutoTokenizer.from_pretrained(
+            "dnotitia/Qwen3-0.6B", local_files_only=True
+        )
+    except OSError:
+        return AutoTokenizer.from_pretrained("dnotitia/Qwen3-0.6B")
+
+
+@pytest.fixture
+def dnotitia_qwen3_tokenizer(_dnotitia_qwen3_tokenizer):
+    """Per-test copy: the override mutates the tokenizer in place, and several tests need a
+    clean slate. A shallow copy is enough — only Python attributes (`chat_template`,
+    `response_template`, `response_schema`) are written.
+    """
+    return copy.copy(_dnotitia_qwen3_tokenizer)
 
 
 def test_add_response_schema_rejects_dnotitia_qwen3_template_unpatched(

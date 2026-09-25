@@ -73,14 +73,27 @@ def generate_auto_output_dir(
         ("dnotitia", vars(dnotitia_args)),
     ]
 
+    # Arguments that never belong in the name: the name itself, the model (it is
+    # already the prefix), and the checkpoint-eval knobs -- those only decide how the
+    # run is *observed*, so two runs that differ only there train the same model and
+    # should share (and resume from) the same directory. Their values are also long
+    # and flag-shaped, which would dominate the name.
+    EXCLUDED_PARAMS = {
+        "output_dir",
+        "model_name_or_path",
+        "eval_on_checkpoint",
+        "eval_tasks",
+        "eval_devices",
+        "eval_vllm_args",
+        "eval_max_connections",
+        "eval_max_tokens",
+    }
+
     # Create a unified dictionary of all user-specified arguments
     user_args_dict = {}
     for _, args_dict in all_args:
         for arg_name, arg_value in args_dict.items():
-            if arg_name in user_specified_args and arg_name not in [
-                "output_dir",
-                "model_name_or_path",
-            ]:
+            if arg_name in user_specified_args and arg_name not in EXCLUDED_PARAMS:
                 user_args_dict[arg_name] = arg_value
 
     # Collect user-specified argument names and values in the order defined in PARAM_ABBREVIATIONS

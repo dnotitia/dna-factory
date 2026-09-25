@@ -31,6 +31,7 @@ from transformers import (
 from transformers.trainer_utils import get_last_checkpoint
 from trl import TrlParser, get_peft_config, get_quantization_config
 
+from dna_factory.checkpoint_eval import build_checkpoint_eval_callback
 from dna_factory.periodic_checkpoint import (
     PeriodicCheckpointCallback,
     parse_duration_to_seconds,
@@ -527,6 +528,21 @@ def run_training(
             "will be saved during training."
         )
 
+    # Benchmark each checkpoint with Inspect (off unless eval_on_checkpoint is true).
+    # Validated here, before the model loads, so a misconfigured eval fails at startup
+    # rather than six hours in at the first checkpoint.
+    eval_callback = build_checkpoint_eval_callback(
+        training_args, model_args, dnotitia_args, train_logger
+    )
+    if eval_callback is not None:
+        if periodic_seconds <= 0 and training_args.save_strategy == "no":
+            train_logger.warning(
+                "Checkpoint eval is on but nothing saves checkpoints "
+                "(save_strategy='no' and periodic_save_seconds is off), so it will "
+                "never run."
+            )
+        callbacks.append(eval_callback)
+
     # Initialize the trainer
     trainer_kwargs = {
         "args": training_args,
@@ -600,7 +616,9 @@ def cli_main(spec, argv=None):
                 user_config_path = cli_args[config_index + 1]
 
             config_path = merge_config_files(spec.defaults_yaml, user_config_path)
-        except ValueError, IndexError:
+        except ValueError:  # no --config in cli_args, or an unmergeable config file
+            config_path = spec.defaults_yaml
+        except IndexError:  # --config was the last argument
             config_path = spec.defaults_yaml
     else:
         config_path = spec.defaults_yaml

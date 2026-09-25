@@ -42,3 +42,19 @@ eval_strategy: 'no'
 do_eval: false
 debug_first_n_batches: 0
 dynamic_sampling: 'off'  # when AsyncGRPO is used, dynamic sampling must be set off! they are not compatible yet
+
+# Benchmark every checkpoint while training keeps running: serve it with vLLM on
+# eval_devices, run each Inspect task against that server, and log the scores to the
+# live W&B run on an `eval/step` x-axis, so the eval curves line up with the loss
+# curve. Rank 0 only, in a background thread — training never waits — and any eval
+# failure is a warning, not a crash. Needs `report_to: [wandb]` to produce curves.
+eval_on_checkpoint: false  # master switch
+eval_tasks:                # registry names, or local task files (resolved against the repo root)
+  - inspect_evals/mmlu_pro
+  - inspect_evals/gpqa_diamond
+  - evals/kmmlu_pro.py
+  - evals/kmmlu_redux.py
+eval_devices: "0,1"        # CUDA_VISIBLE_DEVICES for the eval vLLM server; must match --data-parallel-size below
+eval_vllm_args: "--max-model-len 32768 --data-parallel-size 2"  # extra `vllm serve` flags
+eval_max_connections: 40   # inspect eval --max-connections
+eval_max_tokens: 16000     # inspect eval --max-tokens
