@@ -79,25 +79,29 @@ def prompt(question: str, choices: Choices, template: str) -> str:
     )
 
 
-def parse_answers(state: TaskState, multiple_correct: bool) -> set[str]:
-    """Extract '정답: <letters>' from the completion; empty set if not found."""
-    # Strict: a line that is exactly '정답: X' (optionally followed by a period).
-    match = re.search(
-        r"(?i)^정답\s*:\s*([A-Za-z\d ,]+)\s*(?:$|\n|\.)",
-        state.output.completion,
-        flags=re.MULTILINE,
-    )
-    # Lenient fallback.
-    if match is None:
-        match = re.search(
-            r"(?i)정답\s*:\s*([A-Za-z\d ,]+)(?:[^\w]|\n|$|\.)",
-            state.output.completion,
-        )
-    if match is None:
-        return set()
+def bare_answer(completion: str) -> str | None:
+    """Last non-empty line if it holds nothing but the letters, else None.
 
-    matched = match.group(1).strip().rstrip(".")
-    allowed_options = {answer_character(i) for i in range(len(state.choices))}
+    Catches the common case of a model that skips the '정답:' prefix and
+    replies with just 'A', 'A)', '(A)', '**A**' or 'A.'.
+    """
+    lines = [line.strip() for line in completion.strip().splitlines()]
+    lines = [line for line in lines if line]
+    if not lines:
+        return None
+
+    # Peel off markdown emphasis and the parens/period wrapping a bare letter.
+    # Anything else on the line survives and fails the allowed-options check.
+    stripped = lines[-1].strip("*_` \t").strip("()[].:：").strip("*_` \t")
+    return stripped or None
+
+
+def answers_from_letters(
+    matched: str, num_choices: int, multiple_correct: bool
+) -> set[str]:
+    """Validate the captured letters against the sample's options."""
+    matched = matched.strip().rstrip(".")
+    allowed_options = {answer_character(i) for i in range(num_choices)}
 
     if multiple_correct:
         matched = matched.replace(" ", "")
@@ -111,6 +115,32 @@ def parse_answers(state: TaskState, multiple_correct: bool) -> set[str]:
         return {matched}
 
     return set()
+
+
+def parse_answers(state: TaskState, multiple_correct: bool) -> set[str]:
+    """Extract the answer letters from the completion; empty set if not found."""
+    # Strict: a line that is exactly '정답: X' (optionally followed by a period).
+    match = re.search(
+        r"(?i)^정답\s*:\s*([A-Za-z\d ,]+)\s*(?:$|\n|\.)",
+        state.output.completion,
+        flags=re.MULTILINE,
+    )
+    # Lenient fallback.
+    if match is None:
+        match = re.search(
+            r"(?i)정답\s*:\s*([A-Za-z\d ,]+)(?:[^\w]|\n|$|\.)",
+            state.output.completion,
+        )
+
+    if match is not None:
+        matched = match.group(1)
+    else:
+        # Last resort: no '정답:' anywhere, so accept a bare trailing letter.
+        matched = bare_answer(state.output.completion)
+        if matched is None:
+            return set()
+
+    return answers_from_letters(matched, len(state.choices), multiple_correct)
 
 
 def set_choices_based_on_generated_response(
