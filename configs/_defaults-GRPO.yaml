@@ -28,7 +28,7 @@ log_level: info
 
 # GRPO core arguments
 beta: 0.0  # 0.0 = no reference model created (memory win); > 0 enables the KL penalty
-loss_type: dapo  # grpo, dapo, dr_grpo, bnpo, cispo, sapo, luspo, vespo
+loss_type: grpo  # grpo, dapo, dr_grpo, bnpo, cispo, sapo, luspo, vespo
 num_generations: 8  # Completions per prompt; must divide the generation batch size
 max_completion_length: 16384  # Too small truncates every completion -> reward 0 -> no gradient
 mask_truncated_completions: true  # DAPO overlong filtering: drop capped completions from the loss
