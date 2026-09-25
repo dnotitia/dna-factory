@@ -10,7 +10,6 @@ Four trainers share one setup/train/save path: **SFT** on instruction or convers
 **DPO** on chosen vs rejected pairs, **GRPO** as online RL scored by reward functions,
 and **On-Policy Distillation** where a frozen teacher grades the student's own tokens.
 
-- [DNA Factory](#dna-factory)
 - [News](#news)
 - [Design Principles](#design-principles)
 - [Key Features](#key-features)
@@ -22,7 +21,7 @@ and **On-Policy Distillation** where a frozen teacher grades the student's own t
 
 # News
 
-- Sep/22/2026 - **Checkpoint evaluation** — Inspect benchmarks on every checkpoint, logged to W&B.
+- Sep/22/2026 - **Checkpoint Evaluation** — Inspect benchmarks on every checkpoint, logged to W&B.
 - Sep/02/2026 - **On-Policy Distillation** support.
 - Jun/05/2026 - **GRPO (Group Relative Policy Optimization)** support.
 - Oct/29/2025 - **DPO (Direct Preference Optimization)** support.
