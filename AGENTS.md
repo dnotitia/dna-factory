@@ -60,7 +60,8 @@ with a MoE model risks ZeRO-3 param-trace errors.
 - Checkpoint eval (`eval_on_checkpoint: true`, off by default, all four entry points):
   every checkpoint is served with `vllm serve` on `eval_devices` and scored with
   `inspect eval`, on rank 0 in a background thread — training never blocks and an eval
-  failure is only a warning. Defaults are ready to use — flipping the switch is the only
+  failure is only a warning. `eval_baseline` (default true) also scores the starting
+  model at step 0 from `on_train_begin` (skipped on resume) as a baseline. Defaults are ready to use — flipping the switch is the only
   required change — but `eval_devices` (default `"0,1"`) must not be GPUs training uses,
   and it has to match the parallel sizes in `eval_vllm_args` (default
   `--data-parallel-size 2`); both are checked at startup. `on_save` hardlinks the checkpoint into

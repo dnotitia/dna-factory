@@ -528,8 +528,8 @@ class TestCallbackOnSave:
         seen = []
         release = threading.Event()
 
-        def fake_evaluate(staged_dir, global_step):
-            seen.append((Path(staged_dir), global_step))
+        def fake_evaluate(staged_dir, global_step, output_dir, remove_after):
+            seen.append((Path(staged_dir), global_step, remove_after))
             release.wait(timeout=10)
 
         monkeypatch.setattr(callback, "_evaluate", fake_evaluate)
@@ -543,7 +543,7 @@ class TestCallbackOnSave:
         assert (staged / "model.safetensors").exists()
         release.set()
         callback._thread.join(timeout=10)
-        assert seen == [(staged, 100)]
+        assert seen == [(staged, 100, True)]
 
     def test_skips_a_checkpoint_while_an_eval_is_still_running(
         self, tmp_path, monkeypatch
@@ -552,7 +552,7 @@ class TestCallbackOnSave:
         calls = []
         release = threading.Event()
 
-        def fake_evaluate(staged_dir, global_step):
+        def fake_evaluate(staged_dir, global_step, output_dir, remove_after):
             calls.append(global_step)
             release.wait(timeout=10)
 
@@ -575,6 +575,70 @@ class TestCallbackOnSave:
         )
         assert control.should_save is False
         assert callback._thread is None
+
+
+class TestCallbackOnTrainBegin:
+    """The step-0 baseline: the starting model, scored before any training."""
+
+    def _callback(self, **overrides):
+        options = {
+            "tasks": ["inspect_evals/mmlu_pro"],
+            "devices": "7",
+            "model_tag": "test",
+            "base_model": "dnotitia/Qwen3-0.6B-Base",
+        }
+        options.update(overrides)
+        return CheckpointEvalCallback(**options)
+
+    def _run(self, callback, tmp_path, monkeypatch, state):
+        seen = []
+        monkeypatch.setattr(callback, "_evaluate", lambda *a: seen.append(a))
+        callback.on_train_begin(
+            SimpleNamespace(output_dir=str(tmp_path)), state, TrainerControl()
+        )
+        if callback._thread is not None:
+            callback._thread.join(timeout=10)
+        return seen
+
+    def test_evaluates_the_base_model_as_step_0_without_deleting_it(
+        self, tmp_path, monkeypatch
+    ):
+        callback = self._callback()
+        seen = self._run(callback, tmp_path, monkeypatch, _state(step=0))
+        assert seen == [("dnotitia/Qwen3-0.6B-Base", 0, str(tmp_path), False)]
+
+    def test_skipped_on_resume(self, tmp_path, monkeypatch):
+        callback = self._callback()
+        assert self._run(callback, tmp_path, monkeypatch, _state(step=500)) == []
+        assert callback._thread is None
+
+    def test_skipped_on_non_main_ranks(self, tmp_path, monkeypatch):
+        callback = self._callback()
+        assert self._run(callback, tmp_path, monkeypatch, _state(0, main=False)) == []
+
+    def test_skipped_without_a_base_model(self, tmp_path, monkeypatch):
+        callback = self._callback(base_model=None)
+        assert self._run(callback, tmp_path, monkeypatch, _state(step=0)) == []
+
+    def test_first_checkpoint_is_skipped_while_the_baseline_still_runs(
+        self, tmp_path, monkeypatch
+    ):
+        callback = self._callback()
+        calls = []
+        release = threading.Event()
+
+        def fake_evaluate(model_dir, global_step, output_dir, remove_after):
+            calls.append(global_step)
+            release.wait(timeout=10)
+
+        monkeypatch.setattr(callback, "_evaluate", fake_evaluate)
+        args = SimpleNamespace(output_dir=str(tmp_path))
+        _checkpoint(tmp_path, "checkpoint-100")
+        callback.on_train_begin(args, _state(0), TrainerControl())
+        callback.on_save(args, _state(100), TrainerControl())
+        release.set()
+        callback._thread.join(timeout=10)
+        assert calls == [0]
 
 
 class TestEvaluate:
@@ -635,7 +699,7 @@ write_eval_log(
         staged, _, _ = stage_checkpoint(
             source, tmp_path / "run" / "_eval_staging" / "checkpoint-100"
         )
-        callback._evaluate(staged, 100)
+        callback._evaluate(staged, 100, tmp_path / "run", remove_after=True)
 
         assert logged == [
             (
@@ -668,6 +732,52 @@ write_eval_log(
         assert callback._server is None
         assert not staged.exists()
         assert (tmp_path / "run" / "eval_logs" / "step-100" / "vllm.log").exists()
+
+    def test_base_model_is_served_in_place_and_left_alone(self, tmp_path, monkeypatch):
+        fake_inspect = f"""
+import sys
+sys.path.insert(0, {str(Path(__file__).parent.parent)!r})
+from inspect_ai.log import (
+    EvalConfig, EvalDataset, EvalLog, EvalResults, EvalScore, EvalSpec, write_eval_log
+)
+from inspect_ai.log._log import EvalMetric
+argv = sys.argv[1:]
+log_dir = argv[argv.index("--log-dir") + 1]
+write_eval_log(
+    EvalLog(
+        eval=EvalSpec(
+            created="2026-09-22T00:00:00", task=argv[1], dataset=EvalDataset(),
+            model=argv[argv.index("--model") + 1], config=EvalConfig(),
+        ),
+        results=EvalResults(
+            total_samples=4, completed_samples=4,
+            scores=[EvalScore(name="choice", scorer="choice",
+                              metrics={{"accuracy": EvalMetric(name="accuracy", value=0.3)}})],
+        ),
+    ),
+    log_dir + "/result.eval",
+)
+"""
+        _fake_binaries(monkeypatch, tmp_path, vllm=_FAKE_SERVER, inspect=fake_inspect)
+        base_model = _checkpoint(tmp_path, "base-model")
+        callback = CheckpointEvalCallback(
+            tasks=["inspect_evals/mmlu_pro"],
+            devices="7",
+            vllm_args="--warmup 0",
+            model_tag="test",
+            base_model=str(base_model),
+        )
+        logged = []
+        monkeypatch.setattr(
+            callback,
+            "_log_to_wandb",
+            lambda metrics, step: logged.append((metrics, step)),
+        )
+        run_dir = tmp_path / "run"
+        callback._evaluate(str(base_model), 0, run_dir, remove_after=False)
+        assert logged == [({"eval/mmlu_pro": 0.3}, 0)]
+        assert (base_model / "model.safetensors").exists()
+        assert (run_dir / "eval_logs" / "step-0" / "vllm.log").exists()
 
     def test_one_failing_task_does_not_stop_the_others(self, tmp_path, monkeypatch):
         fake_inspect = f"""
@@ -713,7 +823,7 @@ write_eval_log(
         staged, _, _ = stage_checkpoint(
             source, tmp_path / "run" / "_eval_staging" / "checkpoint-100"
         )
-        callback._evaluate(staged, 100)
+        callback._evaluate(staged, 100, tmp_path / "run", remove_after=True)
         assert logged == [{"eval/mmlu_pro": 0.9}]
 
     def test_a_server_that_never_starts_is_only_a_warning(self, tmp_path, monkeypatch):
@@ -730,7 +840,8 @@ write_eval_log(
         staged, _, _ = stage_checkpoint(
             source, tmp_path / "run" / "_eval_staging" / "checkpoint-100"
         )
-        callback._evaluate(staged, 100)  # must not raise
+        # must not raise
+        callback._evaluate(staged, 100, tmp_path / "run", remove_after=True)
         assert callback._server is None
         assert not staged.exists()
 
@@ -746,6 +857,7 @@ class TestBuildCallback:
             eval_vllm_args="--max-model-len 32768 --data-parallel-size 2",
             eval_max_connections=40,
             eval_max_tokens=16000,
+            eval_baseline=True,
         )
         for key, value in overrides.items():
             setattr(dnotitia, key, value)
@@ -788,6 +900,7 @@ class TestBuildCallback:
         assert callback.tasks == ["inspect_evals/mmlu_pro"]
         assert callback.devices == "0,1"
         assert callback.model_tag == "run"
+        assert callback.base_model == "dnotitia/Qwen3-0.6B-Base"
         assert callback.vllm_args == [
             "--max-model-len",
             "32768",
@@ -795,6 +908,15 @@ class TestBuildCallback:
             "2",
         ]
         assert warnings == []
+
+    def test_eval_baseline_false_drops_the_baseline(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+        training, model, dnotitia = self._args(eval_baseline=False)
+        train_logger = SimpleNamespace(info=lambda *a, **k: None, warning=print)
+        callback = build_checkpoint_eval_callback(
+            training, model, dnotitia, train_logger
+        )
+        assert callback.base_model is None
 
     def test_warns_when_eval_devices_overlap_training(self, monkeypatch):
         monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")

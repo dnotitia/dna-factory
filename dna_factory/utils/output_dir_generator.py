@@ -82,6 +82,7 @@ def generate_auto_output_dir(
         "output_dir",
         "model_name_or_path",
         "eval_on_checkpoint",
+        "eval_baseline",
         "eval_tasks",
         "eval_devices",
         "eval_vllm_args",

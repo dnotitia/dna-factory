@@ -538,8 +538,8 @@ def run_training(
         if periodic_seconds <= 0 and training_args.save_strategy == "no":
             train_logger.warning(
                 "Checkpoint eval is on but nothing saves checkpoints "
-                "(save_strategy='no' and periodic_save_seconds is off), so it will "
-                "never run."
+                "(save_strategy='no' and periodic_save_seconds is off), so at most "
+                "the starting model is evaluated (eval_baseline)."
             )
         callbacks.append(eval_callback)
 

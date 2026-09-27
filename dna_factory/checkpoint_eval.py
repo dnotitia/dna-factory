@@ -6,7 +6,8 @@ the callback snapshots the fresh checkpoint, and a background thread serves it w
 vLLM on a separate GPU, runs each configured `inspect eval` task against that
 server, and logs the scores to the live W&B run.  Training never waits for any of
 it -- the only work on the training thread is the snapshot, which is a handful of
-`os.link` calls.
+`os.link` calls.  With `eval_baseline` (the default) the starting model is scored
+the same way from `on_train_begin`, as step 0, so the curve has a baseline.
 
 Four properties this file exists to guarantee:
 
@@ -466,6 +467,7 @@ class CheckpointEvalCallback(TrainerCallback):
         max_connections=20,
         max_tokens=16000,
         model_tag="model",
+        base_model=None,
         repo_root=REPO_ROOT,
         train_logger=None,
     ):
@@ -475,6 +477,9 @@ class CheckpointEvalCallback(TrainerCallback):
         self.max_connections = max_connections
         self.max_tokens = max_tokens
         self.model_tag = model_tag
+        # The model training starts from, scored as step 0 by `on_train_begin`;
+        # `None` skips the baseline.
+        self.base_model = base_model
         self.repo_root = Path(repo_root)
         self.logger = train_logger or logger
 
@@ -485,6 +490,34 @@ class CheckpointEvalCallback(TrainerCallback):
         atexit.register(self.shutdown)
 
     # -- trainer hooks ---------------------------------------------------------
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        """Score the starting model as step 0, so later checkpoints have a baseline.
+
+        Served straight from `base_model` (a local path or a Hub id; vLLM loads
+        either) -- nothing rotates it away, so there is nothing to stage, and
+        nothing to delete afterwards.  A resumed run skips it: its `global_step` is
+        already past 0, and the baseline was logged by the run it resumes.
+        """
+        if not state.is_world_process_zero or self.base_model is None:
+            return control
+        if state.global_step > 0:
+            self.logger.info(
+                "Checkpoint eval: resuming at step %d, so the step-0 baseline eval of "
+                "the starting model is skipped.",
+                state.global_step,
+            )
+            return control
+        with self._lock:
+            self.logger.info(
+                "Checkpoint eval: starting a background step-0 eval of the starting "
+                "model %s (%d task(s) on CUDA device(s) %s). Training continues.",
+                self.base_model,
+                len(self.tasks),
+                self.devices,
+            )
+            self._spawn(self.base_model, 0, args.output_dir, remove_after=False)
+        return control
 
     def on_save(self, args, state, control, **kwargs):
         # Rank 0 only, and no collective: the other ranks fall straight through so
@@ -536,13 +569,7 @@ class CheckpointEvalCallback(TrainerCallback):
                 self.devices,
             )
 
-            self._thread = threading.Thread(
-                target=self._evaluate,
-                args=(staged, state.global_step),
-                name=f"checkpoint-eval-{state.global_step}",
-                daemon=True,
-            )
-            self._thread.start()
+            self._spawn(staged, state.global_step, args.output_dir, remove_after=True)
         return control
 
     def on_train_end(self, args, state, control, **kwargs):
@@ -566,20 +593,34 @@ class CheckpointEvalCallback(TrainerCallback):
 
     # -- background worker -----------------------------------------------------
 
+    def _spawn(self, model_dir, global_step, output_dir, remove_after):
+        """Start `_evaluate` on a background thread. Caller holds `self._lock`."""
+        self._thread = threading.Thread(
+            target=self._evaluate,
+            args=(model_dir, global_step, output_dir, remove_after),
+            name=f"checkpoint-eval-{global_step}",
+            daemon=True,
+        )
+        self._thread.start()
+
     def shutdown(self):
         """Kill the eval server if one is up. Idempotent; also the `atexit` hook."""
         server, self._server = self._server, None
         if server is not None:
             server.stop()
 
-    def _evaluate(self, staged_dir, global_step):
-        """Serve `staged_dir`, run every task against it, log the scores. Never raises."""
+    def _evaluate(self, model_dir, global_step, output_dir, remove_after):
+        """Serve `model_dir`, run every task against it, log the scores. Never raises.
+
+        `remove_after` deletes `model_dir` at the end -- true for a staged snapshot,
+        false for the base model, which is not ours to delete.
+        """
         served_name = served_name_for_step(self.model_tag, global_step)
-        eval_root = staged_dir.parent.parent / EVAL_LOG_DIR_NAME / f"step-{global_step}"
+        eval_root = Path(output_dir) / EVAL_LOG_DIR_NAME / f"step-{global_step}"
         try:
             port = self.explicit_port or find_free_port()
             server = VllmEvalServer(
-                model_dir=staged_dir,
+                model_dir=model_dir,
                 served_name=served_name,
                 devices=self.devices,
                 extra_args=self.vllm_args,
@@ -629,7 +670,8 @@ class CheckpointEvalCallback(TrainerCallback):
             )
         finally:
             self.shutdown()
-            shutil.rmtree(staged_dir, ignore_errors=True)
+            if remove_after:
+                shutil.rmtree(model_dir, ignore_errors=True)
 
     def _run_task(self, task, server, log_dir):
         """Run one `inspect eval` against the live server and read back its score."""
@@ -794,13 +836,21 @@ def build_checkpoint_eval_callback(
         max_connections=dnotitia_args.eval_max_connections,
         max_tokens=dnotitia_args.eval_max_tokens,
         model_tag=served_model_tag(training_args, model_args),
+        base_model=(
+            model_args.model_name_or_path
+            if getattr(dnotitia_args, "eval_baseline", True)
+            else None
+        ),
         train_logger=train_logger,
     )
     train_logger.info(
-        "Checkpoint eval enabled: %d task(s) [%s] on CUDA device(s) %s after every "
-        "checkpoint; training is never blocked.",
+        "Checkpoint eval enabled: %d task(s) [%s] on CUDA device(s) %s %s; training "
+        "is never blocked.",
         len(tasks),
         ", ".join(tasks),
         devices,
+        "on the starting model (step 0) and after every checkpoint"
+        if callback.base_model is not None
+        else "after every checkpoint",
     )
     return callback

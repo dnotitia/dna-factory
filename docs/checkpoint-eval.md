@@ -6,6 +6,8 @@ Training never waits. The eval runs in a background thread on rank 0 while the o
 
 Off by default. Nothing changes for an existing config until `eval_on_checkpoint: true` is set.
 
+The curve also gets a **step-0 baseline**: as soon as training begins, the starting model (`model_name_or_path`) is evaluated the same way and logged at `eval/step` 0, so every later checkpoint has something to compare against. See [Step-0 baseline](#step-0-baseline).
+
 ## Configuration
 
 Everything but the switch already has a working default, so turning it on is the whole
@@ -38,6 +40,8 @@ python sft.py --config configs/SFT/qwen3-4bexpr.yaml \
   --eval_devices 6,7
 ```
 
+`eval_baseline` (default `true`, not in the YAML defaults) controls the step-0 baseline; set it to `false` to evaluate checkpoints only.
+
 All four entry points (`sft.py`, `dpo.py`, `grpo.py`, `distill.py`) get this, because it is wired in the shared runner.
 
 `report_to` must include `wandb` for the curves; without it the scores still appear in the training log, and startup warns about it.
@@ -69,6 +73,18 @@ One server for all tasks, torn down when the last one finishes.
 - **Served model name.** `<run_name or base model>-checkpoint-<step>`. It is also the model name recorded inside the Inspect log, which is what ties a log back to the checkpoint that produced it.
 - **Task files.** `evals/kmmlu_pro.py` is resolved against the repo root when the working directory doesn't have it, so the eval works regardless of where training was launched from.
 - **Artifacts.** Inspect logs and the server's stdout are kept under `<output_dir>/eval_logs/step-<N>/`, browsable afterwards with `inspect view --log-dir ...`. A failed task's warning quotes the tail of the relevant file.
+
+## Step-0 baseline
+
+With `eval_baseline: true` (the default), `on_train_begin` starts the first eval before the first optimizer step, against the model training starts from:
+
+```bash
+vllm serve <model_name_or_path> --served-model-name <tag>-checkpoint-0 ...
+```
+
+- **Served in place.** `model_name_or_path` is served directly — a local path or a Hub id, vLLM loads either. Nothing rotates it away, so there is no staging snapshot, and nothing is deleted afterwards. Logs go to `<output_dir>/eval_logs/step-0/`.
+- **Skipped on resume.** A run resumed from a checkpoint starts past step 0, and the run it resumes already logged the baseline.
+- **Same one-at-a-time rule.** The baseline is the in-flight eval until it finishes, so a checkpoint saved before then is skipped with the usual warning. With `periodic_save_seconds: 80m` that means the baseline has to finish within 80 minutes, or the first checkpoint's eval is lost.
 
 ## W&B
 

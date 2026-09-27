@@ -59,6 +59,17 @@ class DnotitiaArguments:
             )
         },
     )
+    eval_baseline: bool = field(
+        default=True,
+        metadata={
+            "help": (
+                "With eval_on_checkpoint, also score the starting model "
+                "(model_name_or_path) at step 0, as soon as training begins, so every "
+                "checkpoint's eval has a baseline to compare against. Skipped when "
+                "resuming from a checkpoint -- that run already logged its baseline."
+            )
+        },
+    )
     eval_tasks: list[str] = field(
         default_factory=lambda: list(DEFAULT_EVAL_TASKS),
         metadata={
