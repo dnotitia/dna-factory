@@ -126,7 +126,7 @@ def test_sync_cli_still_uses_grpo_defaults(monkeypatch):
     )
     assert spec is grpo.SPEC
     assert script.grpo_execution == "sync"
-    assert training.loss_type == "dapo"
+    assert training.loss_type == "grpo"
     assert training.vllm_mode == "colocate"
 
 
