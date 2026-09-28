@@ -6,7 +6,16 @@ the memory of an equivalent SFT run.
 
 Dataset: string `prompt`/`chosen`/`rejected` columns (e.g.
 `trl-lib/ultrafeedback_binarized`) or conversational `messages`. Qwen `thinking`
-fields are mapped to `reasoning_content` the same way as SFT.
+fields are mapped to `reasoning_content` the same way as SFT. Use `weight` as a
+per-dataset size multiplier when mixing datasets:
+
+```yaml
+datasets:
+  - path: org/preference-data
+    weight: 2.0
+  - path: org/specialized-preference-data
+    weight: 0.5
+```
 
 ```bash
 # Single GPU
