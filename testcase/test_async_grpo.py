@@ -130,6 +130,45 @@ def test_sync_cli_still_uses_grpo_defaults(monkeypatch):
     assert training.vllm_mode == "colocate"
 
 
+def test_repeated_config_uses_last_value(monkeypatch, tmp_path):
+    first = tmp_path / "first.yaml"
+    second = tmp_path / "second.yaml"
+    first.write_text("learning_rate: 1.0e-5\ntemperature: 0.7\n")
+    second.write_text("learning_rate: 2.0e-5\n")
+    monkeypatch.chdir(Path(__file__).resolve().parents[1])
+    monkeypatch.setattr(training_runner, "run_training", lambda *args: args)
+
+    _, _, training, _, _, _, user_specified = training_runner.cli_main(
+        grpo.get_spec("sync"),
+        [
+            "--config",
+            str(first),
+            "--config",
+            str(second),
+            "--use_cpu",
+            "true",
+            "--bf16",
+            "false",
+        ],
+    )
+
+    assert training.learning_rate == pytest.approx(2.0e-5)
+    assert "temperature" not in user_specified
+
+
+def test_valueless_config_errors(monkeypatch):
+    monkeypatch.chdir(Path(__file__).resolve().parents[1])
+    monkeypatch.setattr(training_runner, "run_training", lambda *args: args)
+
+    with pytest.raises(SystemExit) as exc_info:
+        training_runner.cli_main(
+            grpo.get_spec("sync"),
+            ["--config", "--use_cpu", "true", "--bf16", "false"],
+        )
+
+    assert exc_info.value.code == 2
+
+
 def test_reject_multiple_visible_training_gpus():
     with pytest.raises(ValueError, match="one training GPU"):
         validate_async_args(
