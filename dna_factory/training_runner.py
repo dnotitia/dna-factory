@@ -15,6 +15,7 @@ import multiprocessing
 import os
 import sys
 import tomllib
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -43,6 +44,15 @@ from dna_factory.utils.config_merger import merge_config_files
 from dna_factory.utils.output_dir_generator import generate_auto_output_dir
 
 logger = logging.getLogger(__name__)
+
+# accelerate's `gather` (called by TRL every step) still uses this deprecated torch
+# collective; filter mutations elsewhere reset the once-per-location registry, so
+# without this it repeats on every step.
+warnings.filterwarnings(
+    "ignore",
+    message=r"`torch\.distributed\.all_gather_into_tensor` is deprecated",
+    category=FutureWarning,
+)
 
 
 class QuietProgressCallback(ProgressCallback):
