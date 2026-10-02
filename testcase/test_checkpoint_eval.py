@@ -826,6 +826,28 @@ write_eval_log(
         callback._evaluate(staged, 100, tmp_path / "run", remove_after=True)
         assert logged == [{"eval/mmlu_pro": 0.9}]
 
+    def test_wandb_row_carries_both_step_axes(self, monkeypatch):
+        """A train/global_step X axis must still find the eval points."""
+        calls = []
+        run = SimpleNamespace(
+            define_metric=lambda *a, **k: calls.append(("define", a, k)),
+            log=lambda row: calls.append(("log", row)),
+        )
+        monkeypatch.setitem(sys.modules, "wandb", SimpleNamespace(run=run))
+        callback = CheckpointEvalCallback(
+            tasks=["inspect_evals/math"], devices="7", model_tag="test"
+        )
+        callback._log_to_wandb({"eval/math": 0.5}, 40)
+        callback._log_to_wandb({"eval/math": 0.6}, 80)
+        assert [c for c in calls if c[0] == "define"] == [
+            ("define", ("eval/step",), {"hidden": True}),
+            ("define", ("eval/*",), {"step_metric": "eval/step"}),
+        ]
+        assert [c[1] for c in calls if c[0] == "log"] == [
+            {"eval/step": 40, "train/global_step": 40, "eval/math": 0.5},
+            {"eval/step": 80, "train/global_step": 80, "eval/math": 0.6},
+        ]
+
     def test_a_server_that_never_starts_is_only_a_warning(self, tmp_path, monkeypatch):
         _fake_binaries(
             monkeypatch,

@@ -99,10 +99,12 @@ They are logged against a dedicated `eval/step` x-axis, declared once with `defi
 ```python
 run.define_metric("eval/step", hidden=True)
 run.define_metric("eval/*", step_metric="eval/step")
-run.log({"eval/step": 1776, "eval/kmmlu_pro": 0.61})
+run.log({"eval/step": 1776, "train/global_step": 1776, "eval/kmmlu_pro": 0.61})
 ```
 
 This is not cosmetic. An eval finishes minutes to hours after the checkpoint it scores, by which time the run's internal `_step` has moved well past it, and W&B silently drops a `log(step=...)` that goes backwards — the score would vanish. Logging the checkpoint's `global_step` as a *metric* and declaring it the x-axis puts the eval curves on the training step axis without either side waiting for the other. `hidden=True` keeps `eval/step` off the auto-charts; it is only the x-axis.
+
+The same step is also written as `train/global_step`. A panel or workspace whose X axis is set to `train/global_step` — the HF integration's default axis — plots each metric against the `train/global_step` in its own row, so without it the eval panels would say "There's no data for the selected runs". The trade-off: an eval that lands late writes an earlier value, so a chart of `train/global_step` *itself* dips at each eval. The training curves are unaffected, because every training row carries its own `train/global_step`.
 
 ## GPU placement
 

@@ -68,5 +68,6 @@ with a MoE model risks ZeRO-3 param-trace errors.
   `output_dir/_eval_staging/` first, so `save_total_limit` rotation can't delete it
   mid-eval. Scores go to the live W&B run as `eval/<task>` against an `eval/step` axis
   (`define_metric`), not `log(step=)` — that would be a backwards step and get dropped.
+  The row also carries `train/global_step` so panels on that X axis still find the points.
   See docs/checkpoint-eval.md.
 - Distillation: prompt-only datasets (a conversational dataset's last assistant turn is dropped — the student writes the completion). The teacher must share the student's vocabulary or TRL raises. `beta` selects the divergence (1.0 = reverse KL, 0.0 = forward KL, 0.5 = JSD), **not** GRPO's reference-model KL penalty. See docs/distillation.md.

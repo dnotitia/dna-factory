@@ -728,6 +728,12 @@ class CheckpointEvalCallback(TrainerCallback):
         logged as a *metric* and declared as the x-axis for `eval/*`, which puts the
         eval curves on the same step axis as the training curves without either
         side having to wait for the other.
+
+        The same step also goes in as `train/global_step`, so a panel or workspace
+        whose X axis is set to `train/global_step` (the HF integration's default)
+        still draws the eval curves instead of showing "no data".  The cost is that
+        a late eval writes an earlier value, so a chart of `train/global_step`
+        itself dips at each eval; the training curves are unaffected.
         """
         try:
             import wandb
@@ -751,7 +757,9 @@ class CheckpointEvalCallback(TrainerCallback):
                 run.define_metric("eval/step", hidden=True)
                 run.define_metric("eval/*", step_metric="eval/step")
                 self._wandb_axis_defined = True
-            run.log({"eval/step": global_step, **metrics})
+            run.log(
+                {"eval/step": global_step, "train/global_step": global_step, **metrics}
+            )
         except Exception as error:  # noqa: BLE001 - eval must never fail training
             self.logger.warning(
                 "Checkpoint eval: could not log step %d to W&B: %s", global_step, error
