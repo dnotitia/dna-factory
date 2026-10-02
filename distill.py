@@ -1,4 +1,12 @@
-"""On-policy distillation script. Shared setup/train/save flow lives in dna_factory/training_runner.py."""
+"""
+On-policy distillation training script for DNA Factory.
+
+Method-specific logic only (student + frozen teacher wiring, prompt-only
+dataset mixture, trainer wiring); the shared setup/train/save flow lives in
+dna_factory/training_runner.py.
+Key distillation-specific difference: a frozen teacher scores each token the
+student generates.
+"""
 
 import logging
 import os

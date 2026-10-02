@@ -1,4 +1,11 @@
-"""GRPO training script. Shared setup/train/save flow lives in dna_factory/training_runner.py."""
+"""
+Group Relative Policy Optimization (GRPO) training script for DNA Factory.
+
+Method-specific logic only (reward resolution, prompt-only dataset mixture,
+trainer wiring); the shared setup/train/save flow lives in
+dna_factory/training_runner.py.
+Key GRPO-specific difference: online RL scored by `reward_funcs`.
+"""
 
 import argparse
 import importlib
