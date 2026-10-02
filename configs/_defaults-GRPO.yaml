@@ -64,6 +64,7 @@ use_liger_kernel: false  # Liger GRPO loss path is unverified for the pinned lig
 
 log_completions: true  # W&B table + parquet every logging_steps
 num_completions_to_print: 0  # no rich table on stdout
+print_logs: false  # Don't print the per-step metrics dict to stdout; W&B still gets every log
 
 # Logging backend; per-step metrics go to Weights & Biases (`- none` to disable)
 logging_steps: 1
