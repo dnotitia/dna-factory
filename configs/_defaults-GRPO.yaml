@@ -46,7 +46,8 @@ use_vllm: true
 vllm_mode: colocate
 vllm_gpu_memory_utilization: 0.3
 
-learning_rate: 1e-6  # GRPO typically needs a much smaller lr than SFT
+# Empirically, at least this learning rate was required for effective training.
+learning_rate: 1e-5
 lr_scheduler_type: cosine_with_min_lr
 lr_scheduler_kwargs:
   min_lr_rate: 0.1
@@ -60,6 +61,9 @@ tf32: false
 
 gradient_checkpointing: true  # Less memory, slower training
 use_liger_kernel: false  # Liger GRPO loss path is unverified for the pinned liger-kernel
+
+log_completions: true  # W&B table + parquet every logging_steps
+num_completions_to_print: 0  # no rich table on stdout
 
 # Logging backend; per-step metrics go to Weights & Biases (`- none` to disable)
 logging_steps: 1
