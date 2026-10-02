@@ -32,7 +32,8 @@ bf16: true
 gradient_checkpointing: true
 use_liger_kernel: false
 logging_steps: 1
-report_to: [none]
+report_to:
+  - wandb
 save_strategy: steps
 save_steps: 50
 save_total_limit: 3

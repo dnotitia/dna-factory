@@ -53,9 +53,10 @@ activation_offloading: false
 # For Qwen model, <|im_end|> is used as the end of sentence token
 eos_token: <|im_end|>
 
-# Logging backend; use `- wandb` to enable Weights & Biases
+# Logging backend; per-step metrics go to Weights & Biases (`- none` to disable)
+logging_steps: 1
 report_to:
-  - none
+  - wandb
 
 # Options for checkpoint saving
 save_strategy: "no"  # Step-based saves off; PeriodicCheckpointCallback below is the only checkpoint source

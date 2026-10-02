@@ -60,8 +60,10 @@ tf32: false
 gradient_checkpointing: true  # Less memory, slower training
 use_liger_kernel: false  # Liger GRPO loss path is unverified for the pinned liger-kernel
 
-report_to:  # Use `- wandb` to enable Weights & Biases
-  - none
+# Logging backend; per-step metrics go to Weights & Biases (`- none` to disable)
+logging_steps: 1
+report_to:
+  - wandb
 
 save_strategy: "no"  # Step-based saves off; PeriodicCheckpointCallback below is the only checkpoint source
 save_total_limit: 3  # Still applies to periodic checkpoints (rotation handled by the normal save path)

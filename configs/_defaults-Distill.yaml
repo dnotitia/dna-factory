@@ -74,9 +74,10 @@ use_liger_kernel: false
 log_completions: true
 num_completions_to_print: 2
 
-# Logging backend; use `- wandb` to enable Weights & Biases
+# Logging backend; per-step metrics go to Weights & Biases (`- none` to disable)
+logging_steps: 1
 report_to:
-  - none
+  - wandb
 
 # Options for checkpoint saving
 save_strategy: "no"  # Step-based saves off; PeriodicCheckpointCallback below is the only checkpoint source
