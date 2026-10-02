@@ -6,11 +6,12 @@
 ########################################################
 # SCRIPT ARGUMENTS:
 ########################################################
-dataset_name: trl-lib/DeepMath-103K  # Prompt-only; `solution` column feeds `accuracy_reward`
+dataset_name: dnotitia/competition_math_grpo  # Prompt-only; every `solution` is `\boxed{...}` for `accuracy_reward`
 
 # trl.rewards names (zero-arg only) or dotted import paths -- see docs/grpo-rewards.md.
 # `accuracy_reward` needs math_verify and returns None (skips the sample) on an unparseable gold
-# answer (~16.5% of DeepMath-103K); `boxed_match_reward` scores those by normalized string compare.
+# answer; `boxed_match_reward` scores those by normalized string compare. Gold here is always
+# `\boxed{...}` (MATH competition problems), so the string-compare reward is only the fallback.
 reward_funcs:
   - dna_factory.rewards.safe_accuracy_reward
   - dna_factory.rewards.boxed_match_reward
@@ -118,6 +119,7 @@ eval_tasks:                # registry names, or local task files (resolved again
   - inspect_evals/gpqa_diamond
   - evals/kmmlu_pro.py
   - evals/kmmlu_redux.py
+  - inspect_evals/math
 eval_devices: "0,1"        # CUDA_VISIBLE_DEVICES for the eval vLLM server; must match --data-parallel-size below
 eval_vllm_args: "--max-model-len 32768 --data-parallel-size 2"  # extra `vllm serve` flags
 eval_max_connections: 40   # inspect eval --max-connections
