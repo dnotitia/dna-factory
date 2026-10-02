@@ -74,13 +74,14 @@ def generate_auto_output_dir(
     ]
 
     # Arguments that never belong in the name: the name itself, the model (it is
-    # already the prefix), and the checkpoint-eval knobs -- those only decide how the
-    # run is *observed*, so two runs that differ only there train the same model and
-    # should share (and resume from) the same directory. Their values are also long
-    # and flag-shaped, which would dominate the name.
+    # already the prefix), and print_logs plus the checkpoint-eval knobs -- those only
+    # decide how the run is *observed*, so two runs that differ only there train the
+    # same model and should share (and resume from) the same directory. The eval values
+    # are also long and flag-shaped, which would dominate the name.
     EXCLUDED_PARAMS = {
         "output_dir",
         "model_name_or_path",
+        "print_logs",
         "eval_on_checkpoint",
         "eval_baseline",
         "eval_tasks",

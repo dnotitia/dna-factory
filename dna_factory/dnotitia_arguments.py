@@ -46,6 +46,16 @@ class DnotitiaArguments:
             )
         },
     )
+    print_logs: bool = field(
+        default=True,
+        metadata={
+            "help": (
+                "Print each logging_steps metrics dict ({'loss': ..., 'reward': ...}) to "
+                "stdout. False keeps the tqdm progress bar but drops the dict; the metrics "
+                "still go to every report_to integration (W&B, ...)."
+            )
+        },
+    )
     eval_on_checkpoint: bool = field(
         default=False,
         metadata={

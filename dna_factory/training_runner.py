@@ -28,6 +28,7 @@ from transformers import (
     AutoTokenizer,
     set_seed,
 )
+from transformers.trainer_callback import PrinterCallback, ProgressCallback
 from transformers.trainer_utils import get_last_checkpoint
 from trl import TrlParser, get_peft_config, get_quantization_config
 
@@ -42,6 +43,25 @@ from dna_factory.utils.config_merger import merge_config_files
 from dna_factory.utils.output_dir_generator import generate_auto_output_dir
 
 logger = logging.getLogger(__name__)
+
+
+class QuietProgressCallback(ProgressCallback):
+    """`ProgressCallback` that keeps the tqdm bar but skips the per-log dict print."""
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        pass
+
+
+def silence_log_printing(trainer):
+    """Stop the trainer from printing each metrics dict to stdout (`print_logs: false`).
+
+    The default `ProgressCallback` writes the dict under the progress bar, and
+    `PrinterCallback` (used instead under `disable_tqdm`) prints it outright. Logging
+    integrations such as W&B are separate callbacks and keep receiving every log.
+    """
+    if trainer.pop_callback(ProgressCallback) is not None:
+        trainer.add_callback(QuietProgressCallback)
+    trainer.remove_callback(PrinterCallback)
 
 
 def setup_logging(training_args, trainer_package_name):
@@ -574,6 +594,8 @@ def run_training(
         )
     )
     trainer = spec.trainer_cls(**trainer_kwargs)
+    if not dnotitia_args.print_logs:
+        silence_log_printing(trainer)
 
     # Check checkpoint
     checkpoint = None
