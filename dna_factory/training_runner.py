@@ -10,6 +10,7 @@ Common setup/logging/model helpers (previously in
 is the single place for all training-loop-shared code.
 """
 
+import argparse
 import logging
 import multiprocessing
 import os
@@ -628,35 +629,19 @@ def cli_main(spec, argv=None):
 
     # Get arguments with load default YAML configuration
     cli_args = list(sys.argv[1:] if argv is None else argv)
-    cli_args = [
-        part
-        for arg in cli_args
-        for part in (arg.split("=", 1) if arg.startswith("--config=") else [arg])
-    ]
+
+    config_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    config_parser.add_argument("--config")
+    known, cli_args = config_parser.parse_known_args(cli_args)
 
     # Parse user-specified arguments before adding defaults
-    user_specified_args = parse_user_args(cli_args)
-
-    # Check if user provided a config file
-    user_has_config = "--config" in cli_args
-    if user_has_config:
-        user_config_path = None
-        # Find the config file path specified by user
-        try:
-            config_index = cli_args.index("--config")
-            if config_index + 1 < len(cli_args):
-                user_config_path = cli_args[config_index + 1]
-
-            config_path = merge_config_files(spec.defaults_yaml, user_config_path)
-        except ValueError:  # no --config in cli_args, or an unmergeable config file
-            config_path = spec.defaults_yaml
-        except IndexError:  # --config was the last argument
-            config_path = spec.defaults_yaml
-    else:
-        config_path = spec.defaults_yaml
-    # The merged config replaces the original --config, which strict parsing would reject.
-    if user_has_config:
-        del cli_args[config_index : config_index + 2]
+    user_args = ["--config", known.config, *cli_args] if known.config else cli_args
+    user_specified_args = parse_user_args(user_args)
+    config_path = (
+        merge_config_files(spec.defaults_yaml, known.config)
+        if known.config
+        else spec.defaults_yaml
+    )
     full_args = ["--config", config_path, *cli_args]
 
     # Parse arguments
