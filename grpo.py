@@ -22,9 +22,12 @@ from trl import (
     ScriptArguments,
     get_quantization_config,
 )
-from trl.scripts.utils import DatasetConfig
 
 from dna_factory.dnotitia_arguments import DnotitiaArguments
+from dna_factory.dnotitia_dataset_mixture import (
+    WeightedDatasetConfig,
+    resample_by_weight,
+)
 from dna_factory.dnotitia_grpo_trainer import DnotitiaGRPOTrainer
 from dna_factory.training_runner import (
     TrainingSpec,
@@ -65,7 +68,7 @@ class GRPOScriptArguments(ScriptArguments):
 
 
 @dataclass
-class LabeledDatasetConfig(DatasetConfig):
+class LabeledDatasetConfig(WeightedDatasetConfig):
     """DatasetConfig + `label` tag for per-sample reward routing."""
 
     label: str | None = field(
@@ -177,7 +180,7 @@ def _normalize_dataset_for_grpo(dataset, label):
     return dataset.add_column("label", [label] * len(dataset))
 
 
-def get_dataset_with_schema_alignment(mixture_config):
+def get_dataset_with_schema_alignment(mixture_config, seed=42):
     """Load mixture datasets, normalize each to prompt schema, and concatenate."""
     import os
 
@@ -198,6 +201,11 @@ def get_dataset_with_schema_alignment(mixture_config):
             dataset = ds.load_dataset(
                 path=path, name=dataset_config.name, split=dataset_config.split
             )
+        weight = dataset_config.weight
+        if weight != 1.0:
+            n_before = len(dataset)
+            dataset = resample_by_weight(dataset, weight, seed=seed)
+            logger.info(f"  weight={weight}: {n_before} -> {len(dataset)} examples")
         label = getattr(dataset_config, "label", None) or path
         datasets_list.append(_normalize_dataset_for_grpo(dataset, label))
 
@@ -235,7 +243,7 @@ def load_models(
 
 
 def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
-    return get_dataset_with_schema_alignment(dataset_mixture_args)
+    return get_dataset_with_schema_alignment(dataset_mixture_args, seed=training_args.seed)
 
 
 def extra_trainer_kwargs(

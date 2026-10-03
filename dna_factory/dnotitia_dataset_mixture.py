@@ -25,11 +25,14 @@ times" trick to fractional values:
 The subsample is seeded so runs are reproducible.
 """
 
+import logging
 from dataclasses import dataclass, field
 
-from datasets import concatenate_datasets
+from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
 from trl import DatasetMixtureConfig
 from trl.scripts.utils import DatasetConfig
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -90,3 +93,61 @@ def resample_by_weight(dataset, weight, seed=42):
     if not parts:  # weight == 0 (or rounded to nothing)
         return dataset.select([])
     return concatenate_datasets(parts) if len(parts) > 1 else parts[0]
+
+
+def get_weighted_dataset(mixture_config, seed=42):
+    """Load a TRL dataset mixture and apply each entry's size multiplier."""
+    datasets_list = []
+    for dataset_config in mixture_config.datasets:
+        logger.info(
+            f"Loading dataset for mixture: {dataset_config.path} "
+            f"(config name: {dataset_config.name})"
+        )
+        dataset = load_dataset(
+            path=dataset_config.path,
+            name=dataset_config.name,
+            data_dir=dataset_config.data_dir,
+            data_files=dataset_config.data_files,
+            split=dataset_config.split,
+            streaming=mixture_config.streaming,
+        )
+        if dataset_config.columns is not None:
+            dataset = dataset.select_columns(dataset_config.columns)
+        weight = dataset_config.weight
+        if weight != 1.0:
+            if mixture_config.streaming:
+                raise ValueError("Using a dataset `weight` is not supported with streaming datasets.")
+            n_before = len(dataset)
+            dataset = resample_by_weight(dataset, weight, seed=seed)
+            logger.info(f"  weight={weight}: {n_before} -> {len(dataset)} examples")
+        datasets_list.append(dataset)
+
+    fractions = [dataset_config.fraction for dataset_config in mixture_config.datasets]
+    if any(fraction is not None for fraction in fractions):
+        if any(fraction is None for fraction in fractions):
+            raise ValueError("`fraction` must be set for either all datasets in the mixture or none of them.")
+        if mixture_config.streaming:
+            raise ValueError("Using a dataset `fraction` is not supported with streaming datasets.")
+        normalized = [fraction / sum(fractions) for fraction in fractions]
+        total = min(
+            len(dataset) / weight
+            for dataset, weight in zip(datasets_list, normalized, strict=False)
+            if weight > 0
+        )
+        datasets_list = [
+            dataset.select(range(round(weight * total)))
+            for dataset, weight in zip(datasets_list, normalized, strict=False)
+        ]
+
+    if not datasets_list:
+        raise ValueError("No datasets were loaded from the mixture configuration")
+    combined = concatenate_datasets(datasets_list)
+    if isinstance(combined, Dataset):
+        logger.info(f"Created dataset mixture with {len(combined)} examples")
+    if mixture_config.test_split_size is not None:
+        logger.info(
+            "Splitting dataset into train and test sets with test size: "
+            f"{mixture_config.test_split_size}"
+        )
+        return combined.train_test_split(test_size=mixture_config.test_split_size)
+    return DatasetDict({"train": combined})

@@ -10,15 +10,13 @@ Key DPO-specific difference: Uses both model and ref_model (reference model).
 import logging
 
 from transformers import AutoModelForCausalLM
-from trl import (
-    DatasetMixtureConfig,
-    DPOConfig,
-    ModelConfig,
-    ScriptArguments,
-    get_dataset,
-)
+from trl import DPOConfig, ModelConfig, ScriptArguments
 
 from dna_factory.dnotitia_arguments import DnotitiaArguments
+from dna_factory.dnotitia_dataset_mixture import (
+    WeightedDatasetMixtureConfig,
+    get_weighted_dataset,
+)
 from dna_factory.dnotitia_dpo_trainer import DnotitiaDPOTrainer
 from dna_factory.training_runner import (
     TrainingSpec,
@@ -87,7 +85,7 @@ def load_models(
 
 
 def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
-    return get_dataset(dataset_mixture_args)
+    return get_weighted_dataset(dataset_mixture_args, seed=training_args.seed)
 
 
 def postprocess_dataset(dataset, ctx, train_logger):
@@ -105,7 +103,7 @@ SPEC = TrainingSpec(
         ScriptArguments,
         DPOConfig,
         ModelConfig,
-        DatasetMixtureConfig,
+        WeightedDatasetMixtureConfig,
         DnotitiaArguments,
     ),
     load_models=load_models,
