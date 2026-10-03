@@ -32,7 +32,7 @@ beta: 0.0  # 0.0 = no reference model created (memory win); > 0 enables the KL p
 loss_type: grpo  # grpo, dapo, dr_grpo, bnpo, cispo, sapo, luspo, vespo
 num_generations: 8  # Completions per prompt; must divide the generation batch size
 max_completion_length: 16384  # Too small truncates every completion -> reward 0 -> no gradient
-mask_truncated_completions: true  # Overlong filtering (from DAPO, works with any loss_type): drop capped completions from the loss
+mask_truncated_completions: true  # A completion cut off at the length cap never finished an answer, so keep it out of the loss
 temperature: 1.0
 epsilon: 0.2
 scale_rewards: none  # Dr. GRPO (arXiv:2503.20783). For a single 0/1 correctness reward: skip group-std scaling, which amplifies hard questions
