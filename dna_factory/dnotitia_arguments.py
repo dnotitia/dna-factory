@@ -56,6 +56,19 @@ class DnotitiaArguments:
             )
         },
     )
+    log_completions_steps: int = field(
+        default=0,
+        metadata={
+            "help": (
+                "GRPO only. Minimum optimizer steps between completion-table writes "
+                "(W&B Table plus the parquet under output_dir/completions) while "
+                "log_completions is on. Scalar metrics still follow logging_steps. "
+                "0 writes the table on every logging call, which is what fills a W&B "
+                "run when logging_steps is 1. The table is always the latest generation "
+                "batch, so a larger interval drops duplicate uploads rather than samples."
+            )
+        },
+    )
     eval_on_checkpoint: bool = field(
         default=False,
         metadata={

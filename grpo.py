@@ -246,6 +246,7 @@ def extra_trainer_kwargs(
         "quantization_config": ctx["quantization_config"],
         "dynamic_sampling": dnotitia_args.dynamic_sampling,
         "dynamic_sampling_max_rounds": dnotitia_args.dynamic_sampling_max_rounds,
+        "log_completions_steps": dnotitia_args.log_completions_steps,
     }
 
 

@@ -1,4 +1,5 @@
 import logging
+from contextlib import contextmanager
 from functools import wraps
 
 from trl import GRPOTrainer
@@ -15,10 +16,55 @@ class DnotitiaGRPOTrainer(DynamicSamplingMixin, GRPOTrainer):
     Dynamic sampling comes from DynamicSamplingMixin; see dna_factory/dynamic_sampling.py.
     """
 
-    def __init__(self, *args, debug_first_n_batches: int = 3, **kwargs):
+    def __init__(
+        self,
+        *args,
+        debug_first_n_batches: int = 3,
+        log_completions_steps: int = 0,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         # Maximum number of batches to print debug info for
         self.debug_first_n_batches = debug_first_n_batches
+        # 0 keeps TRL's cadence: the completion table rides along with every log() call.
+        self.log_completions_steps = max(int(log_completions_steps or 0), 0)
+        self._last_completion_log_step = 0
+        if self.log_completions and self.log_completions_steps:
+            logger.info(
+                "Completion table (W&B + %s/completions) every %d steps; "
+                "scalar metrics still follow logging_steps=%s.",
+                self.args.output_dir,
+                self.log_completions_steps,
+                self.args.logging_steps,
+            )
+
+    @contextmanager
+    def _completion_log_scope(self):
+        """Hide log_completions from TRL's log() until the table interval is due.
+
+        TRL writes the W&B table and the local parquet in the same block, gated only on
+        this flag, and log() itself runs every logging_steps. Scalar metrics go out
+        through Trainer.log before that block, so suppressing the flag leaves them alone.
+        """
+        interval = self.log_completions_steps
+        if not self.log_completions or interval <= 0:
+            yield
+            return
+        step = int(self.state.global_step)
+        if step - self._last_completion_log_step < interval:
+            self.log_completions = False
+            try:
+                yield
+            finally:
+                self.log_completions = True
+            return
+        yield
+        self._last_completion_log_step = step
+
+    @wraps(GRPOTrainer.log)
+    def log(self, logs, start_time=None):
+        with self._completion_log_scope():
+            super().log(logs, start_time)
 
     @wraps(GRPOTrainer.compute_loss)
     def compute_loss(

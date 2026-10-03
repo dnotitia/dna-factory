@@ -62,7 +62,7 @@ tf32: false
 gradient_checkpointing: true  # Less memory, slower training
 use_liger_kernel: false  # Liger GRPO loss path is unverified for the pinned liger-kernel
 
-log_completions: true  # W&B table + parquet every logging_steps
+log_completions: true  # sample of prompts/completions; table cadence is log_completions_steps
 num_completions_to_print: 0  # no rich table on stdout
 print_logs: false  # Don't print the per-step metrics dict to stdout; W&B still gets every log
 
@@ -96,6 +96,12 @@ trust_remote_code: false
 ########################################################
 # Print debug input values using the overridden compute_loss() function for the first n batches
 debug_first_n_batches: 5
+
+# Completion table only (W&B Table + parquet under output_dir/completions). Scalar
+# metrics still follow logging_steps above. TRL otherwise uploads that table on every
+# logging call, and with logging_steps: 1 the same generation is re-uploaded for each
+# gradient-accumulation step. 0 restores that cadence.
+log_completions_steps: 100
 
 # Prompt groups whose rollouts all scored the same have zero advantage and no gradient.
 #   off       train on them as-is (stock TRL)
