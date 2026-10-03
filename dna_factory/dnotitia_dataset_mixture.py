@@ -116,7 +116,9 @@ def get_weighted_dataset(mixture_config, seed=42):
         weight = dataset_config.weight
         if weight != 1.0:
             if mixture_config.streaming:
-                raise ValueError("Using a dataset `weight` is not supported with streaming datasets.")
+                raise ValueError(
+                    "Using a dataset `weight` is not supported with streaming datasets."
+                )
             n_before = len(dataset)
             dataset = resample_by_weight(dataset, weight, seed=seed)
             logger.info(f"  weight={weight}: {n_before} -> {len(dataset)} examples")
@@ -125,9 +127,13 @@ def get_weighted_dataset(mixture_config, seed=42):
     fractions = [dataset_config.fraction for dataset_config in mixture_config.datasets]
     if any(fraction is not None for fraction in fractions):
         if any(fraction is None for fraction in fractions):
-            raise ValueError("`fraction` must be set for either all datasets in the mixture or none of them.")
+            raise ValueError(
+                "`fraction` must be set for either all datasets in the mixture or none of them."
+            )
         if mixture_config.streaming:
-            raise ValueError("Using a dataset `fraction` is not supported with streaming datasets.")
+            raise ValueError(
+                "Using a dataset `fraction` is not supported with streaming datasets."
+            )
         normalized = [fraction / sum(fractions) for fraction in fractions]
         total = min(
             len(dataset) / weight

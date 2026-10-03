@@ -243,7 +243,9 @@ def load_models(
 
 
 def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
-    return get_dataset_with_schema_alignment(dataset_mixture_args, seed=training_args.seed)
+    return get_dataset_with_schema_alignment(
+        dataset_mixture_args, seed=training_args.seed
+    )
 
 
 def extra_trainer_kwargs(
