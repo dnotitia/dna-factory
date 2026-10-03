@@ -60,9 +60,11 @@ class DnotitiaArguments:
         default=0,
         metadata={
             "help": (
-                "GRPO only. Minimum optimizer steps between completion-table writes "
+                "GRPO only. Optimizer-step cadence for completion-table writes "
                 "(W&B Table plus the parquet under output_dir/completions) while "
-                "log_completions is on. Scalar metrics still follow logging_steps. "
+                "log_completions is on. The first logging call always writes a table, "
+                "then one every N steps counted from 0 (N=100 with logging_steps 1 → "
+                "steps 1, 100, 200, ...). Scalar metrics still follow logging_steps. "
                 "0 writes the table on every logging call, which is what fills a W&B "
                 "run when logging_steps is 1. The table is always the latest generation "
                 "batch, so a larger interval drops duplicate uploads rather than samples."

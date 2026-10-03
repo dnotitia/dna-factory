@@ -12,12 +12,13 @@ def _trainer(step, interval=100, enabled=True):
     trainer = DnotitiaGRPOTrainer.__new__(DnotitiaGRPOTrainer)
     trainer.log_completions = enabled
     trainer.log_completions_steps = interval
-    trainer._last_completion_log_step = 0
+    trainer._last_completion_log_step = -1
     trainer.state = SimpleNamespace(global_step=step)
     return trainer
 
 
-def test_table_is_due_on_the_interval_only(monkeypatch):
+def test_first_step_then_every_interval(monkeypatch):
+    """Step 1 always uploads; later tables land on 100, 200, ... counted from 0."""
     seen = []
 
     def fake_log(self, logs, start_time=None):
@@ -30,7 +31,7 @@ def test_table_is_due_on_the_interval_only(monkeypatch):
         trainer.state.global_step = step
         DnotitiaGRPOTrainer.log(trainer, {})
 
-    assert seen == [(1, False), (99, False), (100, True), (199, False), (200, True)]
+    assert seen == [(1, True), (99, False), (100, True), (199, False), (200, True)]
     assert trainer.log_completions is True
     assert trainer._last_completion_log_step == 200
 
@@ -59,7 +60,7 @@ def test_disabled_completions_stay_disabled(monkeypatch):
     trainer = _trainer(step=100, enabled=False)
     DnotitiaGRPOTrainer.log(trainer, {})
     assert seen == [False]
-    assert trainer._last_completion_log_step == 0
+    assert trainer._last_completion_log_step == -1
 
 
 def test_failed_log_does_not_consume_the_interval(monkeypatch):
@@ -71,11 +72,11 @@ def test_failed_log_does_not_consume_the_interval(monkeypatch):
     with pytest.raises(RuntimeError, match="wandb down"):
         DnotitiaGRPOTrainer.log(trainer, {})
     assert trainer.log_completions is True
-    assert trainer._last_completion_log_step == 0
+    assert trainer._last_completion_log_step == -1
 
 
 def test_unaligned_logging_steps_still_respect_the_gap(monkeypatch):
-    """logging_steps=30 never lands on 100, so the first table is the next call."""
+    """logging_steps=30 never lands on 100: upload the first call, then the next boundary."""
     seen = []
 
     def fake_log(self, logs, start_time=None):
@@ -83,13 +84,14 @@ def test_unaligned_logging_steps_still_respect_the_gap(monkeypatch):
 
     monkeypatch.setattr(GRPOTrainer, "log", fake_log)
     trainer = _trainer(step=0)
-    for step in (30, 60, 90, 120, 150):
+    for step in (30, 60, 90, 120, 150, 210):
         trainer.state.global_step = step
         DnotitiaGRPOTrainer.log(trainer, {})
     assert seen == [
-        (30, False),
+        (30, True),
         (60, False),
         (90, False),
         (120, True),
         (150, False),
+        (210, True),
     ]

@@ -28,11 +28,13 @@ class DnotitiaGRPOTrainer(DynamicSamplingMixin, GRPOTrainer):
         self.debug_first_n_batches = debug_first_n_batches
         # 0 keeps TRL's cadence: the completion table rides along with every log() call.
         self.log_completions_steps = max(int(log_completions_steps or 0), 0)
-        self._last_completion_log_step = 0
+        # -1: nothing written yet. The first log() always writes, then every
+        # log_completions_steps counted from step 0 (1, then 100, 200, ...).
+        self._last_completion_log_step = -1
         if self.log_completions and self.log_completions_steps:
             logger.info(
-                "Completion table (W&B + %s/completions) every %d steps; "
-                "scalar metrics still follow logging_steps=%s.",
+                "Completion table (W&B + %s/completions) on the first log, then every "
+                "%d steps counted from 0; scalar metrics still follow logging_steps=%s.",
                 self.args.output_dir,
                 self.log_completions_steps,
                 self.args.logging_steps,
@@ -51,7 +53,11 @@ class DnotitiaGRPOTrainer(DynamicSamplingMixin, GRPOTrainer):
             yield
             return
         step = int(self.state.global_step)
-        if step - self._last_completion_log_step < interval:
+        last = self._last_completion_log_step
+        # First call always writes. Later calls write when step crosses the next
+        # multiple of interval since that write, counted from 0, so step 1 is
+        # followed by 100, 200, ... rather than 101, 201, ...
+        if last >= 0 and step // interval <= last // interval:
             self.log_completions = False
             try:
                 yield

@@ -97,10 +97,12 @@ trust_remote_code: false
 # Print debug input values using the overridden compute_loss() function for the first n batches
 debug_first_n_batches: 5
 
-# Completion table only (W&B Table + parquet under output_dir/completions). Scalar
-# metrics still follow logging_steps above. TRL otherwise uploads that table on every
-# logging call, and with logging_steps: 1 the same generation is re-uploaded for each
-# gradient-accumulation step. 0 restores that cadence.
+# Completion table only (W&B Table + parquet under output_dir/completions). The first
+# logging call always uploads, then every N optimizer steps counted from 0
+# (100 → steps 1, 100, 200, ... when logging_steps is 1), the same idea as the
+# step-0 baseline before later checkpoint evals. Scalar metrics still follow
+# logging_steps above. TRL otherwise uploads that table on every logging call.
+# 0 restores that cadence.
 log_completions_steps: 100
 
 # Prompt groups whose rollouts all scored the same have zero advantage and no gradient.
