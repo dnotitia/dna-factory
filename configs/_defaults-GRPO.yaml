@@ -35,7 +35,7 @@ max_completion_length: 16384  # Too small truncates every completion -> reward 0
 mask_truncated_completions: true  # Overlong filtering (from DAPO, works with any loss_type): drop capped completions from the loss
 temperature: 1.0
 epsilon: 0.2
-scale_rewards: group
+scale_rewards: none  # Dr. GRPO (arXiv:2503.20783). For a single 0/1 correctness reward: skip group-std scaling, which amplifies hard questions
 importance_sampling_level: token
 
 per_device_train_batch_size: 2
