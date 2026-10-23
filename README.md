@@ -10,18 +10,21 @@ Four trainers share one setup/train/save path: **SFT** on instruction or convers
 **DPO** on chosen vs rejected pairs, **GRPO** as online RL scored by reward functions,
 and **On-Policy Distillation** where a frozen teacher grades the student's own tokens.
 
+- [DNA Factory](#dna-factory)
 - [News](#news)
 - [Design Principles](#design-principles)
 - [Key Features](#key-features)
 - [How to Run](#how-to-run)
   - [Advanced Usage](#advanced-usage)
-  - [unsloth](#unsloth-single-gpu)
+  - [unsloth (single GPU)](#unsloth-single-gpu)
   - [Multi-GPUs](#multi-gpus)
   - [Multi-Nodes](#multi-nodes)
+  - [Qwen3.8-Flash-Next](#qwen38-flash-next)
 - [Acknowledgments](#acknowledgments)
 
 # News
 
+- Oct/23/2026 - **Qwen3.8-Flash-Next SFT** now supported with more **faster QSA indexer** and **PLE offloading**!
 - Oct/12/2026 - Optional **unsloth** backend (single GPU) for SFT, DPO, GRPO and distillation.
 - Sep/22/2026 - **Checkpoint Evaluation** — Inspect benchmarks on every checkpoint, logged to W&B.
 - Sep/02/2026 - **On-Policy Distillation** support.
@@ -125,6 +128,21 @@ $ accelerate launch \
 ## Multi-Nodes
 
 See [multi-nodes.md](docs/multi-nodes.md) for the master/worker launch commands.
+
+## Qwen3.8-Flash-Next
+
+LoRA SFT of Qwen3.8-Flash-Next runs on DeepSpeed ZeRO-3 with the PLE n-gram table in host memory, a
+vectorized QSA indexer and non-reentrant checkpointing; see [docs/qwen38-flash-next.md](docs/qwen38-flash-next.md).
+
+```bash
+# Train on 4 GPUs with ZeRO-3 (on 8 GPUs: --num_processes 8 --gradient_accumulation_steps 4).
+# The first run builds the PLE table in /dev/shm/ple-host; subsequent runs reuse it.
+accelerate launch \
+  --config_file accelerate_configs/zero3.yaml \
+  --num_processes 4 \
+  sft.py \
+  --config configs/SFT/qwen3.8-flash-next-lora.yaml
+```
 
 ## Documentation
 

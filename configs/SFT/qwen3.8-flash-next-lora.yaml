@@ -1,0 +1,75 @@
+# Qwen3.8-Flash-Next (qwen4_exp, ~180B MoE: 512 experts / 10 active, 36 GDN + 12 full-attention layers)
+# as LoRA. Full fine-tuning requires substantially more memory than this setup.
+# Run it with DeepSpeed ZeRO-3 (accelerate_configs/zero3.yaml) and the PLE table in host memory; see
+# docs/qwen38-flash-next.md (needs fla-core and a built ple_host_table).
+
+model_name_or_path: path/to/Qwen3.8-Flash-Next   # local checkpoint directory
+model_revision: main
+trust_remote_code: false
+dtype: bfloat16
+
+run_name: qwen3.8-flash-next-lora
+
+# ---- Dataset mixture (public example; replace with your own data) ----
+datasets:
+  - path: HuggingFaceTB/smoltalk2
+    name: SFT
+    split: smoltalk_everyday_convs_reasoning_Qwen3_32B_think
+    columns:
+      - messages
+
+# ---- Sequence / loss ----
+max_length: 8192
+packing: false
+completion_only_loss: true
+
+# ---- Optimization ----
+num_train_epochs: 6
+learning_rate: 1.0e-4        # LoRA
+lr_scheduler_type: cosine_with_min_lr
+lr_scheduler_kwargs:
+  min_lr_rate: 0.1
+warmup_steps: 0.1           # < 1 = ratio of total steps (transformers 5.20 dropped warmup_ratio)
+
+per_device_train_batch_size: 4   # ZeRO-3 all-gathers every weight once per micro-batch: 4 x ga1 ran 4.9x faster than 1 x ga4
+gradient_accumulation_steps: 8    # 4 GPU: 4 x pd4 x ga8 = 128 (8 GPU: ga4)
+weight_decay: 0.0
+max_grad_norm: 0.3
+seed: 42
+bf16: true
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false   # required under ZeRO-3: reentrant recompute leaks the re-gathered weights (deepspeed#8481);
+                         # DnotitiaSFTTrainer keeps it although TRL forces True for PEFT + ZeRO-3
+use_liger_kernel: false     # LoRA: Liger has no qwen4_exp support
+router_aux_loss_coef: 0.0   # LoRA: router frozen; TRL >= 1.16 otherwise turns the MoE aux loss on from the model config (0.001)
+
+# ---- LoRA ----
+# Experts are fused 3D nn.Parameters (Qwen4ExpTextExperts.gate_up_proj / down_proj), which plain
+# LoRA cannot wrap. Adapt the full-attention projections, the GDN (linear-attention) projections
+# and the shared-expert MLP instead.
+use_peft: true
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.0
+lora_target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "in_proj_qkv", "in_proj_z", "out_proj", "gate_proj", "up_proj", "down_proj"]
+
+# ---- Tokenizer / attention ----
+eos_token: <|im_end|>
+pad_token: <|endoftext|>
+
+attn_implementation: sdpa   # Qwen4Exp sets _supports_flash_attn = False
+
+# ---- Saving ----
+save_strategy: epoch
+save_total_limit: 6
+
+logging_steps: 1
+report_to:
+  - wandb
+
+debug_first_n_batches: 3
+
+# ---- Qwen3.8-Flash-Next training path (docs/qwen38-flash-next.md) ----
+ple_host_table: /dev/shm/ple-host  # 95 GiB PLE table in RAM; built from the checkpoint on first use
+qsa_indexer_fast: true            # vectorized QSA indexer (upstream's per-query loop dominates the step)

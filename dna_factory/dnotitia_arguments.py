@@ -154,3 +154,23 @@ class DnotitiaArguments:
         default=16000,
         metadata={"help": "`inspect eval --max-tokens`: generation cap per sample."},
     )
+    ple_host_table: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "Qwen3.8-Flash-Next (qwen4_exp): directory for the PLE n-gram embedding table (use /dev/shm); "
+                "built there from the checkpoint on first use. The ~95 GiB table then stays in a host memmap "
+                "shared by all processes instead of being a GPU parameter (see dna_factory/ple_host_offload.py)."
+            )
+        },
+    )
+    qsa_indexer_fast: bool = field(
+        default=False,
+        metadata={
+            "help": (
+                "Qwen3.8-Flash-Next (qwen4_exp): vectorized QSA indexer for causal, cache-free rows "
+                "instead of upstream's per-query Python loop, which dominates the training step "
+                "(see dna_factory/qsa_indexer_fast.py)."
+            )
+        },
+    )

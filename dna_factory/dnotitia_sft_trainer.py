@@ -17,7 +17,30 @@ logger = logging.getLogger(__name__)
 
 class DnotitiaSFTTrainer(SFTTrainer):
     def __init__(self, *args, debug_first_n_batches: int = 3, **kwargs):
+        training_args = kwargs.get("args")
+        gc_kwargs = (
+            (getattr(training_args, "gradient_checkpointing_kwargs", None) or {})
+            if training_args
+            else {}
+        )
+        requested_reentrant = gc_kwargs.get("use_reentrant")
         super().__init__(*args, **kwargs)
+        # TRL forces use_reentrant=True for PEFT + DeepSpeed ZeRO-3 + gradient checkpointing (trl#2514: on
+        # older stacks the non-reentrant recompute check failed on partitioned weights). With reentrant
+        # checkpointing, DeepSpeed does not release the weights it re-gathers for the backward recompute
+        # (deepspeed#8481), so they pile up layer after layer: on Qwen3.8-Flash-Next its frozen MoE experts
+        # (4.7 GiB per layer) OOM the first backward. An explicit use_reentrant: false is honoured again.
+        if requested_reentrant is False and (
+            self.args.gradient_checkpointing_kwargs or {}
+        ).get("use_reentrant"):
+            self.args.gradient_checkpointing_kwargs = {
+                **self.args.gradient_checkpointing_kwargs,
+                "use_reentrant": False,
+            }
+            logger.warning(
+                "Keeping the configured gradient_checkpointing_kwargs.use_reentrant=False that TRL overrides for "
+                "PEFT + ZeRO-3: reentrant checkpointing leaks the re-gathered weights under ZeRO-3 (deepspeed#8481)."
+            )
         # Maximum number of batches to print debug info for
         self.debug_first_n_batches = debug_first_n_batches
 

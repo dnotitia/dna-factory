@@ -305,6 +305,26 @@ def create_model_kwargs(model_args, training_args, dnotitia_args):
     # conflicts with distributed training (where the map must remain `None`).
     model_kwargs["quantization_config"] = quantization_config
 
+    # Qwen3.8-Flash-Next (qwen4_exp) model-code patches. They change classes, not this model's kwargs,
+    # and must be in place before from_pretrained builds the model; see docs/qwen38-flash-next.md.
+    # Some callers (e.g. DPO's reference model) pass no DnotitiaArguments.
+    ple_host_table = getattr(dnotitia_args, "ple_host_table", None)
+    if ple_host_table:
+        from dna_factory.ple_host_offload import enable as enable_ple_host_offload
+
+        model_dir = model_args.model_name_or_path
+        if not os.path.isdir(model_dir):
+            # Use the same hub cache as from_pretrained so the checkpoint is downloaded only once.
+            from huggingface_hub import snapshot_download
+
+            model_dir = snapshot_download(model_dir, revision=model_args.model_revision)
+        # Build the flat table on first use; one process per node performs the build.
+        enable_ple_host_offload(ple_host_table, model_dir=model_dir)
+    if getattr(dnotitia_args, "qsa_indexer_fast", False):
+        from dna_factory import qsa_indexer_fast
+
+        qsa_indexer_fast.enable()
+
     return model_kwargs
 
 
