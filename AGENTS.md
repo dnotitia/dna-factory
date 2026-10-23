@@ -31,7 +31,9 @@ MoE models must launch with the matching MoE accelerate config
 (`zero3-qwen3-moe.yaml`, `zero3-qwen3_5-moe.yaml`): it sets
 `deepspeed_moe_layer_cls_names`, which is the only ZeRO-3 leaf handling
 (the scripts contain no manual `set_z3_leaf_modules` call). Plain `zero3.yaml`
-with a MoE model risks ZeRO-3 param-trace errors.
+with a MoE model risks ZeRO-3 param-trace errors. The one exception is
+Qwen3.8-Flash-Next (`qwen4_exp`), validated only with plain `zero3.yaml`; see
+docs/qwen38-flash-next.md (its `ple_host_table` requires `use_peft`).
 
 ## Layout
 

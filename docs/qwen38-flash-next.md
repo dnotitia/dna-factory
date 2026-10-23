@@ -17,8 +17,8 @@ those changes and how to run [configs/SFT/qwen3.8-flash-next-lora.yaml](../confi
 
 | Argument (`DnotitiaArguments`) | What it does | Why |
 |---|---|---|
-| `qsa_indexer_fast: true` | [dna_factory/qsa_indexer_fast.py](../dna_factory/qsa_indexer_fast.py) vectorizes the QSA indexer for causal (possibly right-padded) rows without cached indexer keys (training, and the prefill of generation); other batches, such as decoding steps, use upstream's loop | Upstream selects blocks in a Python loop over every query token (with a host-syncing `nonzero`): ~78% of a training step. Under ZeRO-3 that loop also deadlocks: it calls `k_layernorm` once per query, so ranks with different lengths issue different all-gathers; the fast path calls it once per row. The mask is identical to upstream's on real tokens (up to top-k ties); see [testcase/test_qsa_indexer_fast.py](../testcase/test_qsa_indexer_fast.py) |
-| `ple_host_table: <dir>` | [dna_factory/ple_host_offload.py](../dna_factory/ple_host_offload.py) keeps the 95 GiB PLE n-gram embedding table in a host memmap shared by all processes and gathers rows on the CPU | As a parameter, ZeRO-3 gathers the whole table onto one GPU at load (OOM). The table is frozen under LoRA |
+| `qsa_indexer_fast: true` | [dna_factory/qsa_indexer_fast.py](../dna_factory/qsa_indexer_fast.py) vectorizes the QSA indexer for causal (possibly right-padded) rows without cached indexer keys (training, and the prefill of generation); other batches, such as decoding steps, use upstream's loop, except in training under ZeRO-3, where such a batch stops with an error | Upstream selects blocks in a Python loop over every query token (with a host-syncing `nonzero`): ~78% of a training step. Under ZeRO-3 that loop also deadlocks: it calls `k_layernorm` once per query, so ranks with different lengths issue different all-gathers; the fast path calls it once per row. The mask is identical to upstream's on real tokens (up to top-k ties); see [testcase/test_qsa_indexer_fast.py](../testcase/test_qsa_indexer_fast.py) |
+| `ple_host_table: <dir>` | [dna_factory/ple_host_offload.py](../dna_factory/ple_host_offload.py) keeps the 95 GiB PLE n-gram embedding table in a host memmap shared by all processes and gathers rows on the CPU | As a parameter, ZeRO-3 gathers the whole table onto one GPU at load (OOM). The table is then frozen and left out of saved checkpoints, so `use_peft: true` is required (checked at startup) |
 
 `DnotitiaSFTTrainer` also keeps an explicit `gradient_checkpointing_kwargs.use_reentrant: false`. TRL forces it
 to `true` for PEFT + DeepSpeed ZeRO-3 (trl#2514), and with reentrant checkpointing DeepSpeed does not release
@@ -29,7 +29,8 @@ override passed on this stack.
 
 Point `ple_host_table` at a directory in `/dev/shm` (RAM). If it contains no table, or one built from another
 checkpoint, the first process on the node builds it from the checkpoint shards while the others wait on a lock
-file; subsequent runs reuse it.
+file; subsequent runs reuse it. The build checks the free space first (~95 GiB): in a container, `/dev/shm` is
+capped by `--shm-size`. A failed build removes its partial file.
 
 The table is read through a memmap with random row lookups, so it is only fast while its pages are in
 memory. On a network filesystem, once other workloads push it out of the page cache, every step waits on
@@ -51,6 +52,10 @@ accelerate launch --config_file accelerate_configs/zero3.yaml --num_processes 4 
     --output_dir output/qwen3.8-flash-next-lora
 ```
 
+This uses the plain `accelerate_configs/zero3.yaml`, the setup measured below. Unlike the Qwen3 and Qwen3.5 MoE
+configs (`zero3-qwen3-moe.yaml`, `zero3-qwen3_5-moe.yaml`), it sets no `deepspeed_moe_layer_cls_names`; a ZeRO-3
+leaf module for `Qwen4ExpTextSparseMoeBlock` has not been tested.
+
 ZeRO-3 all-gathers every weight once per micro-batch, so larger micro-batches amortize the communication:
 the config uses `per_device_train_batch_size` 4. Keep the global batch at 128: `gradient_accumulation_steps`
 8 on 4 GPUs, 4 on 8 GPUs.
@@ -67,5 +72,5 @@ the config uses `per_device_train_batch_size` 4. Keep the global batch at 128: `
 
 - Packing is not supported: under `sdpa` the GDN layers do not receive sequence boundaries (`cu_seq_lens_q`),
   so packed sequences would leak state across each other.
-- Left padding falls back to upstream's indexer loop, which deadlocks under ZeRO-3 (see above); TRL pads on
-  the right.
+- Left padding would fall back to upstream's indexer loop, which deadlocks under ZeRO-3 (see above), so
+  training stops with an error instead; TRL pads on the right.

@@ -27,3 +27,4 @@ Guides for the training scripts and the features around them. Setup and the SFT 
 | Guide | Covers |
 |---|---|
 | [gpt-oss.md](gpt-oss.md) | SFT of the dequantized gpt-oss-120b on two 8×H100 nodes |
+| [qwen38-flash-next.md](qwen38-flash-next.md) | LoRA SFT of Qwen3.8-Flash-Next on ZeRO-3: the host-memory PLE table (`ple_host_table`), the vectorized QSA indexer (`qsa_indexer_fast`), non-reentrant checkpointing, and throughput |

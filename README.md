@@ -23,7 +23,7 @@ and **On-Policy Distillation** where a frozen teacher grades the student's own t
 
 # News
 
-- Oct/23/2026 - **Qwen3.8-Flash-Next SFT** now supported with more **faster QSA indexer** and **PLE offloading**!
+- Oct/23/2026 - **Qwen3.8-Flash-Next SFT** now supported with a **faster QSA indexer** and **PLE offloading**!
 - Oct/12/2026 - Optional **unsloth** backend (single GPU) for SFT, DPO, GRPO and distillation.
 - Sep/22/2026 - **Checkpoint Evaluation** — Inspect benchmarks on every checkpoint, logged to W&B.
 - Sep/02/2026 - **On-Policy Distillation** support.
@@ -122,7 +122,8 @@ accelerate launch \
   --config_file accelerate_configs/zero3.yaml \
   --num_processes 4 \
   sft.py \
-  --config configs/SFT/qwen3.8-flash-next-lora.yaml
+  --config configs/SFT/qwen3.8-flash-next-lora.yaml \
+  --model_name_or_path path/to/Qwen3.8-Flash-Next
 ```
 
 ## Documentation
