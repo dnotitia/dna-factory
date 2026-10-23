@@ -191,3 +191,20 @@ def test_decode_step_with_earlier_keys_falls_back_and_updates_the_cache_once():
     assert torch.equal(
         caches[1].layers[0].indexer_keys, caches[0].layers[0].indexer_keys
     )
+
+
+def test_fallback_raises_in_training_under_zero3(monkeypatch):
+    # Upstream's loop calls k_layernorm once per query, which deadlocks ZeRO-3 ranks: fail loudly instead.
+    indexer = _indexer().train()
+    monkeypatch.setattr(qsa_indexer_fast, "is_deepspeed_zero3_enabled", lambda: True)
+    qsa_indexer_fast._ORIG.setdefault("forward", m.Qwen4ExpTextQSAIndexer.forward)
+    seq_length = 40
+    hidden = torch.randn(1, seq_length, 64)
+    mask = (
+        torch.ones(seq_length, seq_length, dtype=torch.bool).tril()[None, None].clone()
+    )
+    mask[..., :5] = False  # left padding
+    with torch.no_grad(), pytest.raises(RuntimeError, match="ZeRO-3"):
+        qsa_indexer_fast._fast_forward(
+            indexer, hidden, _rope(1, seq_length), mask, None
+        )

@@ -12,22 +12,24 @@ from the checkpoint's shards; the other processes wait on a file lock. Then:
   * the module is built without its nn.Embedding, so ZeRO-3 never creates or partitions it;
   * the table is an np.memmap of the flat file, so all processes on the node share one copy of the
     pages instead of each holding 95 GiB;
-  * forward computes the ids exactly as upstream and gathers the rows on the CPU, then copies them
-    to the activations' device (pinned, non-blocking);
+  * forward computes the ids exactly as upstream and gathers the rows on the CPU into pinned memory;
+    upstream's forward then copies them to the activations' device;
   * the checkpoint's 128 shard keys are dropped from the weight conversion and ignored on load.
 The memmap is only fast while the file is in the page cache: rows are random small reads, so when the
 pages are evicted, every step waits on storage. Put the table on /dev/shm (RAM, never evicted); on first use the file is also prefetched
 with posix_fadvise(WILLNEED) as a best effort.
-Written against transformers 5.16 (Qwen4ExpTextNGramEmbedding); the __init__ below mirrors upstream's
+Written against transformers 5.20 (Qwen4ExpTextNGramEmbedding); the __init__ below mirrors upstream's
 minus the embedding, and forward reuses upstream's by swapping in a lookup shim.
 """
 
+import contextlib
 import fcntl
 import json
 import logging
 import math
 import os
 import re
+import shutil
 
 import numpy as np
 import torch
@@ -73,23 +75,43 @@ def build_table(model_dir, out_dir):
             f"{model_dir}: expected one PLE table stored as contiguous shard_0..shard_N"
         )
 
+    # Check the space up front: a container's /dev/shm is capped by --shm-size, and running out mid-build
+    # would only surface as a failed write after tens of GiB.
+    needed = 0
+    for _, key, _ in shards:
+        with safe_open(os.path.join(model_dir, weight_map[key]), "pt") as handle:
+            needed += math.prod(handle.get_slice(key).get_shape()) * 2  # bf16
+    free = shutil.disk_usage(out_dir).free
+    if free < needed:
+        raise OSError(
+            f"{out_dir}: the PLE table needs {needed / 2**30:.1f} GiB but only {free / 2**30:.1f} GiB is free"
+        )
+
     rows, dim = 0, None
     tmp = os.path.join(out_dir, _TABLE_FILE + ".tmp")
-    with open(tmp, "wb") as f:
-        for idx, key, _ in shards:
-            with safe_open(os.path.join(model_dir, weight_map[key]), "pt") as handle:
-                shard = handle.get_tensor(key)
-            if shard.dtype != torch.bfloat16 or (
-                dim is not None and shard.shape[1] != dim
-            ):
-                raise ValueError(
-                    f"{key}: unexpected dtype/shape {shard.dtype} {tuple(shard.shape)}"
-                )
-            dim = shard.shape[1]
-            f.write(shard.contiguous().view(torch.int16).numpy().tobytes())
-            rows += shard.shape[0]
-            if idx % 16 == 0:
-                logger.info(f"PLE table: shard {idx}/{len(shards)}, {rows} rows")
+    try:
+        with open(tmp, "wb") as f:
+            for idx, key, _ in shards:
+                with safe_open(
+                    os.path.join(model_dir, weight_map[key]), "pt"
+                ) as handle:
+                    shard = handle.get_tensor(key)
+                if shard.dtype != torch.bfloat16 or (
+                    dim is not None and shard.shape[1] != dim
+                ):
+                    raise ValueError(
+                        f"{key}: unexpected dtype/shape {shard.dtype} {tuple(shard.shape)}"
+                    )
+                dim = shard.shape[1]
+                f.write(shard.contiguous().view(torch.int16).numpy().tobytes())
+                rows += shard.shape[0]
+                if idx % 16 == 0:
+                    logger.info(f"PLE table: shard {idx}/{len(shards)}, {rows} rows")
+    except BaseException:
+        # A partial table in /dev/shm would hold up to 95 GiB of RAM until someone deletes it.
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(tmp)
+        raise
     os.replace(tmp, os.path.join(out_dir, _TABLE_FILE))
     meta = {
         "param": shards[0][2] + ".weight",
@@ -182,6 +204,9 @@ class _HostLookup(nn.Module):
             self.num_embeddings,
         )
         rows = table.index_select(0, ids.reshape(-1).cpu())
+        # Pinned, so upstream's `.to(<ids' device>)` right after this call is a direct DMA copy.
+        if torch.cuda.is_available():
+            rows = rows.pin_memory()
         return rows.view(*ids.shape, self.embedding_dim)
 
 
@@ -211,12 +236,8 @@ def _materialize_id_buffers(module, m, device):
 def _patched_forward(orig_forward, m):
     def forward(self, input_ids, past_key_values):
         _materialize_id_buffers(self, m, input_ids.device)
-        out = orig_forward(
-            self, input_ids, past_key_values
-        )  # CPU rows (ids were sent to weight.device)
-        if out.device != input_ids.device:
-            out = out.pin_memory().to(input_ids.device, non_blocking=True)
-        return out
+        # Upstream sends the ids to ngram_embedding.weight.device (CPU) and moves the rows back to theirs.
+        return orig_forward(self, input_ids, past_key_values)
 
     return forward
 
@@ -235,7 +256,13 @@ def enable(path, model_dir=None):
         )
 
     cls = m.Qwen4ExpTextNGramEmbedding
-    if getattr(cls, "_dna_host_offload", False):
+    patched_path = getattr(cls, "_dna_host_offload", None)
+    if patched_path is not None:
+        # The patched __init__ captured that path; a second one would be silently ignored.
+        if patched_path != path:
+            raise ValueError(
+                f"PLE host offload is already enabled for {patched_path}, not {path}"
+            )
         return
 
     def __init__(self, config, embedding_dim, layer_idx, ple_layer_index=0):
@@ -285,7 +312,7 @@ def enable(path, model_dir=None):
 
     cls.__init__ = __init__
     cls.forward = _patched_forward(cls.forward, m)
-    cls._dna_host_offload = True
+    cls._dna_host_offload = path
 
     # Drop the shard-concatenation converter (it would materialize the 95 GiB table in every process)
     # from the cached mapping itself (get_checkpoint_conversion_mapping returns deep copies).

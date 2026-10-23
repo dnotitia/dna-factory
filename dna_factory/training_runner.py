@@ -310,6 +310,12 @@ def create_model_kwargs(model_args, training_args, dnotitia_args):
     # Some callers (e.g. DPO's reference model) pass no DnotitiaArguments.
     ple_host_table = getattr(dnotitia_args, "ple_host_table", None)
     if ple_host_table:
+        if not getattr(model_args, "use_peft", False):
+            # The table is then a host lookup, not a parameter: full fine-tuning would neither train it
+            # nor save it, leaving a checkpoint that cannot be loaded again.
+            raise ValueError(
+                "ple_host_table requires use_peft: true (the offloaded PLE table is frozen and not saved)."
+            )
         from dna_factory.ple_host_offload import enable as enable_ple_host_offload
 
         model_dir = model_args.model_name_or_path

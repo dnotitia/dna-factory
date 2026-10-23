@@ -100,3 +100,46 @@ def test_table_is_reused_then_rebuilt_when_the_checkpoint_changes(upstream_and_t
     assert os.stat(table_file).st_mtime_ns != built  # checkpoint changed: rebuilt
     with open(os.path.join(table_dir, "meta.json")) as f:
         assert json.load(f)["rows"] == weight.shape[0]
+
+
+def test_enable_rejects_a_second_table_path(upstream_and_table, tmp_path):
+    _, _, model_dir, table_dir = upstream_and_table
+    ple_host_offload.enable(str(table_dir))  # same path: no-op
+    with pytest.raises(ValueError, match="already enabled"):
+        ple_host_offload.enable(str(tmp_path), model_dir=str(model_dir))
+
+
+def test_build_checks_free_space_first(tmp_path, monkeypatch):
+    model_dir = tmp_path / "checkpoint"
+    _write_checkpoint(model_dir, torch.zeros(8, EMBEDDING_DIM, dtype=torch.bfloat16))
+    monkeypatch.setattr(
+        ple_host_offload.shutil, "disk_usage", lambda _: SimpleNamespace(free=100)
+    )
+    out_dir = tmp_path / "ple-host"
+    with pytest.raises(OSError, match="needs"):
+        ple_host_offload.build_table(str(model_dir), str(out_dir))
+    assert os.listdir(out_dir) == []
+
+
+def test_failed_build_leaves_no_partial_file(tmp_path):
+    model_dir = tmp_path / "checkpoint"
+    _write_checkpoint(
+        model_dir, torch.zeros(8, EMBEDDING_DIM)
+    )  # float32: rejected mid-build
+    out_dir = tmp_path / "ple-host"
+    with pytest.raises(ValueError, match="unexpected dtype"):
+        ple_host_offload.build_table(str(model_dir), str(out_dir))
+    assert os.listdir(out_dir) == []
+
+
+def test_ple_host_table_requires_peft():
+    from trl import ModelConfig
+
+    from dna_factory.training_runner import create_model_kwargs
+
+    with pytest.raises(ValueError, match="use_peft"):
+        create_model_kwargs(
+            ModelConfig(model_name_or_path="unused", use_peft=False),
+            SimpleNamespace(),
+            SimpleNamespace(ple_host_table="/nonexistent"),
+        )

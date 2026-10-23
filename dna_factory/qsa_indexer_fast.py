@@ -16,6 +16,8 @@ once and selects blocks for all queries with one [T, H, num_blocks] score tensor
   * if every visible block fits the budget (T <= token_budget + c - 1), the mask is all-selected.
 Padding queries keep their visible mask. Any other batch (left padding, a cache with earlier keys, i.e.
 decoding, a non-causal mask) falls back to upstream's loop. The selection matches upstream up to ties in the block scores (top-k tie-breaking).
+In training under ZeRO-3 such a batch raises instead: upstream's loop calls k_layernorm once per query and
+would deadlock the ranks (see _select_causal).
 
 Enabled with qsa_indexer_fast: true (DnotitiaArguments; see training_runner.create_model_kwargs).
 """
@@ -23,6 +25,7 @@ Enabled with qsa_indexer_fast: true (DnotitiaArguments; see training_runner.crea
 import math
 
 import torch
+from transformers.integrations import is_deepspeed_zero3_enabled
 
 _ORIG = {}
 
@@ -117,6 +120,12 @@ def _fast_forward(
     # If any row is not causal-with-right-padding (e.g. left padding, a cache with earlier keys,
     # query length != kv length), fall back to the original (slower) forward pass.
     if lengths is None or -1 in lengths:
+        if self.training and is_deepspeed_zero3_enabled():
+            raise RuntimeError(
+                "qsa_indexer_fast: this batch is not causal with right padding (packing, left padding or a "
+                "custom mask), and upstream's indexer loop that would handle it deadlocks under ZeRO-3. "
+                "Train with right padding and packing: false."
+            )
         return _ORIG["forward"](
             self, hidden_states, position_embeddings, attention_mask, past_key_values
         )
