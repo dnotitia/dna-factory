@@ -16,7 +16,6 @@ and **On-Policy Distillation** where a frozen teacher grades the student's own t
 - [Key Features](#key-features)
 - [How to Run](#how-to-run)
   - [Advanced Usage](#advanced-usage)
-  - [unsloth (single GPU)](#unsloth-single-gpu)
   - [Multi-GPUs](#multi-gpus)
   - [Multi-Nodes](#multi-nodes)
   - [Qwen3.8-Flash-Next](#qwen38-flash-next)
@@ -47,10 +46,6 @@ and **On-Policy Distillation** where a frozen teacher grades the student's own t
 1. **Commented default YAMLs** (`configs/_defaults-*.yaml`), overridable by custom YAML or CLI args.
 1. **Ready-made accelerate configs** for DDP and DeepSpeed ZeRO-1/3 (+ CPU offload).
 1. **Flexible checkpoint interval** — save on a wall-clock schedule (e.g. `6h`) instead of a step count.
-1. **Weighted dataset mixtures** via a per-dataset `weight:` (upsample, downsample, or drop) instead of listing the same path N times.
-1. **Composable GRPO rewards** — TRL builtins or dotted paths (judge / string-match / shaping); returning `None` skips a sample so several rewards can share one labeled mixture.
-1. **GRPO dynamic sampling** (`off` / `mask` / `resample`) — drop or refill zero-advantage groups so they don't waste a backward pass.
-1. **AsyncGRPO** — generation decoupled onto a separate vLLM GPU, with token-budget batching and staleness metrics; see [docs/async-grpo.md](docs/async-grpo.md).
 1. **Benchmarks on every checkpoint** — each checkpoint is served with vLLM on a spare GPU, scored with Inspect, and logged to the same W&B run, so eval curves land next to the loss curve while training keeps running; see [docs/checkpoint-eval.md](docs/checkpoint-eval.md).
 
 # How to Run
@@ -93,20 +88,6 @@ $ python sft.py \
   --config configs/SFT/qwen3-0.6B-sft.yaml \
   --num_train_epochs 2
 ```
-
-## unsloth (single GPU)
-
-`use_unsloth: true` loads the model through [unsloth](https://github.com/unslothai/unsloth)'s `FastModel` and its patched TRL trainers, for all four scripts. It is an optional extra and single-GPU only (no DeepSpeed, no AsyncGRPO). It follows the same configuration as without it: a setting unsloth cannot honour stops the run or prints a warning instead of being changed silently, and where the computation differs (kernels, packing groups, unsloth's own GRPO/distillation loss code) is listed in the guide. Supported `model_type`s are `qwen3`, `qwen3_moe`, `qwen3_5` and `qwen3_5_moe`; other models fall back to the standard path with a warning (an unreadable model `config.json` stops the run with an error instead). Write the flag out in full, as `--use_unsloth true`:
-
-```bash
-$ uv sync --extra unsloth
-$ python sft.py --config configs/SFT/qwen3-0.6B-sft-unsloth.yaml
-
-# Any script, any config
-$ python dpo.py --use_unsloth true --use_peft true --lora_dropout 0.0
-```
-
-Full guide, including an example GRPO config, when it helps and what it changes: [docs/unsloth.md](docs/unsloth.md).
 
 ## Multi-GPUs
 
