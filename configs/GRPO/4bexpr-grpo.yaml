@@ -1,6 +1,6 @@
-model_name_or_path: dnotitia/Qwen3-4B-Thinking-2507
-# model_name_or_path: dnotitia/Qwen3-1.7B
-
+########################################################
+# SCRIPT ARGUMENTS:
+########################################################
 run_name: grpo-4b-thinking-2507-strict-rewards
 # run_name: grpo-1.7b-zero3
 
@@ -24,6 +24,9 @@ reward_funcs:
 #  - dna_factory.rewards.safe_accuracy_reward
 reward_weights: [1.0, 0.5, 0.5, 0.5]
 
+########################################################
+# TRAINING ARGUMENTS:
+########################################################
 # 7497 prompts / 8 per step = 937 steps per epoch. eval/math peaked at 0.93 (step 469-763) and
 # fell to 0.63 at step 938, the first step of epoch 2 -- replaying solved prompts only drifts.
 num_train_epochs: 10
@@ -48,7 +51,16 @@ gradient_accumulation_steps: 16
 
 learning_rate: 2e-6
 
-periodic_save_seconds: 1h
+########################################################
+# MODEL ARGUMENTS:
+########################################################
+model_name_or_path: dnotitia/Qwen3-4B-Thinking-2507
+# model_name_or_path: dnotitia/Qwen3-1.7B
+
+########################################################
+# DNOTITIA GRPO TRAINER ARGUMENTS:
+########################################################
+periodic_save_seconds: 1h 40m
 eval_on_checkpoint: true
 eval_tasks:
   - inspect_evals/math
@@ -57,4 +69,5 @@ eval_tasks:
 #  - evals/kmmlu_pro.py
 #  - evals/kmmlu_redux.py
 
-eval_devices: "4,5" 
+eval_devices: "7"
+eval_vllm_args: "--max-model-len 12480 --data-parallel-size 1"
