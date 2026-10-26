@@ -60,58 +60,97 @@ def test_fast_matches_upstream_on_causal_masks(seq_length, bool_mask):
     assert torch.equal(out, ref)
 
 
-def test_non_causal_rows_fall_back_to_upstream():
+def _patched(indexer, hidden, rope, mask, cache=None):
+    qsa_indexer_fast._ORIG.setdefault("forward", m.Qwen4ExpTextQSAIndexer.forward)
+    return qsa_indexer_fast._fast_forward(indexer, hidden, rope, mask, cache)
+
+
+def _no_fallback(monkeypatch):
+    # Any fallback to upstream's loop fails the test.
+    monkeypatch.setitem(
+        qsa_indexer_fast._ORIG,
+        "forward",
+        lambda *_: pytest.fail("fell back to upstream"),
+    )
+
+
+def _padded_mask(lengths, seq_length, left=False):
+    """Causal mask with right (or left) padding as transformers builds it: query i sees real keys j <= i."""
+    positions = torch.arange(seq_length)
+    causal = positions[None, :] <= positions[:, None]
+    rows = []
+    for n in lengths:
+        real = positions >= seq_length - n if left else positions < n
+        rows.append(causal & real[None, :])
+    return torch.stack(rows)[:, None]
+
+
+def _document_mask(boundaries, seq_length):
+    """Causal mask of packed documents: a query sees only the earlier keys of its own document."""
+    doc = torch.zeros(seq_length, dtype=torch.long)
+    for start in boundaries:
+        doc[start:] += 1
+    positions = torch.arange(seq_length)
+    causal = positions[None, :] <= positions[:, None]
+    return (causal & (doc[None, :] == doc[:, None]))[None, None]
+
+
+@pytest.mark.parametrize("left", [False, True])
+@pytest.mark.parametrize("lengths", [(40, 23), (64, 64, 7), (129, 90), (5, 2)])
+def test_padded_rows_match_upstream_on_every_query(lengths, left, monkeypatch):
     indexer = _indexer()
     upstream = m.Qwen4ExpTextQSAIndexer.forward
-    seq_length = 40
-    hidden = torch.randn(1, seq_length, 64)
+    seq_length = max(lengths)
+    hidden = torch.randn(len(lengths), seq_length, 64)
     rope = _rope(hidden.shape[0], seq_length)
-    mask = (
-        torch.ones(seq_length, seq_length, dtype=torch.bool).tril()[None, None].clone()
+    mask = _padded_mask(lengths, seq_length, left=left)
+    with torch.no_grad():
+        ref = upstream(indexer, hidden, rope, mask, None)
+        _no_fallback(monkeypatch)
+        out = _patched(indexer, hidden, rope, mask)
+    assert torch.equal(out, ref)
+
+
+def test_rows_padded_on_different_sides_match_upstream(monkeypatch):
+    indexer = _indexer()
+    upstream = m.Qwen4ExpTextQSAIndexer.forward
+    seq_length = 50
+    mask = torch.cat(
+        [
+            _padded_mask((50,), seq_length),
+            _padded_mask((31,), seq_length),
+            _padded_mask((44,), seq_length, left=True),
+        ]
     )
-    mask[..., :5] = False  # left padding: not plain causal
+    hidden = torch.randn(3, seq_length, 64)
+    rope = _rope(3, seq_length)
+    with torch.no_grad():
+        ref = upstream(indexer, hidden, rope, mask, None)
+        _no_fallback(monkeypatch)
+        out = _patched(indexer, hidden, rope, mask)
+    assert torch.equal(out, ref)
+
+
+def test_document_masks_fall_back_to_upstream():
+    indexer = _indexer()
+    upstream = m.Qwen4ExpTextQSAIndexer.forward
+    seq_length = 60
+    hidden = torch.randn(1, seq_length, 64)
+    rope = _rope(1, seq_length)
+    mask = _document_mask([25], seq_length)
+    assert qsa_indexer_fast._shared_prefixes(mask) is None
     with torch.no_grad():
         ref = upstream(indexer, hidden, rope, mask, None)
         out = _patched(indexer, hidden, rope, mask)
     assert torch.equal(out, ref)
 
 
-def _patched(indexer, hidden, rope, mask):
-    qsa_indexer_fast._ORIG.setdefault("forward", m.Qwen4ExpTextQSAIndexer.forward)
-    return qsa_indexer_fast._fast_forward(indexer, hidden, rope, mask, None)
-
-
-def _right_padded_mask(lengths, seq_length):
-    """Causal mask with right padding as transformers builds it: query i sees real keys j <= i."""
-    positions = torch.arange(seq_length)
-    causal = positions[None, :] <= positions[:, None]
-    rows = [causal & (positions[None, :] < n) for n in lengths]
-    return torch.stack(rows)[:, None]
-
-
-@pytest.mark.parametrize("lengths", [(40, 23), (64, 64, 7), (129, 90)])
-def test_right_padded_rows_match_upstream_on_real_queries(lengths):
-    indexer = _indexer()
-    upstream = m.Qwen4ExpTextQSAIndexer.forward
-    seq_length = max(lengths)
-    hidden = torch.randn(len(lengths), seq_length, 64)
-    rope = _rope(hidden.shape[0], seq_length)
-    mask = _right_padded_mask(lengths, seq_length)
-    with torch.no_grad():
-        ref = upstream(indexer, hidden, rope, mask, None)
-        out = _patched(indexer, hidden, rope, mask)
-    for b, n in enumerate(lengths):
-        assert torch.equal(
-            out[b, 0, :n], ref[b, 0, :n]
-        )  # padding queries never reach the loss
-
-
-def test_k_layernorm_called_once_per_row_whatever_the_length():
+def test_k_layernorm_called_once_per_forward_whatever_the_data():
     # Under ZeRO-3 each module call gathers parameters, so the call count must not depend on the data.
     indexer = _indexer()
     calls = []
     indexer.k_layernorm.register_forward_hook(lambda *_: calls.append(1))
-    for lengths in [(3, 3), (40, 23), (129, 90)]:
+    for lengths, left in [((3, 3), False), ((40, 23), False), ((129, 90), True)]:
         calls.clear()
         seq_length = max(lengths)
         hidden = torch.randn(len(lengths), seq_length, 64)
@@ -120,9 +159,9 @@ def test_k_layernorm_called_once_per_row_whatever_the_length():
                 indexer,
                 hidden,
                 _rope(len(lengths), seq_length),
-                _right_padded_mask(lengths, seq_length),
+                _padded_mask(lengths, seq_length, left=left),
             )
-        assert len(calls) == len(lengths)
+        assert len(calls) == 1
 
 
 class _IndexerCache:
@@ -137,59 +176,39 @@ class _IndexerCache:
         return self.layers[layer_idx].update_indexer(keys)
 
 
-def test_fresh_cache_prefill_matches_upstream_and_fills_the_cache(monkeypatch):
-    # use_cache=True (e.g. training without gradient checkpointing, or a generation prefill) passes an
-    # empty cache: the fast path must still apply and leave the cache as upstream does.
+@pytest.mark.parametrize("left", [False, True])
+def test_cached_prefill_and_decode_match_upstream_and_fill_the_cache(left, monkeypatch):
+    # Prefill, a multi-token chunk and single-token decode steps, all with a cache of earlier keys.
     indexer = _indexer()
     upstream = m.Qwen4ExpTextQSAIndexer.forward
-    lengths, seq_length = (40, 23), 40
-    hidden = torch.randn(len(lengths), seq_length, 64)
-    rope = _rope(len(lengths), seq_length)
-    mask = _right_padded_mask(lengths, seq_length)
+    lengths, total = (40, 23), 52
+    chunks = [(0, 40), (40, 48), (48, 49), (49, 50), (50, 52)]
+    hidden = torch.randn(len(lengths), total, 64)
+    rope = _rope(len(lengths), total)
+    # Padding (to the prompt length 40) stays in the cache; the tokens generated after it are real.
+    prompt_mask = _padded_mask(lengths, 40, left=left)[:, 0, -1]
+    real = torch.cat(
+        [prompt_mask, torch.ones(len(lengths), total - 40, dtype=torch.bool)], dim=-1
+    )
+    positions = torch.arange(total)
+    full_mask = ((positions[None, :] <= positions[:, None])[None] & real[:, None, :])[
+        :, None
+    ]
     ref_cache, fast_cache = _IndexerCache(), _IndexerCache()
     with torch.no_grad():
-        ref = upstream(indexer, hidden, rope, mask, ref_cache)
-        # Any fallback to upstream's loop fails the test.
-        monkeypatch.setitem(
-            qsa_indexer_fast._ORIG,
-            "forward",
-            lambda *_: pytest.fail("fell back to upstream"),
-        )
-        out = qsa_indexer_fast._fast_forward(indexer, hidden, rope, mask, fast_cache)
-    for b, n in enumerate(lengths):
-        assert torch.equal(out[b, 0, :n], ref[b, 0, :n])
+        for start, end in chunks:
+            args = (
+                hidden[:, start:end],
+                (rope[0][:, :end], rope[1][:, :end]),
+                full_mask[:, :, start:end, :end],
+            )
+            ref = upstream(indexer, *args, ref_cache)
+            with monkeypatch.context() as patch:
+                _no_fallback(patch)
+                out = qsa_indexer_fast._fast_forward(indexer, *args, fast_cache)
+            assert torch.equal(out, ref)
     assert torch.equal(
         fast_cache.layers[0].indexer_keys, ref_cache.layers[0].indexer_keys
-    )
-
-
-def test_decode_step_with_earlier_keys_falls_back_and_updates_the_cache_once():
-    indexer = _indexer()
-    upstream = m.Qwen4ExpTextQSAIndexer.forward
-    qsa_indexer_fast._ORIG.setdefault("forward", upstream)
-    prompt = 40
-    hidden = torch.randn(1, prompt + 1, 64)
-    rope = _rope(1, prompt + 1)
-    prefill_mask = _right_padded_mask((prompt,), prompt)
-    decode_mask = torch.ones(1, 1, 1, prompt + 1, dtype=torch.bool)
-    caches = [_IndexerCache(), _IndexerCache()]
-    with torch.no_grad():
-        for cache in caches:
-            upstream(
-                indexer,
-                hidden[:, :prompt],
-                (rope[0][:, :prompt], rope[1][:, :prompt]),
-                prefill_mask,
-                cache,
-            )
-        ref = upstream(indexer, hidden[:, prompt:], rope, decode_mask, caches[0])
-        out = qsa_indexer_fast._fast_forward(
-            indexer, hidden[:, prompt:], rope, decode_mask, caches[1]
-        )
-    assert torch.equal(out, ref)
-    assert caches[1].layers[0].indexer_keys.shape[1] == prompt + 1
-    assert torch.equal(
-        caches[1].layers[0].indexer_keys, caches[0].layers[0].indexer_keys
     )
 
 
@@ -200,11 +219,38 @@ def test_fallback_raises_in_training_under_zero3(monkeypatch):
     qsa_indexer_fast._ORIG.setdefault("forward", m.Qwen4ExpTextQSAIndexer.forward)
     seq_length = 40
     hidden = torch.randn(1, seq_length, 64)
-    mask = (
-        torch.ones(seq_length, seq_length, dtype=torch.bool).tril()[None, None].clone()
-    )
-    mask[..., :5] = False  # left padding
     with torch.no_grad(), pytest.raises(RuntimeError, match="ZeRO-3"):
         qsa_indexer_fast._fast_forward(
-            indexer, hidden, _rope(1, seq_length), mask, None
+            indexer,
+            hidden,
+            _rope(1, seq_length),
+            _document_mask([15], seq_length),
+            None,
         )
+
+
+def _fresh_enable(monkeypatch, validated):
+    import transformers
+
+    monkeypatch.setattr(qsa_indexer_fast, "_ORIG", {})
+    monkeypatch.setattr(
+        qsa_indexer_fast,
+        "VALIDATED_TRANSFORMERS",
+        (transformers.__version__,) if validated else ("0.0.0",),
+    )
+    monkeypatch.setattr(
+        m.Qwen4ExpTextQSAIndexer, "forward", m.Qwen4ExpTextQSAIndexer.forward
+    )
+
+
+@pytest.mark.parametrize("validated", [True, False])
+def test_enable_patches_and_warns_only_on_an_unvalidated_version(
+    validated, monkeypatch, caplog
+):
+    upstream = m.Qwen4ExpTextQSAIndexer.forward
+    _fresh_enable(monkeypatch, validated=validated)
+    with caplog.at_level("WARNING"):
+        qsa_indexer_fast.enable()
+    assert m.Qwen4ExpTextQSAIndexer.forward is qsa_indexer_fast._fast_forward
+    assert qsa_indexer_fast._ORIG["forward"] is upstream
+    assert ("VALIDATED_TRANSFORMERS" in caplog.text) is not validated

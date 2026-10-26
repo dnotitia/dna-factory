@@ -1,107 +1,126 @@
-"""Vectorized QSA indexer for Qwen4Exp (Qwen3.8-Flash-Next) training forwards.
+"""Vectorized QSA indexer for Qwen4Exp (Qwen3.8-Flash-Next).
 
-Upstream `Qwen4ExpTextQSAIndexer.forward` (transformers 5.16) selects each query's key blocks in a Python
-loop over every (batch, query) pair: ~20 small kernels per query, including a host-syncing `nonzero`.
-For one 2k-token sequence that is 2,048 iterations in each of the 12 full-attention layers, and it makes
-the training step CPU-bound (profile: 7.5 s wall vs 3.1 s of CUDA time per fwd+bwd).
+Upstream `Qwen4ExpTextQSAIndexer.forward` selects each query's key blocks in a Python loop over every
+(batch, query) pair: ~20 small kernels per query, including a host-syncing `nonzero`. For one 2k-token
+sequence that is 2,048 iterations in each of the 12 full-attention layers, and it makes the training step
+CPU-bound (profile: 7.5 s wall vs 3.1 s of CUDA time per fwd+bwd).
 
-Its output is only a boolean mask (no gradient flows through it). When a batch row's mask is causal (possibly
-right-padded) and there is no cache or the cache holds no indexer keys for the layer yet (a prompt's first
-forward, which writes its keys to the cache as upstream does), i.e. every training forward and every
-prefill without left padding, real query i sees
-tokens 0..i, so all queries share the same complete blocks [b*c, (b+1)*c). This module then computes the pooled block keys
-once and selects blocks for all queries with one [T, H, num_blocks] score tensor and a masked top-k:
-  * blocks: top min(block_topk, (i+1)//c) visible blocks by relu(q_i . k_b) summed over heads;
-  * tail: tokens from the last complete visible block boundary up to i are always selected;
-  * if every visible block fits the budget (T <= token_budget + c - 1), the mask is all-selected.
-Padding queries keep their visible mask. Any other batch (left padding, a cache with earlier keys, i.e.
-decoding, a non-causal mask) falls back to upstream's loop. The selection matches upstream up to ties in the block scores (top-k tie-breaking).
-In training under ZeRO-3 such a batch raises instead: upstream's loop calls k_layernorm once per query and
-would deadlock the ranks (see _select_causal).
+Upstream blocks a query's visible keys in key order: complete blocks of `compress_ratio` keys, of which the
+`block_topk` best by relu(q . k_block) summed over heads are kept, plus the trailing partial block. Whenever
+every query of a batch row sees a prefix of the same list of keys (the keys any of the row's queries sees),
+all those queries share that list's blocks. That holds for causal masks with right or left padding, for a
+cache of earlier keys (decoding, chunked prefill) and for static caches, i.e. for everything but masks that
+give queries different key sets, such as packed sequences with per-document masks. For such batches this
+module packs each row's keys, pools the blocks once and selects blocks for every query of every row with one
+[batch, query, block] score tensor and a masked top-k, the same pattern as transformers' DSA indexers (e.g.
+GLM5-Next). The selection matches upstream for every query, up to ties in the block scores (top-k
+tie-breaking). Other batches fall back to upstream's loop; in training under ZeRO-3 they raise instead,
+since the loop calls k_layernorm once per query and would deadlock the ranks.
 
-Enabled with qsa_indexer_fast: true (DnotitiaArguments; see training_runner.create_model_kwargs).
+Enabled with qsa_indexer_fast: true (DnotitiaArguments; see training_runner.create_model_kwargs). This is a
+monkeypatch of a reimplementation, validated against the transformers versions in VALIDATED_TRANSFORMERS by
+testcase/test_qsa_indexer_fast.py; enable() warns on any other version.
 """
 
+import logging
 import math
 
 import torch
+import transformers
 from transformers.integrations import is_deepspeed_zero3_enabled
+
+logger = logging.getLogger(__name__)
+
+# transformers versions whose Qwen4ExpTextQSAIndexer testcase/test_qsa_indexer_fast.py checked this patch against.
+# Add a version here after running those tests on it.
+VALIDATED_TRANSFORMERS = ("5.20.2",)
 
 _ORIG = {}
 
 
-def _fresh_cache(past_key_values, layer_idx):
-    """Whether the cache holds no indexer keys for this layer yet (the prompt's first forward)."""
-    try:
-        layer = past_key_values.layers[layer_idx]
-    except AttributeError, IndexError, TypeError:
-        return False
-    if not getattr(layer, "is_indexer_initialized", False):
-        return True
-    keys = getattr(layer, "indexer_keys", None)
-    # A static layer keeps a preallocated buffer once initialized, so only an empty dynamic one counts.
-    return keys is not None and keys.numel() == 0
+def _shared_prefixes(visible):
+    """(valid, rank, lengths) if every query sees a prefix of its row's keys, else None.
 
-
-def _real_lengths(visible, seq_length):
-    """Per batch row, its number of real tokens L if the row is causal with right padding, else -1.
-
-    Such a row's real queries (diagonal True, positions < L) see exactly keys 0..i; its padding queries
-    (diagonal False, positions >= L) may see anything, as they never reach the loss. A row without
-    padding is the L == seq_length case. Returns None when the kv length differs from the query length.
+    valid [batch, kv]: keys any of the row's queries sees.
+    rank [batch, kv]: a valid key's position in that list.
+    lengths [batch, query]: how many of those keys each query sees.
     """
-    if visible.shape[-1] != seq_length:
-        return None
     rows = visible[:, 0]
-    positions = torch.arange(seq_length, device=visible.device)
-    causal = positions[None, :] <= positions[:, None]
-    diagonal = rows.diagonal(dim1=-2, dim2=-1)
-    lengths = diagonal.sum(dim=-1)
-    real = positions[None, :] < lengths[:, None]
-    contiguous = (diagonal == real).all(dim=-1)
-    causal_real = ((rows == causal) | ~real[:, :, None]).flatten(1).all(dim=-1)
-    ok = contiguous & causal_real
-    return [int(n) if good else -1 for n, good in zip(lengths.tolist(), ok.tolist())]
+    valid = rows.any(dim=1)
+    rank = valid.cumsum(dim=-1) - 1
+    lengths = rows.sum(dim=-1)
+    expected = valid[:, None, :] & (rank[:, None, :] < lengths[:, :, None])
+    if not torch.equal(rows, expected):
+        return None
+    return valid, rank, lengths
 
 
-def _select_causal(self, m, q, raw_keys, full_cos, full_sin):
-    """Token selection mask [T, T] for one causal row. q: [T, H, D], raw_keys: [T, D]."""
-    seq_length = q.shape[0]
-    c, budget = self.compress_ratio, self.block_topk
-    device = q.device
-    positions = torch.arange(seq_length, device=device)
-    causal = positions[None, :] <= positions[:, None]
-    num_blocks = seq_length // c
-    # k_layernorm runs exactly once per row regardless of length: under ZeRO-3 every module call gathers
-    # its parameters, so a length-dependent number of calls (upstream: one per query) desyncs the ranks'
-    # collectives and deadlocks them.
-    keys = raw_keys[: num_blocks * c].view(num_blocks, c, raw_keys.shape[-1])
-    pooled = self.k_layernorm(keys.float().mean(dim=1).to(raw_keys.dtype))
-    if (
-        num_blocks <= budget
-    ):  # every visible block fits the budget: selection == causal mask
-        return causal
-    starts = positions[: num_blocks * c : c]
+def _select_blocks(
+    self, m, q, raw_keys, full_cos, full_sin, visible, valid, rank, lengths
+):
+    """Token selection mask [batch, query, kv] for rows whose queries see prefixes of the row's keys."""
+    batch_size, seq_length = q.shape[:2]
+    c, device = self.compress_ratio, q.device
+    kv_length = valid.shape[-1]
+    packed_length = int(lengths.max())
+    num_blocks = packed_length // c
+
+    # Original key position of each row's r-th valid key (r < packed_length); invalid keys go to a dropped slot.
+    positions = torch.arange(kv_length, device=device).expand(batch_size, -1)
+    slots = torch.where(valid, rank, packed_length)
+    packed_positions = torch.zeros(
+        batch_size, packed_length + 1, dtype=torch.long, device=device
+    )
+    packed_positions = packed_positions.scatter(1, slots, positions)[:, :packed_length]
+
+    # One k_layernorm call per forward whatever the data: under ZeRO-3 every module call gathers its
+    # parameters, so a data-dependent number of calls (upstream: one per query) desyncs the ranks.
+    block_positions = packed_positions[:, : num_blocks * c]
+    keys = raw_keys.gather(
+        1, block_positions[..., None].expand(-1, -1, raw_keys.shape[-1])
+    )
+    pooled = self.k_layernorm(
+        keys.view(batch_size, num_blocks, c, raw_keys.shape[-1])
+        .float()
+        .mean(dim=2)
+        .to(raw_keys.dtype)
+    )
+    # Every query keeps all its blocks: the selection is exactly what it sees.
+    if num_blocks <= self.block_topk:
+        return visible[:, 0]
+    starts = block_positions[:, ::c]
     block_keys = m.apply_rotary_pos_emb(
-        pooled.unsqueeze(1),
-        cos=full_cos.index_select(0, starts),
-        sin=full_sin.index_select(0, starts),
-    ).squeeze(1)
-    scores = torch.einsum("thd,bd->tbh", q.float(), block_keys.float())
-    scores = torch.relu(scores).sum(dim=-1) / math.sqrt(
-        self.index_head_dim
-    )  # [T, num_blocks]
-    visible_blocks = (positions + 1) // c  # complete visible blocks per query
+        pooled.unsqueeze(2),
+        cos=full_cos.gather(1, starts[..., None].expand(-1, -1, full_cos.shape[-1])),
+        sin=full_sin.gather(1, starts[..., None].expand(-1, -1, full_sin.shape[-1])),
+        unsqueeze_dim=2,
+    ).squeeze(2)
+
+    # [batch, query * head, dim] @ [batch, dim, block]: one batched GEMM (matmul would broadcast the keys to
+    # every query first)
+    num_heads, head_dim = q.shape[2:]
+    scores = torch.bmm(
+        q.float().reshape(batch_size, seq_length * num_heads, head_dim),
+        block_keys.float().transpose(1, 2),
+    ).view(batch_size, seq_length, num_heads, num_blocks)
+    scores = torch.relu(scores).sum(dim=2) / math.sqrt(self.index_head_dim)
+    complete_blocks = lengths // c
     block_ids = torch.arange(num_blocks, device=device)
-    valid = block_ids[None, :] < visible_blocks[:, None]
-    scores = scores.masked_fill(~valid, float("-inf"))
-    top = scores.topk(budget, dim=-1)
-    chosen = torch.zeros(seq_length, num_blocks, dtype=torch.bool, device=device)
-    chosen.scatter_(1, top.indices, top.values > float("-inf"))
-    selected = torch.zeros(seq_length, seq_length, dtype=torch.bool, device=device)
-    selected[:, : num_blocks * c] = chosen.repeat_interleave(c, dim=1)
-    tail = (positions[None, :] >= (visible_blocks * c)[:, None]) & causal
-    return selected | tail
+    scores = scores.masked_fill(block_ids >= complete_blocks[..., None], float("-inf"))
+    top = scores.topk(min(self.block_topk, num_blocks), dim=-1)
+    chosen = torch.zeros(
+        batch_size, seq_length, num_blocks, dtype=torch.bool, device=device
+    )
+    chosen = chosen.scatter(-1, top.indices, top.values > float("-inf"))
+
+    # Selection over the packed keys (selected blocks, then the trailing partial block), mapped back to the
+    # original key positions. The extra last slot stays False and absorbs the invalid keys.
+    packed = torch.arange(packed_length + 1, device=device)
+    selected = (packed >= (complete_blocks * c)[..., None]) & (
+        packed < lengths[..., None]
+    )
+    selected[..., : num_blocks * c] |= chosen.repeat_interleave(c, dim=-1)
+    return selected.gather(-1, slots[:, None, :].expand(-1, seq_length, -1))
 
 
 def _fast_forward(
@@ -113,25 +132,26 @@ def _fast_forward(
     visible = (
         attention_mask if attention_mask.dtype == torch.bool else attention_mask == 0
     )
-    # Decided before touching the cache, so a fallback leaves it for upstream to update exactly once.
-    fresh = past_key_values is None or _fresh_cache(past_key_values, self.layer_idx)
-    # Per row: real length L if causal with right padding, -1 otherwise.
-    lengths = _real_lengths(visible, seq_length) if fresh else None
-    # If any row is not causal-with-right-padding (e.g. left padding, a cache with earlier keys,
-    # query length != kv length), fall back to the original (slower) forward pass.
-    if lengths is None or -1 in lengths:
+    # Decided from the mask alone, before touching the cache, so a fallback leaves it for upstream to update.
+    prefixes = _shared_prefixes(visible)
+    if prefixes is None:
         if self.training and is_deepspeed_zero3_enabled():
             raise RuntimeError(
-                "qsa_indexer_fast: this batch is not causal with right padding (packing, left padding or a "
-                "custom mask), and upstream's indexer loop that would handle it deadlocks under ZeRO-3. "
-                "Train with right padding and packing: false."
+                "qsa_indexer_fast: this batch gives queries of a row different key sets (e.g. packing with "
+                "per-document masks), and upstream transformers' indexer loop that would handle it "
+                "deadlocks under ZeRO-3. Train with packing: false."
             )
         return _ORIG["forward"](
             self, hidden_states, position_embeddings, attention_mask, past_key_values
         )
 
+    # Same projections as upstream; the cos/sin cover every key, the queries are the last seq_length of them.
     hidden_shape = (batch_size, seq_length, -1, self.index_head_dim)
     full_cos, full_sin = position_embeddings
+    current_cos, current_sin = (
+        full_cos[:, -seq_length:, :],
+        full_sin[:, -seq_length:, :],
+    )
     qk = self.index_qk_proj(hidden_states)
     q, token_k = torch.split(
         qk,
@@ -142,24 +162,14 @@ def _fast_forward(
         dim=-1,
     )
     q, raw_keys = q.reshape(*hidden_shape), token_k.reshape(*hidden_shape).squeeze(2)
-    if past_key_values is not None:
-        # Fresh cache: store this prompt's keys for the decode steps, as upstream does (it then holds
-        # exactly these keys, so the returned tensor is raw_keys itself).
-        raw_keys = past_key_values.update_indexer(raw_keys, self.layer_idx)
     q = self.q_layernorm(q)
-    q = m.apply_rotary_pos_emb(q, cos=full_cos, sin=full_sin, unsqueeze_dim=2)
-    # Real queries get the causal selection over their row's L real tokens; padding queries keep their
-    # visible mask (upstream would score them too, but their outputs never reach the loss).
-    selected = visible.clone()
-    for b, length in enumerate(lengths):
-        selected[b, 0, :length, :length] = _select_causal(
-            self,
-            m,
-            q[b, :length],
-            raw_keys[b, :length],
-            full_cos[b, :length],
-            full_sin[b, :length],
-        )
+    q = m.apply_rotary_pos_emb(q, cos=current_cos, sin=current_sin, unsqueeze_dim=2)
+    if past_key_values is not None:
+        raw_keys = past_key_values.update_indexer(raw_keys, self.layer_idx)
+
+    selected = _select_blocks(
+        self, m, q, raw_keys, full_cos, full_sin, visible, *prefixes
+    ).unsqueeze(1)
     if attention_mask.is_floating_point():
         min_dtype = torch.finfo(attention_mask.dtype).min
         selected = torch.where(selected, attention_mask.new_zeros(()), min_dtype)
@@ -170,6 +180,14 @@ def enable():
     from transformers.models.qwen4_exp import modeling_qwen4_exp as m
 
     cls = m.Qwen4ExpTextQSAIndexer
-    if "forward" not in _ORIG:
-        _ORIG["forward"] = cls.forward
-        cls.forward = _fast_forward
+    if "forward" in _ORIG:
+        return
+    if transformers.__version__ not in VALIDATED_TRANSFORMERS:
+        logger.warning(
+            "qsa_indexer_fast reimplements the QSA indexer of transformers "
+            f"{', '.join(VALIDATED_TRANSFORMERS)}, not {transformers.__version__}, whose indexer may have "
+            "changed. Run testcase/test_qsa_indexer_fast.py, which compares it with the installed indexer, "
+            "and add the version to VALIDATED_TRANSFORMERS."
+        )
+    _ORIG["forward"] = cls.forward
+    cls.forward = _fast_forward
