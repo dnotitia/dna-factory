@@ -97,6 +97,51 @@ def preprocess_thinking_data(example):
     return {"messages": messages}
 
 
+EARLIER_ASSISTANT_TURNS = "_earlier_assistant_turns"
+
+
+def messages_to_prompt_completion(example):
+    """Split a `messages` conversation into prompt (all turns but the last) and completion (the last turn).
+
+    TRL masks the prompt only for prompt/completion data. `thinking` goes into `reasoning_content` as for
+    `messages` data, so the chat template renders the same token sequence. Earlier assistant turns become
+    part of the prompt and are not trained; their count is returned so the caller can report it.
+    """
+    messages = preprocess_thinking_data(example)["messages"]
+    if not messages or messages[-1]["role"] != "assistant":
+        raise ValueError(
+            "completion_only_loss needs each conversation to end with an assistant turn, got "
+            f"{messages[-1]['role'] if messages else 'an empty conversation'!r}."
+        )
+    *prompt, completion = messages
+    earlier = sum(1 for m in prompt if m["role"] == "assistant")
+    return {
+        "prompt": prompt,
+        "completion": [completion],
+        EARLIER_ASSISTANT_TURNS: earlier,
+    }
+
+
+def convert_for_completion_only_loss(dataset, train_logger):
+    converted = dataset.map(messages_to_prompt_completion, remove_columns=["messages"])
+    for split, data in converted.items():
+        try:
+            multi_turn = sum(1 for n in data[EARLIER_ASSISTANT_TURNS] if n)
+        except KeyError, TypeError:  # streaming splits cannot be counted up front
+            multi_turn = None
+        if multi_turn:
+            train_logger.warning(
+                f"completion_only_loss: {multi_turn} of {len(data)} `{split}` conversations have earlier "
+                "assistant turns, which are now part of the prompt and not trained; only the final assistant "
+                "turn carries the loss."
+            )
+    train_logger.info(
+        "completion_only_loss: converted `messages` to prompt/completion so the loss covers only the final "
+        "assistant turn."
+    )
+    return converted.remove_columns(EARLIER_ASSISTANT_TURNS)
+
+
 def load_models(
     script_args, training_args, model_args, dnotitia_args, ctx, train_logger
 ):
@@ -135,7 +180,24 @@ def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
     )
 
 
+def setup_training_args(
+    script_args, training_args, model_args, dnotitia_args, ctx, train_logger
+):
+    ctx["completion_only_loss"] = training_args.completion_only_loss
+
+
+def _has_messages(dataset):
+    columns = dataset.column_names
+    if isinstance(columns, dict):
+        return any(c and "messages" in c for c in columns.values())
+    return bool(columns) and "messages" in columns
+
+
 def postprocess_dataset(dataset, ctx, train_logger):
+    # TRL applies completion_only_loss only to prompt/completion data and silently trains every token of a
+    # `messages` dataset, so convert those conversations (the final assistant turn becomes the completion).
+    if ctx.get("completion_only_loss") and _has_messages(dataset):
+        return convert_for_completion_only_loss(dataset, train_logger)
     return dataset.map(preprocess_thinking_data)
 
 
@@ -154,6 +216,7 @@ SPEC = TrainingSpec(
         DnotitiaArguments,
     ),
     load_models=load_models,
+    setup_training_args=setup_training_args,
     load_mixture=load_mixture,
     postprocess_dataset=postprocess_dataset,
     trainer_cls=DnotitiaSFTTrainer,

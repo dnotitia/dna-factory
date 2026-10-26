@@ -21,7 +21,7 @@ datasets:
 # ---- Sequence / loss ----
 max_length: 8192
 packing: false
-completion_only_loss: true
+completion_only_loss: true   # sft.py turns `messages` into prompt/completion so only the assistant turn is trained
 
 # ---- Optimization ----
 num_train_epochs: 6

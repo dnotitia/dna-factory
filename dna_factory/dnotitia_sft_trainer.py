@@ -15,6 +15,41 @@ from dna_factory.unsloth_integration import (
 logger = logging.getLogger(__name__)
 
 
+def check_completion_mask(dataset, num_examples=64):
+    """Fail when `completion_only_loss` is set but the tokenized training set masks no token.
+
+    Looks at the `labels` of the first `num_examples` rows (TRL folds the completion mask into `labels` as -100).
+    Returns the fraction of label tokens that carry the loss, or None when the check cannot run (no `labels`
+    column, or a streaming dataset).
+    """
+    try:
+        columns = dataset.column_names
+        rows = dataset.select(range(min(num_examples, len(dataset))))
+    except AttributeError, TypeError:
+        return None
+    if columns is None or "labels" not in columns:
+        return None
+    total = trained = 0
+    for labels in rows["labels"]:
+        total += len(labels)
+        trained += sum(1 for label in labels if label != -100)
+    if total and trained == total:
+        raise ValueError(
+            "completion_only_loss is set, but no token of the first "
+            f"{len(rows)} training examples is masked: the loss would cover the prompt as well. TRL applies "
+            "completion_only_loss only to prompt/completion data; a conversational `messages` dataset must be "
+            "converted first (sft.py does this), or use assistant_only_loss with a chat template that has "
+            "{% generation %} markers."
+        )
+    fraction = trained / total if total else None
+    if fraction is not None:
+        logger.info(
+            f"completion_only_loss: {fraction:.1%} of the label tokens in the first {len(rows)} training "
+            "examples carry the loss."
+        )
+    return fraction
+
+
 class DnotitiaSFTTrainer(SFTTrainer):
     def __init__(self, *args, debug_first_n_batches: int = 3, **kwargs):
         training_args = kwargs.get("args")
@@ -41,6 +76,10 @@ class DnotitiaSFTTrainer(SFTTrainer):
                 "Keeping the configured gradient_checkpointing_kwargs.use_reentrant=False that TRL overrides for "
                 "PEFT + ZeRO-3: reentrant checkpointing leaks the re-gathered weights under ZeRO-3 (deepspeed#8481)."
             )
+        # completion_only_loss is silently ignored on data TRL tokenizes as plain language modeling
+        # (e.g. `messages`), so check that the tokenized training set actually masks something.
+        if self.args.completion_only_loss:
+            check_completion_mask(self.train_dataset)
         # Maximum number of batches to print debug info for
         self.debug_first_n_batches = debug_first_n_batches
 
