@@ -101,8 +101,12 @@ def _context_to_text(value):
     return str(value)
 
 
-def normalize_dataset_for_sdft(dataset, privileged_context=None, context_column="privileged_context",
-                               prompt_column=None):
+def normalize_dataset_for_sdft(
+    dataset,
+    privileged_context=None,
+    context_column="privileged_context",
+    prompt_column=None,
+):
     """Normalize one dataset to the `prompt` (list of messages) + `privileged_context` (str) schema.
 
     The student prompt comes from `prompt_column` when given, else `prompt` (a string becomes one user turn), else
@@ -112,14 +116,21 @@ def normalize_dataset_for_sdft(dataset, privileged_context=None, context_column=
     """
     feats = dataset.column_names
     if prompt_column is not None and prompt_column not in feats:
-        raise ValueError(f"prompt_column `{prompt_column}` not in the dataset (columns: {feats}).")
+        raise ValueError(
+            f"prompt_column `{prompt_column}` not in the dataset (columns: {feats})."
+        )
     if prompt_column is None and "prompt" not in feats and "messages" not in feats:
         raise ValueError(
             f"Dataset has neither `prompt` nor `messages` (columns: {feats}); set `prompt_column`."
         )
-    if (privileged_context is None and context_column != "privileged_context"
-            and context_column not in feats):
-        raise ValueError(f"privileged_context_column `{context_column}` not in the dataset (columns: {feats}).")
+    if (
+        privileged_context is None
+        and context_column != "privileged_context"
+        and context_column not in feats
+    ):
+        raise ValueError(
+            f"privileged_context_column `{context_column}` not in the dataset (columns: {feats})."
+        )
     has_context_col = context_column in feats
     prompt_key = prompt_column or ("prompt" if "prompt" in feats else None)
 
@@ -189,13 +200,19 @@ def get_dataset_with_context(mixture_config, seed=42):
         context = _resolve_context(dataset_config)
         context_column = dataset_config.privileged_context_column
         per_row = context is None and context_column in dataset.column_names
-        dataset = normalize_dataset_for_sdft(dataset, context, context_column, dataset_config.prompt_column)
+        dataset = normalize_dataset_for_sdft(
+            dataset, context, context_column, dataset_config.prompt_column
+        )
         if context:
-            logger.info(f"  privileged context: same text on every row ({len(context)} chars)")
+            logger.info(
+                f"  privileged context: same text on every row ({len(context)} chars)"
+            )
         elif per_row:
             n_empty = sum(1 for c in dataset["privileged_context"] if not c.strip())
-            logger.info(f"  privileged context: per row from column `{context_column}` "
-                        f"({n_empty}/{len(dataset)} rows empty = anchor rows)")
+            logger.info(
+                f"  privileged context: per row from column `{context_column}` "
+                f"({n_empty}/{len(dataset)} rows empty = anchor rows)"
+            )
         else:
             logger.info("  privileged context: none (anchor rows)")
 

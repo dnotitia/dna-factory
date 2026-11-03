@@ -68,7 +68,9 @@ class TestPlacementTeacherContextBuilder:
             make_builder("assistant")
 
     def test_select_generation_prompts_follows_placement(self):
-        out = make_builder("system").select_generation_prompts([PROMPT, PROMPT], ["x", ""])
+        out = make_builder("system").select_generation_prompts(
+            [PROMPT, PROMPT], ["x", ""]
+        )
         assert out[0][0] == {"role": "system", "content": "x"}
         assert out[1] == PROMPT
 
@@ -135,7 +137,10 @@ class TestDatasetNormalization:
 
     def test_existing_context_column_is_kept_and_yaml_context_overrides(self):
         ds = Dataset.from_list(
-            [{"prompt": "a", "privileged_context": "own"}, {"prompt": "b", "privileged_context": None}]
+            [
+                {"prompt": "a", "privileged_context": "own"},
+                {"prompt": "b", "privileged_context": None},
+            ]
         )
         kept = normalize_dataset_for_sdft(ds)
         assert [r["privileged_context"] for r in kept] == ["own", ""]
@@ -178,14 +183,27 @@ class TestPerRowContext:
 
     def test_mixture_config_accepts_column_fields(self):
         cfg = ContextDatasetMixtureConfig(
-            datasets=[{"path": "json", "data_files": "rows.jsonl", "prompt_column": "question",
-                       "privileged_context_column": "answer"}]
+            datasets=[
+                {
+                    "path": "json",
+                    "data_files": "rows.jsonl",
+                    "prompt_column": "question",
+                    "privileged_context_column": "answer",
+                }
+            ]
         )
         entry = cfg.datasets[0]
-        assert (entry.prompt_column, entry.privileged_context_column, entry.data_files) == (
-            "question", "answer", "rows.jsonl")
-        assert ContextDatasetMixtureConfig(datasets=[{"path": "a/b"}]).datasets[0].privileged_context_column == \
-            "privileged_context"
+        assert (
+            entry.prompt_column,
+            entry.privileged_context_column,
+            entry.data_files,
+        ) == ("question", "answer", "rows.jsonl")
+        assert (
+            ContextDatasetMixtureConfig(datasets=[{"path": "a/b"}])
+            .datasets[0]
+            .privileged_context_column
+            == "privileged_context"
+        )
 
 
 def test_loader_passes_data_files_and_reads_a_per_row_column(monkeypatch):
@@ -197,11 +215,17 @@ def test_loader_passes_data_files_and_reads_a_per_row_column(monkeypatch):
 
     def fake_load_dataset(**kwargs):
         seen.update(kwargs)
-        return Dataset.from_list([{"prompt": "p1", "privileged_context": "c1"},
-                                  {"prompt": "p2", "privileged_context": None}])
+        return Dataset.from_list(
+            [
+                {"prompt": "p1", "privileged_context": "c1"},
+                {"prompt": "p2", "privileged_context": None},
+            ]
+        )
 
     monkeypatch.setattr(ds_lib, "load_dataset", fake_load_dataset)
-    cfg = ContextDatasetMixtureConfig(datasets=[{"path": "json", "data_files": "rows.jsonl", "split": "train"}])
+    cfg = ContextDatasetMixtureConfig(
+        datasets=[{"path": "json", "data_files": "rows.jsonl", "split": "train"}]
+    )
     out = sdft.get_dataset_with_context(cfg)["train"]
     assert seen["data_files"] == "rows.jsonl"
     assert [r["privileged_context"] for r in out] == ["c1", ""]

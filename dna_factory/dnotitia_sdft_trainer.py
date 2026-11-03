@@ -102,7 +102,10 @@ class DnotitiaSDFTTrainer(SDFTTrainer):
         if not hasattr(self, "_debug_count"):
             self._debug_count = 0
 
-        if self._debug_count < self.debug_first_n_batches and "teacher_input_ids" in inputs:
+        if (
+            self._debug_count < self.debug_first_n_batches
+            and "teacher_input_ids" in inputs
+        ):
             # First sample only: the student prompt, the teacher prompt (student prompt + privileged context in
             # the configured placement) and the shared on-policy completion.
             n_completion = inputs["completion_ids"].size(1)
@@ -116,12 +119,18 @@ class DnotitiaSDFTTrainer(SDFTTrainer):
                 "INPUTS: \033[36mCYAN\033[0m for tokens included, \033[90mDARK GRAY\033[0m for padding, "
                 "\033[33mYELLOW\033[0m for the completion tokens the loss is computed on, 🤗 for broken characters:"
             )
-            logger.info(f"STUDENT PROMPT ({int(inputs['prompt_mask'][0].sum())} tokens):")
             logger.info(
-                self._decode_colored(inputs["prompt_ids"][0], inputs["prompt_mask"][0], 36)
+                f"STUDENT PROMPT ({int(inputs['prompt_mask'][0].sum())} tokens):"
+            )
+            logger.info(
+                self._decode_colored(
+                    inputs["prompt_ids"][0], inputs["prompt_mask"][0], 36
+                )
             )
             logger.info(f"TEACHER PROMPT ({int(teacher_prompt_mask.sum())} tokens):")
-            logger.info(self._decode_colored(teacher_prompt_ids, teacher_prompt_mask, 36))
+            logger.info(
+                self._decode_colored(teacher_prompt_ids, teacher_prompt_mask, 36)
+            )
             logger.info("COMPLETION:")
             logger.info(
                 self._decode_colored(
