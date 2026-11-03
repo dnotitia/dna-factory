@@ -1,8 +1,7 @@
 ########################################################
 # SCRIPT ARGUMENTS:
 ########################################################
-run_name: grpo-4b-thinking-2507-strict-rewards
-# run_name: grpo-1.7b-zero3
+run_name: grpo-4b-thinking-2507-math
 
 dataset_name: dnotitia/competition_math_grpo
 dataset_config: decontamination
@@ -40,11 +39,9 @@ max_completion_length: 8192  # matches eval_max_tokens and the reward instances 
 
 # grpo normalizes each sequence by its own length, so a long wrong completion's per-token
 # penalty shrinks -- the bias that let the failing groups grow. dapo is token-level.
-# loss_type: dapo
-# epsilon_high: 0.28  # DAPO clip-higher, against entropy collapse into one stock answer
-
-# Corrects vLLM-vs-trainer logprob mismatch (TRL default); off lets long rollouts drift.
-# vllm_importance_sampling_correction: true
+loss_type: dapo
+epsilon_high: 0.28  # DAPO clip-higher, against entropy collapse into one stock answer
+num_iterations: 2
 
 per_device_train_batch_size: 2
 gradient_accumulation_steps: 16
