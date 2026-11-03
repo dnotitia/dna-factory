@@ -1,5 +1,5 @@
 """
-On-policy self-distillation (SDFT / context distillation) training script for DNA Factory.
+Self-Distillation Fine-Tuning (SDFT) training script for DNA Factory.
 
 Method-specific logic only (prompt + per-row privileged-context dataset mixture, trainer wiring); the shared
 setup/train/save flow lives in dna_factory/training_runner.py.

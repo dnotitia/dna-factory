@@ -20,7 +20,7 @@ python grpo.py --config configs/GRPO/qwen3-0.6B-grpo.yaml
 # On-policy distillation (single GPU); teacher is set in YAML via teacher_model_name_or_path
 python distill.py --config configs/Distill/qwen3-0.6B-distill.yaml
 
-# On-policy self-distillation / context distillation (single GPU); the teacher is the model itself
+# SDFT, Self-Distillation Fine-Tuning (single GPU); the teacher is the model itself
 # shown a per-row `privileged_context` (see docs/sdft.md)
 python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
 
@@ -48,7 +48,7 @@ docs/qwen38-flash-next.md (its `ple_host_table` requires `use_peft`).
   four; DPO also loads `ref_model`; GRPO is online RL (generates completions and scores
   them with `reward_funcs`; no `ref_model` unless `beta != 0`); `distill.py` is on-policy
   distillation (student generates, a frozen `teacher_model` scores every token — no rewards,
-  no `ref_model`); `sdft.py` is on-policy self-distillation (the teacher is the model itself, shown a
+  no `ref_model`); `sdft.py` is Self-Distillation Fine-Tuning (SDFT; on-policy; the teacher is the model itself, shown a
   per-row `privileged_context` the student does not see; empty context = anchor row).
 - `dna_factory/` — custom trainers and utils (config merging, output-dir naming, colored
   logging). `rewards/` holds the GRPO reward framework (`generative.py` = judge,

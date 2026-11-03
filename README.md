@@ -21,7 +21,7 @@ and **On-Policy Distillation** where a frozen teacher grades the student's own t
 
 # News
 
-- Nov/03/2026 - **SDFT** (on-policy self-distillation / context distillation) support: bake a per-row privileged context, such as a system prompt, into the weights.
+- Nov/03/2026 - **SDFT** (Self-Distillation Fine-Tuning) support: on-policy learning from a per-row privileged context, such as demonstrations or a system prompt.
 - Oct/23/2026 - **Qwen3.8-Flash-Next** LoRA SFT support.
 - Oct/12/2026 - Optional **unsloth** backend (single GPU) for SFT, DPO, GRPO and distillation.
 - Sep/22/2026 - **Checkpoint Evaluation** - Inspect benchmarks on every checkpoint, logged to W&B.
@@ -69,7 +69,7 @@ $ python grpo.py
 # On-Policy Distillation — student completions scored token-wise by a frozen teacher.
 $ python distill.py
 
-# SDFT — on-policy self-distillation: the model, shown a privileged context (e.g. a system prompt),
+# SDFT (Self-Distillation Fine-Tuning): the model, shown a privileged context (e.g. a system prompt),
 # teaches itself to behave that way without it. See docs/sdft.md.
 $ python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
 ```

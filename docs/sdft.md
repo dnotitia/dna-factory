@@ -1,4 +1,4 @@
-# SDFT: On-Policy Self-Distillation
+# SDFT: Self-Distillation Fine-Tuning
 
 Guide for `sdft.py`, built on TRL's experimental `SDFTTrainer` (`trl.experimental.sdft`). The method is
 described in [Self-Distillation Enables Continual Learning](https://huggingface.co/papers/2601.19897)
