@@ -17,6 +17,7 @@ from trl.rewards import (
 )
 
 from .generative import _warn_once, make_judge_reward
+from .multiple_choice import make_mcq_accuracy_reward, make_mcq_format_penalty
 from .reasoning import (
     make_answer_format_penalty,
     make_ngram_loop_penalty,
@@ -170,4 +171,20 @@ soft_overlong_penalty_8k.__name__ = "soft_overlong_penalty_8k"
 soft_overlong_penalty_8k.__doc__ = (
     "Soft length punishment (max_completion_len=8192). "
     "YAML: dna_factory.rewards.soft_overlong_penalty_8k"
+)
+
+
+# --- Thinking-model multiple-choice rewards (multiple_choice.py), built for max_completion_length 8192 ---
+# Used by configs/GRPO/4b-kmmlu-grpo.yaml with ngram_loop_penalty and soft_overlong_penalty_8k.
+mcq_accuracy_reward = make_mcq_accuracy_reward(max_completion_len=8192)
+mcq_accuracy_reward.__doc__ = (
+    "0/1: the letter the KMMLU eval's parsing extracts after </think> (reasoning ignored) equals "
+    "the gold `solution` letter; finished, closed "
+    "completions only. YAML: dna_factory.rewards.mcq_accuracy_reward"
+)
+
+mcq_format_penalty = make_mcq_format_penalty(max_completion_len=8192)
+mcq_format_penalty.__doc__ = (
+    "Unclosed reasoning -1; -0.25 per extra `정답:` in the answer section. "
+    "YAML: dna_factory.rewards.mcq_format_penalty"
 )

@@ -19,6 +19,8 @@ reward_funcs: entry is one of two forms —
        │     safe_accuracy_reward
        ├─ reasoning     ← make_strict_accuracy_reward / make_answer_format_penalty / make_ngram_loop_penalty (framework: reasoning.py)
        │     strict_accuracy_reward · answer_format_penalty · ngram_loop_penalty
+       ├─ multiple choice ← make_mcq_accuracy_reward / make_mcq_format_penalty (framework: multiple_choice.py)
+       │     mcq_accuracy_reward · mcq_format_penalty
        └─ shaping       ← trl.rewards.get_* (TRL's own factories)
              soft_overlong_penalty · soft_overlong_penalty_8k · cosine_scaled_reward · repetition_penalty_reward
 
@@ -45,6 +47,8 @@ Every dotted-path entry shares the same reason it cannot be a bare name: `resolv
 | `answer_format_penalty` | reasoning | ≤ 0: unclosed reasoning, extra `\boxed` / "Final Answer" blocks; length bound 8192 |
 | `ngram_loop_penalty` | reasoning | ≤ 0: repeated token 20-gram share past 0.1 |
 | `soft_overlong_penalty_8k` | shaping | soft length punishment (`max_completion_len=8192`) |
+| `mcq_accuracy_reward` | multiple choice | 0/1: the letter `evals/_multiple_choice_ko.py`'s parsing extracts from the answer section (after `</think>`; `정답:` inside the reasoning is ignored) equals the gold `solution` letter; truncated or unclosed -> 0; optional `num_choices` column; length bound 8192 |
+| `mcq_format_penalty` | multiple choice | ≤ 0: unclosed reasoning -1, -0.25 per extra `정답:` after `</think>`; length bound 8192 |
 
 Shaping instances hard-code a length bound of **4096**. Rebuild them if the recipe's `max_completion_length` changes (the GRPO default is `8192` and is not auto-synced). Bare TRL names (`accuracy_reward`, `reasoning_accuracy_reward`, `think_format_reward`) are resolved in `grpo.py`, not in this package.
 

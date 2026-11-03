@@ -1,0 +1,70 @@
+########################################################
+# SCRIPT ARGUMENTS:
+########################################################
+run_name: grpo-4b-thinking-2507-kmmlu
+
+# KMMLU train (HAERAE-HUB/KMMLU, all 45 subjects, 208522 rows), prompt-only, private; built by
+#   python utils/build-kmmlu-grpo-dataset.py --push_to_hub dnotitia/kmmlu_grpo_data
+# Prompts ask for an explanation ending in a '정답: X' line, so a correct rollout's advantage also
+# reinforces the explanation in the answer section; questions also in KMMLU-Redux are dropped.
+dataset_name: dnotitia/kmmlu_grpo_data
+
+# 0/1 accuracy plus non-positive shaping terms (sum_then_normalize, scale_rewards none), as in
+# 4b-math-grpo.yaml: a clean, correct answer scores exactly 1.0, so the 0/1 advantage scale is
+# unchanged and the penalties only split groups the 0/1 reward leaves tied.
+#   mcq_accuracy_reward      the letter evals/_multiple_choice_ko.py parses after </think>
+#                            ("정답:" inside the reasoning is ignored)
+#                            equals the gold letter; truncated / unclosed -> 0
+#   mcq_format_penalty       -1 if </think> missing; -0.25 per extra "정답:" after </think>
+#   ngram_loop_penalty       verbatim 20-gram loops
+#   soft_overlong_penalty_8k last 1638 tokens before the cap (DAPO), -1 when cut off
+# All length-aware instances are built for 8192; rebuild them in my_rewards.py if that changes.
+reward_funcs:
+  - dna_factory.rewards.mcq_accuracy_reward
+  - dna_factory.rewards.mcq_format_penalty
+  - dna_factory.rewards.ngram_loop_penalty
+  - dna_factory.rewards.soft_overlong_penalty_8k
+reward_weights: [1.0, 0.5, 0.5, 0.5]
+
+########################################################
+# TRAINING ARGUMENTS:
+########################################################
+# 208522 prompts at ~4 prompts per step (the math run: 7497 prompts -> 1874 steps/epoch with
+# num_iterations 2) = ~52k steps per epoch, far too long. max_steps bounds the run and sets the
+# cosine schedule's length. 20000 steps = ~80k prompts (~38%); at the math run's 46.5 s/step
+# (10165 steps in 131 h, mean completion 2.3k -> 1.6k tokens) that is ~11 days. Rescale from this
+# run's step_time once it settles (days = max_steps * step_time / 86400).
+num_train_epochs: 1
+max_steps: 20000
+
+max_completion_length: 8192  # matches eval_max_tokens and the reward instances above
+
+# token-level loss; see 4b-math-grpo.yaml
+loss_type: dapo
+epsilon_high: 0.28  # DAPO clip-higher, against entropy collapse into one stock answer
+num_iterations: 2
+
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 16
+
+learning_rate: 2e-6
+
+########################################################
+# MODEL ARGUMENTS:
+########################################################
+model_name_or_path: dnotitia/Qwen3-4B-Thinking-2507
+
+########################################################
+# DNOTITIA GRPO TRAINER ARGUMENTS:
+########################################################
+periodic_save_seconds: 1h
+eval_on_checkpoint: true
+eval_tasks:
+  - evals/kmmlu_redux.py
+
+eval_devices: "7"
+# qwen3 reasoning parser: the eval then sees only the text after </think>, as mcq_accuracy_reward
+# does, so a "정답: X" inside the reasoning can't win the eval's first-match parse. It splits on
+# </think> even without the opening <think> (that sits in Thinking-2507's prompt); a completion
+# that never closes its reasoning has no content and scores wrong, as in the reward.
+eval_vllm_args: "--max-model-len 12480 --data-parallel-size 1 --reasoning-parser qwen3"

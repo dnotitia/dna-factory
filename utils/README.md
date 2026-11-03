@@ -71,3 +71,11 @@ python utils/measure-distill-kl.py \
     --student ./my-distilled-checkpoint --tokenizer dnotitia/Qwen3-1.7B \
     --teacher dnotitia/Qwen3-1.7B
 ```
+
+## build-kmmlu-grpo-dataset.py
+
+Prompt-only GRPO dataset from the HAERAE-HUB/KMMLU train split (all 45 subjects): the prompt asks for an explanation of how the answer was reached, ending in a `정답: X` line, `solution` is the gold letter for `dna_factory.rewards.mcq_accuracy_reward`, and questions also in LGAI-EXAONE/KMMLU-Redux are dropped. Used by `configs/GRPO/4b-kmmlu-grpo.yaml`.
+
+```bash
+python utils/build-kmmlu-grpo-dataset.py --push_to_hub dnotitia/kmmlu_grpo_data
+```
