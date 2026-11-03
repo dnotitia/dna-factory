@@ -33,10 +33,6 @@ max_steps: -1
 
 max_completion_length: 8192  # matches eval_max_tokens and the reward instances above
 
-# KL to the starting model keeps the answer style from drifting into padding/loops once the
-# 0/1 reward saturates (beta 0 has nothing pulling it back). Loads a reference model.
-# beta: 0.04
-
 # grpo normalizes each sequence by its own length, so a long wrong completion's per-token
 # penalty shrinks -- the bias that let the failing groups grow. dapo is token-level.
 loss_type: dapo
