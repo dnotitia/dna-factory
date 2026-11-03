@@ -56,7 +56,7 @@ $ source .venv/bin/activate
 $ python sft.py
 ```
 
-Beyond SFT, DPO, GRPO, and On-Policy Distillation are also available:
+Beyond SFT, DPO, GRPO, On-Policy Distillation, and SDFT are also available:
 
 ```bash
 # DPO — preference learning on chosen vs rejected responses.
@@ -67,6 +67,10 @@ $ python grpo.py
 
 # On-Policy Distillation — student completions scored token-wise by a frozen teacher.
 $ python distill.py
+
+# SDFT — on-policy self-distillation: the model, shown a privileged context (e.g. a system prompt),
+# teaches itself to behave that way without it. See docs/sdft.md.
+$ python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
 ```
 
 ## Advanced Usage
