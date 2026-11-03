@@ -32,8 +32,22 @@ Each training row has two fields:
 | `prompt` | What the student sees: a list of chat messages, or a string. `messages` is accepted too, and its last assistant turn is dropped. |
 | `privileged_context` | Text the teacher sees in addition. A string; a list of messages is flattened. |
 
-The context can be a column in the data, or set per dataset in YAML. With a `datasets:` mixture, each entry
-takes (besides the usual `path`, `split`, `columns`, `weight`):
+The context is either the same text on every row of a dataset (set in YAML) or a different text per row (a
+column in the data). With a `datasets:` mixture, each entry takes, besides the usual `path`, `name`, `split`,
+`data_files`, `columns` and `weight`:
+
+| Key | Meaning |
+|---|---|
+| `privileged_context` | Same context on every row of this dataset (inline text). |
+| `privileged_context_file` | Same, read from a text file (for long system prompts). |
+| `privileged_context_column` | Column with a per-row context. Default `privileged_context`. |
+| `prompt_column` | Column with the student prompt (string or messages). Default `prompt`, else `messages`. |
+
+A YAML value (`privileged_context` / `privileged_context_file`) **replaces** the column on every row, so leave both
+unset on an entry whose context should vary per row. With no YAML value and no context column, the rows have an
+empty context (anchor rows). Only the columns listed in `columns:` are kept, so list the context column there too.
+
+### Same context on every row (e.g. a system prompt)
 
 ```yaml
 datasets:
@@ -43,8 +57,41 @@ datasets:
     # privileged_context_file: path/to/system_prompt.txt          # a file, for long prompts
 ```
 
-A YAML value overrides a `privileged_context` column of the same dataset. With neither, the rows have an empty
-context.
+
+### A different context on every row (e.g. demonstrations)
+
+Put the context in a column. With the default column names, a local JSONL file looks like:
+
+```jsonl
+{"prompt": [{"role": "user", "content": "Write a function that returns the n-th Fibonacci number."}], "privileged_context": "Reference solution:\ndef fib(n): ..."}
+{"prompt": "What is the capital of Australia?", "privileged_context": "Answer in one sentence."}
+{"prompt": "Hi!", "privileged_context": ""}
+```
+
+```yaml
+datasets:
+  - path: json
+    data_files: my_rows.jsonl
+    split: train
+    columns: [prompt, privileged_context]
+```
+
+A cell may be a string or a list of messages (their contents are joined); an empty or null cell makes that row an
+anchor row. Datasets with other column names need no preprocessing, for example GSM8K's question and reference
+solution:
+
+```yaml
+datasets:
+  - path: openai/gsm8k
+    name: main
+    split: train
+    columns: [question, answer]
+    prompt_column: question
+    privileged_context_column: answer
+```
+
+See `configs/SDFT/qwen3-0.6B-sdft.yaml`, which also sets a `teacher_prompt_template` that
+introduces the demonstration.
 
 ### Anchor rows
 
@@ -69,18 +116,15 @@ student prompt. It follows the same placement.
 ## Running it
 
 ```bash
-# Single GPU (vLLM colocate shares the GPU with the frozen teacher copy)
+# Single GPU: GSM8K reference solutions as per-row demonstrations, plus anchor rows (vLLM colocate shares the GPU with the frozen teacher copy)
 $ python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
-
-# Bake a system prompt into the weights, with anchor rows from a general dataset
-$ python sdft.py --config configs/SDFT/qwen3-0.6B-sdft-system-prompt.yaml
 
 # Without vLLM (slower generation through transformers)
 $ python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml --use_vllm false
 
 # Multiple GPUs
 $ accelerate launch --config_file accelerate_configs/zero3.yaml --num_processes 4 \
-  sdft.py --config configs/SDFT/qwen3-0.6B-sdft-system-prompt.yaml
+  sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
 ```
 
 Key options (all documented in `configs/_defaults-SDFT.yaml`):

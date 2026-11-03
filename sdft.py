@@ -48,6 +48,20 @@ class ContextDatasetConfig(WeightedDatasetConfig):
             "help": "Path to a text file read once and used as `privileged_context` (for long system prompts)."
         },
     )
+    privileged_context_column: str = field(
+        default="privileged_context",
+        metadata={
+            "help": "Column holding a per-row privileged context (e.g. a reference answer or a per-row system "
+            "prompt). Ignored when `privileged_context` / `privileged_context_file` is set."
+        },
+    )
+    prompt_column: str | None = field(
+        default=None,
+        metadata={
+            "help": "Column holding the student prompt (a string or a list of messages). Default: `prompt`, "
+            "else `messages`."
+        },
+    )
 
 
 @dataclass
@@ -87,23 +101,31 @@ def _context_to_text(value):
     return str(value)
 
 
-def normalize_dataset_for_sdft(dataset, privileged_context=None):
+def normalize_dataset_for_sdft(dataset, privileged_context=None, context_column="privileged_context",
+                               prompt_column=None):
     """Normalize one dataset to the `prompt` (list of messages) + `privileged_context` (str) schema.
 
-    The student prompt comes from `prompt` (a string becomes one user turn) or from `messages` (everything before
-    the last assistant turn; the reference answer is discarded since the student writes its own). The context is
-    `privileged_context` when given, else the dataset's own `privileged_context` column, else empty (anchor rows).
+    The student prompt comes from `prompt_column` when given, else `prompt` (a string becomes one user turn), else
+    `messages` (everything before the last assistant turn; the reference answer is discarded since the student
+    writes its own). The context is `privileged_context` when given (same text on every row), else the per-row
+    `context_column`, else empty (anchor rows).
     """
     feats = dataset.column_names
-    if "prompt" not in feats and "messages" not in feats:
+    if prompt_column is not None and prompt_column not in feats:
+        raise ValueError(f"prompt_column `{prompt_column}` not in the dataset (columns: {feats}).")
+    if prompt_column is None and "prompt" not in feats and "messages" not in feats:
         raise ValueError(
-            f"Dataset has neither `prompt` nor `messages` (columns: {feats}); cannot build an SDFT prompt."
+            f"Dataset has neither `prompt` nor `messages` (columns: {feats}); set `prompt_column`."
         )
-    has_context_col = "privileged_context" in feats
+    if (privileged_context is None and context_column != "privileged_context"
+            and context_column not in feats):
+        raise ValueError(f"privileged_context_column `{context_column}` not in the dataset (columns: {feats}).")
+    has_context_col = context_column in feats
+    prompt_key = prompt_column or ("prompt" if "prompt" in feats else None)
 
     def convert(example):
-        if "prompt" in example and example["prompt"] is not None:
-            p = example["prompt"]
+        if prompt_key is not None and example[prompt_key] is not None:
+            p = example[prompt_key]
             msgs = p if isinstance(p, list) else [{"role": "user", "content": p}]
         else:
             messages = example["messages"]
@@ -114,7 +136,7 @@ def normalize_dataset_for_sdft(dataset, privileged_context=None):
         if privileged_context is not None:
             context = privileged_context
         elif has_context_col:
-            context = _context_to_text(example["privileged_context"])
+            context = _context_to_text(example[context_column])
         else:
             context = ""
         return {
@@ -154,17 +176,28 @@ def get_dataset_with_context(mixture_config, seed=42):
                 dataset = dataset[dataset_config.split or "train"]
         else:
             dataset = ds.load_dataset(
-                path=path, name=dataset_config.name, split=dataset_config.split
+                path=path,
+                name=dataset_config.name,
+                data_dir=dataset_config.data_dir,
+                data_files=dataset_config.data_files,
+                split=dataset_config.split,
             )
 
         if dataset_config.columns is not None:
             dataset = dataset.select_columns(dataset_config.columns)
 
         context = _resolve_context(dataset_config)
-        dataset = normalize_dataset_for_sdft(dataset, context)
-        logger.info(
-            f"  privileged context: {'none (anchor rows)' if not context else f'{len(context)} chars'}"
-        )
+        context_column = dataset_config.privileged_context_column
+        per_row = context is None and context_column in dataset.column_names
+        dataset = normalize_dataset_for_sdft(dataset, context, context_column, dataset_config.prompt_column)
+        if context:
+            logger.info(f"  privileged context: same text on every row ({len(context)} chars)")
+        elif per_row:
+            n_empty = sum(1 for c in dataset["privileged_context"] if not c.strip())
+            logger.info(f"  privileged context: per row from column `{context_column}` "
+                        f"({n_empty}/{len(dataset)} rows empty = anchor rows)")
+        else:
+            logger.info("  privileged context: none (anchor rows)")
 
         weight = dataset_config.weight
         if weight != 1.0:
