@@ -10,6 +10,7 @@ Four trainers share one setup/train/save path: **SFT** on instruction or convers
 **DPO** on chosen vs rejected pairs, **GRPO** as online RL scored by reward functions,
 and **On-Policy Distillation** where a frozen teacher grades the student's own tokens.
 
+- [DNA Factory](#dna-factory)
 - [News](#news)
 - [Design Principles](#design-principles)
 - [Key Features](#key-features)
@@ -21,7 +22,7 @@ and **On-Policy Distillation** where a frozen teacher grades the student's own t
 
 # News
 
-- Nov/03/2026 - **SDFT** (Self-Distillation Fine-Tuning) support: on-policy learning from a per-row privileged context, such as demonstrations or a system prompt.
+- Nov/03/2026 - **SDFT** (Self-Distillation Fine-Tuning) support.
 - Oct/23/2026 - **Qwen3.8-Flash-Next** LoRA SFT support.
 - Oct/12/2026 - Optional **unsloth** backend (single GPU) for SFT, DPO, GRPO and distillation.
 - Sep/22/2026 - **Checkpoint Evaluation** - Inspect benchmarks on every checkpoint, logged to W&B.
