@@ -21,6 +21,7 @@ and **On-Policy Distillation** where a frozen teacher grades the student's own t
 
 # News
 
+- Nov/03/2026 - **SDFT** (on-policy self-distillation / context distillation) support: bake a per-row privileged context, such as a system prompt, into the weights.
 - Oct/23/2026 - **Qwen3.8-Flash-Next** LoRA SFT support.
 - Oct/12/2026 - Optional **unsloth** backend (single GPU) for SFT, DPO, GRPO and distillation.
 - Sep/22/2026 - **Checkpoint Evaluation** - Inspect benchmarks on every checkpoint, logged to W&B.
