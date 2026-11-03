@@ -116,7 +116,7 @@ student prompt. It follows the same placement.
 ## Running it
 
 ```bash
-# Single GPU: GSM8K reference solutions as per-row demonstrations, plus anchor rows (vLLM colocate shares the GPU with the frozen teacher copy)
+# Single GPU: GSM8K reference solutions as per-row demonstrations (vLLM colocate shares the GPU with the frozen teacher copy)
 $ python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
 
 # Without vLLM (slower generation through transformers)

@@ -22,10 +22,8 @@ datasets:
     columns: [question, answer]
     prompt_column: question              # student prompt; a string becomes one user turn
     privileged_context_column: answer    # teacher-only demonstration, different on every row
-  - path: HuggingFaceH4/ultrachat_200k   # anchor rows: no context column, so the teacher is the plain model
-    split: train_sft
-    columns: [messages]
-    weight: 0.02
+# To keep behavior on unrelated prompts from drifting, a general dataset without a context column can be added
+# here as anchor rows (see "Anchor rows" in docs/sdft.md); the paper's setup trains on demonstrations only.
 
 # The demonstration is appended to the last user turn; the template must keep both placeholders.
 teacher_context_placement: user
