@@ -236,7 +236,7 @@ def setup_training_args(
     # Models passed as strings; init kwargs go through training config.
     training_args.model_init_kwargs = {
         "revision": model_args.model_revision,
-        "trust_remote_code": resolve_trust_remote_code(model_args, training_args),
+        "trust_remote_code": resolve_trust_remote_code(training_args),
         "attn_implementation": model_args.attn_implementation,
         "dtype": model_args.dtype,
     }

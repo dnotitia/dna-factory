@@ -14,32 +14,6 @@ class DnotitiaAsyncGRPOConfig(AsyncGRPOConfig):
     dtype: str = field(default="float32", init=False)
 
 
-def apply_attn_implementation_override(attn_implementation):
-    """Make AsyncGRPOTrainer build its model with the repo-configured attn_implementation.
-
-    TRL 1.13.0 hardcodes flash-attn3, which has no sm100 build; delete this once TRL reads the
-    value from its own config. Wraps `create_model_from_path` in the trainer's module namespace,
-    which is the symbol the hardcoded call site resolves through. See docs/async-grpo.md.
-    """
-    if attn_implementation == "kernels-community/flash-attn3":
-        return
-
-    from trl.experimental.async_grpo import async_grpo_trainer as trainer_module
-
-    current = trainer_module.create_model_from_path
-    if getattr(current, "__dna_attn_implementation__", None) == attn_implementation:
-        return
-    original = getattr(current, "__dna_original__", current)
-
-    def create_model_with_attn_override(*args, **kwargs):
-        kwargs["attn_implementation"] = attn_implementation
-        return original(*args, **kwargs)
-
-    create_model_with_attn_override.__dna_original__ = original
-    create_model_with_attn_override.__dna_attn_implementation__ = attn_implementation
-    trainer_module.create_model_from_path = create_model_with_attn_override
-
-
 # Covers every branch TRL's Qwen3 parser handles; rendered for comparison, never trained on.
 _RESPONSE_TEMPLATE_PROBE_MESSAGES = [
     {"role": "user", "content": "probe"},
@@ -154,26 +128,10 @@ def validate_async_args(script_args, training_args, model_args, dnotitia_args):
         raise ValueError(
             "This AsyncGRPO draft supports full finetuning only, without PEFT or quantization."
         )
-    if model_args.attn_implementation in ("sdpa", "eager"):
-        raise ValueError(
-            "AsyncGRPO trains in padding-free mode (sequences concatenated into one row, "
-            "cu_seq_lens derived from position_ids resets); sdpa/eager can't handle that layout "
-            "(see the comment at the from_pretrained call in TRL's AsyncGRPOTrainer.__init__). "
-            "Use attn_implementation: kernels-community/flash-attn2 (this repo's default) or "
-            "kernels-community/flash-attn3."
-        )
-    if model_args.attn_implementation not in (
-        None,
-        "kernels-community/flash-attn2",
-        "kernels-community/flash-attn3",
-    ):
-        raise ValueError(
-            "AsyncGRPO supports attn_implementation: kernels-community/flash-attn2 (default) or "
-            "kernels-community/flash-attn3 only."
-        )
     if "attn_implementation" in (training_args.model_init_kwargs or {}):
         raise ValueError(
-            "Remove attn_implementation from model_init_kwargs; AsyncGRPO supplies it internally."
+            "Remove attn_implementation from model_init_kwargs; AsyncGRPOTrainer always builds the model "
+            "with TRL's tree attention."
         )
     if training_args.use_liger_kernel:
         raise ValueError("AsyncGRPO does not support use_liger_kernel: true.")

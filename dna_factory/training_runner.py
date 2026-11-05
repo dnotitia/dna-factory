@@ -273,26 +273,16 @@ def print_environment_and_arguments(
     _logger.info("")
 
 
-def resolve_trust_remote_code(model_args, training_args=None):
-    """Resolve `trust_remote_code` across TRL versions.
-
-    TRL 1.9 moved the flag off `ModelConfig` and onto the trainer config
-    (`SFTConfig`/`DPOConfig`/`GRPOConfig`), so a YAML `trust_remote_code: true` now lands in
-    `training_args`. Prefer `model_args` when it still carries the field (older TRL) and fall
-    back to `training_args`, so both layouts work.
-    """
-    for args in (model_args, training_args):
-        value = getattr(args, "trust_remote_code", None)
-        if value is not None:
-            return value
-    return False
+def resolve_trust_remote_code(training_args):
+    """`trust_remote_code` lives on the trainer config (`SFTConfig`, `GRPOConfig`, ...), not on `ModelConfig`."""
+    return bool(getattr(training_args, "trust_remote_code", False))
 
 
 def create_model_kwargs(model_args, training_args, dnotitia_args):
     """Create model initialization kwargs including quantization config."""
     model_kwargs = {
         "revision": model_args.model_revision,
-        "trust_remote_code": resolve_trust_remote_code(model_args, training_args),
+        "trust_remote_code": resolve_trust_remote_code(training_args),
         "attn_implementation": model_args.attn_implementation,
         "dtype": model_args.dtype,
         # use_cache=False if training_args.gradient_checkpointing else True,
@@ -558,7 +548,7 @@ def run_training(
     # Create tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,
-        trust_remote_code=resolve_trust_remote_code(model_args, training_args),
+        trust_remote_code=resolve_trust_remote_code(training_args),
         use_fast=True,
     )
     tokenizer = _default(

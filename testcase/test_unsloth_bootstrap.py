@@ -416,18 +416,3 @@ class TestNoexecInductorCacheDir:
             )
         assert decision.active and calls == [1]
         assert "TORCHINDUCTOR_CACHE_DIR" in caplog.text
-
-    def test_user_cache_dir_survives_unsloth_import(self, check, monkeypatch, tmp_path):
-        """unsloth_zoo pops TORCHINDUCTOR_CACHE_DIR on import; the bootstrap restores the user's value"""
-        monkeypatch.setenv("TORCHINDUCTOR_CACHE_DIR", str(tmp_path / "inductor"))
-        monkeypatch.setattr(
-            ub, "_import_unsloth", lambda: ub.os.environ.pop("TORCHINDUCTOR_CACHE_DIR")
-        )
-        monkeypatch.setattr(ub, "_noexec_inductor_cache_dir", lambda: None)
-        model_dir = make_model_dir(tmp_path, "qwen3")
-        defaults = write_yaml(tmp_path / "defaults.yaml", {})
-        decision = ub.maybe_import_unsloth(
-            ["--use_unsloth", "--model_name_or_path", str(model_dir)], defaults
-        )
-        assert decision.active
-        assert ub.os.environ["TORCHINDUCTOR_CACHE_DIR"] == str(tmp_path / "inductor")

@@ -249,7 +249,7 @@ def setup_training_args(
     # Model passed as string; init kwargs go through training_args.
     training_args.model_init_kwargs = {
         "revision": model_args.model_revision,
-        "trust_remote_code": resolve_trust_remote_code(model_args, training_args),
+        "trust_remote_code": resolve_trust_remote_code(training_args),
         "attn_implementation": model_args.attn_implementation,
         "dtype": model_args.dtype,
     }
@@ -408,21 +408,25 @@ def setup_async_training_args(
     script_args, training_args, model_args, dnotitia_args, ctx, train_logger
 ):
     from dna_factory.async_grpo import (
-        apply_attn_implementation_override,
         validate_async_args,
         validate_completion_length_against_server,
     )
 
     validate_async_args(script_args, training_args, model_args, dnotitia_args)
-    # TRL hardcodes flash-attn3 in AsyncGRPOTrainer, which has no sm100 build.
-    apply_attn_implementation_override(model_args.attn_implementation)
+    # AsyncGRPOTrainer always builds the model with TRL's tree attention (prompts shared across a
+    # group are packed once), whatever attn_implementation says: FlashAttention-3, or -4 on Blackwell.
+    train_logger.info(
+        "AsyncGRPO: attention is TRL's tree attention (flash-attn3; flash-attn4 on Blackwell); "
+        "attn_implementation=%s is not used.",
+        model_args.attn_implementation,
+    )
     validate_completion_length_against_server(training_args, train_logger)
     ctx["reward_funcs"] = resolve_reward_funcs(script_args, training_args)
     training_args.dtype = model_args.dtype
     training_args.model_init_kwargs = {
         **(training_args.model_init_kwargs or {}),
         "revision": model_args.model_revision,
-        "trust_remote_code": resolve_trust_remote_code(model_args, training_args),
+        "trust_remote_code": resolve_trust_remote_code(training_args),
         "dtype": model_args.dtype,
     }
     train_logger.info(

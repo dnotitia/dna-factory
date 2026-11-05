@@ -16,7 +16,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import grpo
 from dna_factory import async_grpo, training_runner
 from dna_factory.async_grpo import (
-    apply_attn_implementation_override,
     apply_response_template_override,
     validate_async_args,
     validate_completion_length_against_server,
@@ -77,10 +76,15 @@ def test_async_parse_and_setup(monkeypatch):
     monkeypatch.setattr(
         async_grpo, "validate_completion_length_against_server", lambda *a, **k: None
     )
+    from trl.experimental.async_grpo import async_grpo_trainer
+
+    create_model = async_grpo_trainer.create_model_from_path
     ctx = {}
     spec.setup_training_args(
         script, training, model, dna, ctx, logging.getLogger(__name__)
     )
+    # TRL builds the model with its tree attention; setup must not swap the attention backend.
+    assert async_grpo_trainer.create_model_from_path is create_model
     assert script.grpo_execution == "async"
     assert training.dtype == model.dtype == "float32"
     assert training.model_init_kwargs["dtype"] == "float32"
@@ -199,14 +203,6 @@ def test_reject_distributed(monkeypatch, env, value):
         ("dna", "use_unsloth", True, "use_unsloth"),
         ("model", "use_peft", True, "full finetuning"),
         ("model", "load_in_4bit", True, "full finetuning"),
-        ("model", "attn_implementation", "sdpa", "padding-free"),
-        ("model", "attn_implementation", "eager", "padding-free"),
-        (
-            "model",
-            "attn_implementation",
-            "kernels-community/vllm-flash-attn3",
-            "flash-attn2",
-        ),
         ("script", "reward_model_name_or_path", "some/model", "callable rewards"),
         ("training", "do_eval", True, "evaluation"),
     ],
@@ -217,16 +213,6 @@ def test_reject_unsupported_options(monkeypatch, target, key, value, message):
     setattr(args[target], key, value)
     with pytest.raises(ValueError, match=message):
         validate_async_args(script, training, model, dna)
-
-
-@pytest.mark.parametrize(
-    "attn_implementation",
-    [None, "kernels-community/flash-attn2", "kernels-community/flash-attn3"],
-)
-def test_accept_supported_attn_implementations(monkeypatch, attn_implementation):
-    _, script, training, model, _, dna, _ = parse_async(monkeypatch)
-    model.attn_implementation = attn_implementation
-    validate_async_args(script, training, model, dna)  # must not raise
 
 
 def test_runner_passes_only_supported_constructor_args(monkeypatch):
@@ -266,68 +252,6 @@ def test_runner_passes_only_supported_constructor_args(monkeypatch):
     )
     assert received["reward_funcs"]
     assert received["processing_class"] == "tokenizer"
-
-
-def test_attn_override_noop_for_upstream_default(monkeypatch):
-    from trl.experimental.async_grpo import async_grpo_trainer
-
-    # Register the current value with monkeypatch so any mutation below is undone at teardown,
-    # regardless of whether it happens via monkeypatch.setattr or direct assignment.
-    monkeypatch.setattr(
-        async_grpo_trainer,
-        "create_model_from_path",
-        async_grpo_trainer.create_model_from_path,
-    )
-    original = async_grpo_trainer.create_model_from_path
-    apply_attn_implementation_override("kernels-community/flash-attn3")
-    assert async_grpo_trainer.create_model_from_path is original
-
-
-def test_attn_override_idempotent(monkeypatch):
-    from trl.experimental.async_grpo import async_grpo_trainer
-
-    monkeypatch.setattr(
-        async_grpo_trainer,
-        "create_model_from_path",
-        async_grpo_trainer.create_model_from_path,
-    )
-    apply_attn_implementation_override("kernels-community/flash-attn2")
-    patched_once = async_grpo_trainer.create_model_from_path
-    apply_attn_implementation_override("kernels-community/flash-attn2")
-    assert async_grpo_trainer.create_model_from_path is patched_once  # no double-wrap
-
-    # Re-applying with a different value unwraps first, so it still doesn't stack.
-    apply_attn_implementation_override("sdpa")
-    assert (
-        async_grpo_trainer.create_model_from_path.__dna_original__ is not patched_once
-    )
-
-
-def test_attn_override_forces_kwarg_into_from_pretrained(monkeypatch):
-    # Pure CPU, no network, no real model: force `architecture` explicitly so
-    # create_model_from_path skips config-based inference and calls
-    # AutoModelForCausalLM.from_pretrained directly on our recorder.
-    from transformers import AutoModelForCausalLM
-    from trl.experimental.async_grpo import async_grpo_trainer
-
-    monkeypatch.setattr(
-        async_grpo_trainer,
-        "create_model_from_path",
-        async_grpo_trainer.create_model_from_path,
-    )
-    calls = []
-    monkeypatch.setattr(
-        AutoModelForCausalLM,
-        "from_pretrained",
-        classmethod(lambda cls, *a, **kw: calls.append(kw)),
-    )
-
-    apply_attn_implementation_override("kernels-community/flash-attn2")
-    async_grpo_trainer.create_model_from_path(
-        "unused/model-id", architecture=AutoModelForCausalLM, dtype="float32"
-    )
-
-    assert calls[-1]["attn_implementation"] == "kernels-community/flash-attn2"
 
 
 @pytest.fixture(scope="module")

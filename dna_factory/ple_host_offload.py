@@ -18,7 +18,7 @@ from the checkpoint's shards; the other processes wait on a file lock. Then:
 The memmap is only fast while the file is in the page cache: rows are random small reads, so when the
 pages are evicted, every step waits on storage. Put the table on /dev/shm (RAM, never evicted); on first use the file is also prefetched
 with posix_fadvise(WILLNEED) as a best effort.
-Written against transformers 5.20 (Qwen4ExpTextNGramEmbedding); the __init__ below mirrors upstream's
+Written against transformers 5.22 (Qwen4ExpTextNGramEmbedding); the __init__ below mirrors upstream's
 minus the embedding, and forward reuses upstream's by swapping in a lookup shim.
 """
 

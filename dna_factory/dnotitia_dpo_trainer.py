@@ -1,7 +1,6 @@
 import logging
 from functools import wraps
 
-from torch import nn
 from trl import DPOTrainer
 
 # Initialize logger
@@ -92,43 +91,12 @@ class DnotitiaDPOTrainer(DPOTrainer):
 
             self._debug_count += 1
 
-        # TRL's Liger DPO implementation accesses ``model.base_model``
-        # directly. Data-parallel wrappers hide that attribute, so use TRL's
-        # regular DPO implementation for wrapped models. It executes through
-        # the wrapper's forward pass and therefore preserves parallel training.
-        # Liger remains enabled for unwrapped models. TRL 1.15 dropped the trainer's
-        # `use_liger_kernel` attribute (its Liger DPO path is gone), so read it defensively.
-        use_liger_with_data_parallel = getattr(
-            self, "use_liger_kernel", False
-        ) and isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel))
-        if use_liger_with_data_parallel:
-            if not getattr(self, "_warned_liger_data_parallel_fallback", False):
-                logger.warning(
-                    "Liger DPO is incompatible with a data-parallel model wrapper in "
-                    "the installed TRL version; using standard DPO loss for this run. "
-                    "Liger remains enabled for unwrapped models."
-                )
-                self._warned_liger_data_parallel_fallback = True
-
-            original_use_liger_kernel = self.use_liger_kernel
-            self.use_liger_kernel = False
-            try:
-                loss_output = super().compute_loss(
-                    model,
-                    inputs,
-                    return_outputs=return_outputs,
-                    num_items_in_batch=num_items_in_batch,
-                )
-            finally:
-                self.use_liger_kernel = original_use_liger_kernel
-        else:
-            # Call parent class's compute_loss method to calculate the actual loss.
-            loss_output = super().compute_loss(
-                model,
-                inputs,
-                return_outputs=return_outputs,
-                num_items_in_batch=num_items_in_batch,
-            )
+        loss_output = super().compute_loss(
+            model,
+            inputs,
+            return_outputs=return_outputs,
+            num_items_in_batch=num_items_in_batch,
+        )
         if return_outputs:
             # If return_outputs is True, return the full output (loss, outputs)
             return loss_output
