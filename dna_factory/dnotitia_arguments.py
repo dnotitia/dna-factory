@@ -168,9 +168,13 @@ class DnotitiaArguments:
         default=False,
         metadata={
             "help": (
-                "Qwen3.8-Flash-Next (qwen4_exp): vectorized QSA indexer for causal, cache-free rows "
-                "instead of upstream's per-query Python loop, which dominates the training step "
-                "(see dna_factory/qsa_indexer_fast.py)."
+                "Qwen3.8-Flash-Next (qwen4_exp): vectorized QSA indexer for causal masks with right or "
+                "left padding, with or without a cache, instead of transformers' per-query Python loop, "
+                "which dominates the training step (see dna_factory/qsa_indexer_fast.py). Beware: this "
+                "is a monkeypatch of transformers' Qwen4ExpTextQSAIndexer.forward. The upstream loop is "
+                "intentional (kept simple until the library's indexers are generalized; transformers "
+                "commit 807cb38 in #48337), so a later upstream change to the indexer may require "
+                "updating this patch (it warns on a transformers version it was not validated against)."
             )
         },
     )

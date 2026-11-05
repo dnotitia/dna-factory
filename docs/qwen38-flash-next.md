@@ -17,7 +17,7 @@ those changes and how to run [configs/SFT/qwen3.8-flash-next-lora.yaml](../confi
 
 | Argument (`DnotitiaArguments`) | What it does | Why |
 |---|---|---|
-| `qsa_indexer_fast: true` | [dna_factory/qsa_indexer_fast.py](../dna_factory/qsa_indexer_fast.py) vectorizes the QSA indexer for causal (possibly right-padded) rows without cached indexer keys (training, and the prefill of generation); other batches, such as decoding steps, use upstream's loop, except in training under ZeRO-3, where such a batch stops with an error | Upstream selects blocks in a Python loop over every query token (with a host-syncing `nonzero`): ~78% of a training step. Under ZeRO-3 that loop also deadlocks: it calls `k_layernorm` once per query, so ranks with different lengths issue different all-gathers; the fast path calls it once per row. The mask is identical to upstream's on real tokens (up to top-k ties); see [testcase/test_qsa_indexer_fast.py](../testcase/test_qsa_indexer_fast.py) |
+| `qsa_indexer_fast: true` | [dna_factory/qsa_indexer_fast.py](../dna_factory/qsa_indexer_fast.py) vectorizes the QSA indexer across the whole batch whenever every query of a row sees a prefix of the same keys: causal masks with right or left padding, decoding and chunked prefill with a cache, static caches. Masks that give a row's queries different key sets (packing with per-document masks) use upstream's loop, except in training under ZeRO-3, where such a batch stops with an error | Upstream selects blocks in a Python loop over every query token (with a host-syncing `nonzero`): ~78% of a training step. Under ZeRO-3 that loop also deadlocks: it calls `k_layernorm` once per query, so ranks with different lengths issue different all-gathers; the fast path calls it once per forward. The mask is identical to upstream's on every query (up to top-k ties); see [testcase/test_qsa_indexer_fast.py](../testcase/test_qsa_indexer_fast.py) |
 | `ple_host_table: <dir>` | [dna_factory/ple_host_offload.py](../dna_factory/ple_host_offload.py) keeps the 95 GiB PLE n-gram embedding table in a host memmap shared by all processes and gathers rows on the CPU | As a parameter, ZeRO-3 gathers the whole table onto one GPU at load (OOM). The table is then frozen and left out of saved checkpoints, so `use_peft: true` is required (checked at startup) |
 
 `DnotitiaSFTTrainer` also keeps an explicit `gradient_checkpointing_kwargs.use_reentrant: false`. TRL forces it
@@ -72,5 +72,3 @@ the config uses `per_device_train_batch_size` 4. Keep the global batch at 128: `
 
 - Packing is not supported: under `sdpa` the GDN layers do not receive sequence boundaries (`cu_seq_lens_q`),
   so packed sequences would leak state across each other.
-- Left padding would fall back to upstream's indexer loop, which deadlocks under ZeRO-3 (see above), so
-  training stops with an error instead; TRL pads on the right.
