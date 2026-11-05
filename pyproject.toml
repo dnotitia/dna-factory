@@ -8,40 +8,42 @@ dependencies = [
     "accelerate==1.15.0",
     "apache-tvm-ffi==0.1.11",
     "datasets==5.1.0",
-    "deepspeed==0.19.8",
+    "deepspeed==0.19.9",
     "inspect-ai==0.3.277",
     "inspect-evals==0.23.0",
-    "kernels==0.17.2",
+    "kernels==0.17.3",
     "liger-kernel==0.8.5",
     "math-verify==0.9.0",
     "peft==0.21.2",
-    "pytest==9.1.1",
+    "pytest==9.2.0",
     "requests==2.34.2",
-    "ruff==0.17.1",
+    "ruff==0.17.3",
     "tilelang==0.1.12",
     "torch==2.13.0",
-    "transformers==5.20.2",
-    "trl==1.16.0",
-    "vllm==0.31.0",
+    "transformers==5.22.1",
+    "trl==1.17.1",
+    "vllm==0.32.0",
     "wandb==0.31.0",
 ]
 
 [project.optional-dependencies]
 # Opt-in unsloth backend (`use_unsloth: true`); install with `uv sync --extra unsloth`. See docs/unsloth.md.
 unsloth = [
-    "unsloth==2026.10.7",
-    "unsloth-zoo==2026.10.7",
+    "unsloth==2026.11.2",
+    "unsloth-zoo==2026.11.2",
 ]
 
 [tool.uv]
 package = false
 # unsloth caps datasets, transformers and trl below the core pins; keep the core pins so the
-# extra resolves alongside them (validated on GPU). Keep in sync with the core pins above
-# (testcase/test_dependency_pins.py checks this).
+# extra resolves alongside them. The transformers override also lifts vllm's cap (<5.20.0),
+# deliberately and validated by hand; any other cap an override lifts fails the tests. Keep in
+# sync with the core pins above (testcase/test_dependency_pins.py checks both, and lists the
+# deliberate lifts in INTENTIONALLY_LIFTED).
 override-dependencies = [
     "datasets==5.1.0",
-    "transformers==5.20.2",
-    "trl==1.16.0",
+    "transformers==5.22.1",
+    "trl==1.17.1",
 ]
 
 [tool.ruff]

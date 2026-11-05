@@ -197,7 +197,7 @@ def build_from_pretrained_kwargs(
         use_exact_model_name=True,
         revision=model_args.model_revision,
         dtype=torch_dtype_from(model_args.dtype),
-        trust_remote_code=resolve_trust_remote_code(model_args, training_args),
+        trust_remote_code=resolve_trust_remote_code(training_args),
         attn_implementation=model_args.attn_implementation,
         use_gradient_checkpointing="unsloth"
         if training_args.gradient_checkpointing
@@ -398,7 +398,7 @@ def _load_text_config(model_args, training_args):
     config = AutoConfig.from_pretrained(
         model_args.model_name_or_path,
         revision=model_args.model_revision,
-        trust_remote_code=resolve_trust_remote_code(model_args, training_args),
+        trust_remote_code=resolve_trust_remote_code(training_args),
     )
     return getattr(config, "text_config", None) or config
 

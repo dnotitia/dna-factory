@@ -237,12 +237,7 @@ def maybe_import_unsloth(cli_args: list[str], defaults_path: str) -> UnslothDeci
         _DECISION = UnslothDecision(True, False, model_type, reason)
         return _DECISION
 
-    # unsloth_zoo pops TORCHINDUCTOR_CACHE_DIR when imported (unsloth_zoo/patching_utils.py), silently
-    # moving inductor's cache back to <tempdir>/torchinductor_<user>; put the user's choice back.
-    user_inductor_dir = os.environ.get("TORCHINDUCTOR_CACHE_DIR")
     _import_unsloth()
-    if user_inductor_dir is not None:
-        os.environ["TORCHINDUCTOR_CACHE_DIR"] = user_inductor_dir
 
     # On a noexec cache dir the compiled .so files can't be loaded, and unsloth silently runs the
     # affected modules eagerly (slower, more memory) or fails — easy to miss in the logs, so say it.

@@ -193,40 +193,22 @@ This behavior originates upstream in `trl/experimental/async_grpo/async_grpo_tra
 
 After resuming, reconnect to the external vLLM server and transfer the resumed policy weights before requesting new generations.
 
+## Attention
+
+`AsyncGRPOTrainer` always builds the model with TRL's own tree attention (`tree_fa3`), whatever
+`attn_implementation` says. Tree packing stores a prompt shared by a group's completions once and gives each
+completion the prompt as its prefix, which only that attention follows: on CUDA it runs FlashAttention-3, or
+FlashAttention-4 on Blackwell (sm100), from the Hub `kernels`. `attn_implementation` is therefore not used here,
+and `model_init_kwargs` must not set it (TRL passes it explicitly, so setup rejects it).
+
+Before TRL 1.17, `AsyncGRPOTrainer` loaded FlashAttention-3 only, which has no sm100 build, and this repository
+replaced the model's attention with the configured `attn_implementation`. That override is gone: it also
+replaced the tree attention, so completions packed under one prompt were not kept apart.
+
 ## Upstream workarounds
 
-`dna_factory/async_grpo.py` contains two overrides for values currently hardcoded by TRL that should instead be configurable. Each override documents the condition under which it can be removed.
-
-### Attention implementation
-
-`AsyncGRPOTrainer.__init__` currently passes:
-
-```text
-attn_implementation="kernels-community/flash-attn3"
-```
-
-directly when constructing the model and does not read the value from configuration.
-
-That kernel ships SASS only for CUDA architectures 8.0 and 9.0a, so it cannot load on sm100:
-
-```text
-CUDA capability 10.0 of the current device is not supported by the
-architectures of the build: 8.0, 9.0a
-```
-
-`apply_attn_implementation_override` wraps the model construction so that the configured attention implementation is used instead.
-
-This repository defaults to:
-
-```text
-kernels-community/flash-attn2
-```
-
-matching the synchronous default in `AGENTS.md`.
-
-`sdpa` and `eager` are rejected. AsyncGRPO uses padding-free training, concatenating sequences into a single row and deriving `cu_seq_lens` from resets in `position_ids`. Neither backend handles this representation correctly.
-
-The override can be removed once TRL reads `attn_implementation` from `AsyncGRPOConfig` or `model_init_kwargs`.
+`dna_factory/async_grpo.py` contains an override for a value TRL hardcodes. It documents the condition under
+which it can be removed.
 
 ### Response template
 

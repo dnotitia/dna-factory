@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 # transformers versions whose Qwen4ExpTextQSAIndexer testcase/test_qsa_indexer_fast.py checked this patch against.
 # Add a version here after running those tests on it.
-VALIDATED_TRANSFORMERS = ("5.20.2",)
+VALIDATED_TRANSFORMERS = ("5.22.1",)
 
 _ORIG = {}
 

@@ -11,7 +11,7 @@ code), so results match the standard path in what is trained, not bit for bit. S
 
 ## Install and run
 
-unsloth is an optional extra, pinned to `unsloth`/`unsloth-zoo` 2026.10.3:
+unsloth is an optional extra, pinned to `unsloth`/`unsloth-zoo` 2026.11.2:
 
 ```bash
 $ uv sync --extra unsloth
@@ -26,8 +26,9 @@ $ python distill.py --use_unsloth true --use_peft true --lora_dropout 0.0
 
 unsloth officially caps `datasets`, `transformers`, and `trl` below this repo's pins. `pyproject.toml` keeps the
 core pins through a `[tool.uv] override-dependencies` entry. As a result, `uv sync --extra unsloth` changes none
-of the core pins, and `uv sync` without the extra is unaffected. This combination was validated on GPU with all
-four scripts. When you bump `datasets`, `transformers`, or `trl` in the core dependencies, bump the override too.
+of the core pins. The `transformers` override also lifts vllm's cap for every sync, deliberately; see
+`INTENTIONALLY_LIFTED` in `testcase/test_dependency_pins.py`. This combination was validated on GPU with all
+four scripts on unsloth 2026.10.x. When you bump `datasets`, `transformers`, or `trl` in the core dependencies, bump the override too.
 
 Write the flag out in full (`--use_unsloth true`, or `use_unsloth: true` in the YAML). The bootstrap reads it
 before trl is imported and does not recognise abbreviated option names such as `--use_unsl`; the run then stops
@@ -239,8 +240,6 @@ models; a warning is printed.
   ```bash
   $ export TORCHINDUCTOR_CACHE_DIR=$HOME/.cache/torchinductor  # any directory on an exec-capable filesystem
   ```
-
-  unsloth clears this variable when imported; the bootstrap restores it.
 - The first steps are slow while unsloth compiles kernels. The cache makes later runs start faster.
 - unsloth writes `unsloth_compiled_cache/` and, with its vLLM engine, `vllm_gen_lora_<gpu>/` into the working
   directory. Both are git-ignored.
