@@ -1,0 +1,33 @@
+# SDFT with a different privileged context on every row, as in the SDFT paper: the teacher sees a reference
+# solution (a demonstration) next to the question, the student sees only the question and writes its own answer.
+#
+#   python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
+#
+# Per-row context comes from a dataset column (`privileged_context_column`). Do not also set `privileged_context`
+# or `privileged_context_file` on that entry: a YAML value replaces the column on every row. Rows whose cell is
+# empty or null are anchor rows (teacher prompt = student prompt).
+#
+# A local file works the same way, e.g.
+#   - path: json
+#     data_files: my_rows.jsonl          # {"prompt": [...] or "...", "privileged_context": "..."} per line
+#     split: train
+
+model_name_or_path: dnotitia/Qwen3-0.6B
+run_name: qwen3-0.6B-sdft
+
+datasets:
+  - path: openai/gsm8k
+    name: main
+    split: train
+    columns: [question, answer]
+    prompt_column: question              # student prompt; a string becomes one user turn
+    privileged_context_column: answer    # teacher-only demonstration, different on every row
+# To keep behavior on unrelated prompts from drifting, a general dataset without a context column can be added
+# here as anchor rows (see "Anchor rows" in docs/sdft.md); the paper's setup trains on demonstrations only.
+
+# The demonstration is appended to the last user turn; the template must keep both placeholders.
+teacher_context_placement: user
+teacher_prompt_template: "{prompt}\n\nHere is a reference solution to this problem:\n{privileged_context}\n\nNow solve the problem yourself."
+
+max_completion_length: 512
+per_device_train_batch_size: 8

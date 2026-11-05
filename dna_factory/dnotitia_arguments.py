@@ -13,6 +13,17 @@ class DnotitiaArguments:
             "help": "Number of batches to print debug information for during training"
         },
     )
+    teacher_context_placement: str = field(
+        default="user",
+        metadata={
+            "help": (
+                "SDFT only. Where the teacher sees the per-row `privileged_context`: 'user' appends it to the "
+                "last user turn (TRL's default, via `teacher_prompt_template`); 'system' puts it in a system "
+                "message in front of the conversation. An empty context leaves the teacher prompt equal to the "
+                "student prompt under both."
+            )
+        },
+    )
     dynamic_sampling: str = field(
         default="off",
         metadata={

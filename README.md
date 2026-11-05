@@ -10,6 +10,7 @@ Four trainers share one setup/train/save path: **SFT** on instruction or convers
 **DPO** on chosen vs rejected pairs, **GRPO** as online RL scored by reward functions,
 and **On-Policy Distillation** where a frozen teacher grades the student's own tokens.
 
+- [DNA Factory](#dna-factory)
 - [News](#news)
 - [Design Principles](#design-principles)
 - [Key Features](#key-features)
@@ -21,6 +22,7 @@ and **On-Policy Distillation** where a frozen teacher grades the student's own t
 
 # News
 
+- Nov/03/2026 - **SDFT** (Self-Distillation Fine-Tuning) support.
 - Oct/23/2026 - **Qwen3.8-Flash-Next** LoRA SFT support.
 - Oct/12/2026 - Optional **unsloth** backend (single GPU) for SFT, DPO, GRPO and distillation.
 - Sep/22/2026 - **Checkpoint Evaluation** - Inspect benchmarks on every checkpoint, logged to W&B.
@@ -56,7 +58,7 @@ $ source .venv/bin/activate
 $ python sft.py
 ```
 
-Beyond SFT, DPO, GRPO, and On-Policy Distillation are also available:
+Beyond SFT, DPO, GRPO, On-Policy Distillation, and SDFT are also available:
 
 ```bash
 # DPO — preference learning on chosen vs rejected responses.
@@ -67,6 +69,10 @@ $ python grpo.py
 
 # On-Policy Distillation — student completions scored token-wise by a frozen teacher.
 $ python distill.py
+
+# SDFT (Self-Distillation Fine-Tuning): the model, shown a privileged context (e.g. a system prompt),
+# teaches itself to behave that way without it. See docs/sdft.md.
+$ python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
 ```
 
 ## Advanced Usage
