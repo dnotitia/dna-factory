@@ -10,7 +10,6 @@ Four trainers share one setup/train/save path: **SFT** on instruction or convers
 **DPO** on chosen vs rejected pairs, **GRPO** as online RL scored by reward functions,
 and **On-Policy Distillation** where a frozen teacher grades the student's own tokens.
 
-- [DNA Factory](#dna-factory)
 - [News](#news)
 - [Design Principles](#design-principles)
 - [Key Features](#key-features)
@@ -72,7 +71,7 @@ $ python distill.py
 
 # SDFT (Self-Distillation Fine-Tuning): the model, shown a privileged context (e.g. a system prompt),
 # teaches itself to behave that way without it. See docs/sdft.md.
-$ python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
+$ python sdft.py
 ```
 
 ## Advanced Usage

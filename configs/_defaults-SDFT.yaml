@@ -7,9 +7,19 @@
 # SCRIPT ARGUMENTS:
 ########################################################
 # Prompt data. Each row needs a `prompt` (or `messages`, whose last assistant turn is dropped) and optionally a
-# `privileged_context`: text the teacher sees but the student does not. Prefer the `datasets:` mixture below, which
-# can attach a context to every row of a dataset from YAML. See docs/sdft.md.
-dataset_name: trl-lib/ultrafeedback-prompt
+# `privileged_context`: text the teacher sees but the student does not. Rows without one are anchor rows (teacher
+# prompt = student prompt), which teach nothing on their own. See docs/sdft.md.
+#
+# Default, as in the SDFT paper: GSM8K, where the teacher sees the reference solution next to the question and
+# the student sees only the question. `datasets:` takes precedence over `dataset_name`, so to train on other data,
+# set `datasets:` in your config.
+datasets:
+  - path: openai/gsm8k
+    name: main
+    split: train
+    columns: [question, answer]
+    prompt_column: question              # student prompt; a string becomes one user turn
+    privileged_context_column: answer    # teacher-only demonstration, different on every row
 
 ########################################################
 # TRAINING ARGUMENTS:
@@ -23,6 +33,10 @@ log_level: info
 #   base = a frozen copy of the initial student (with LoRA: the same weights with the adapter disabled)
 #   live = the current student   |   ema = a moving average of the student
 teacher_model_kind: base
+
+# How the privileged context joins the student prompt in the teacher prompt (with teacher_context_placement: user).
+# Must keep both placeholders; this wording fits the GSM8K default above.
+teacher_prompt_template: "{prompt}\n\nHere is a reference solution to this problem:\n{privileged_context}\n\nNow solve the problem yourself."
 
 # Divergence between teacher and student over the student's own samples. `topk_logits` is the SDFT default
 # (top-k approximation, cheap); `full_logits` is exact over the full vocabulary; `sampled_token` is per-token

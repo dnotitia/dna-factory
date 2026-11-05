@@ -105,7 +105,8 @@ the context rows teach the new behavior. `weight` sets the ratio between the two
 `teacher_context_placement` (a `DnotitiaArguments` field, default `user`):
 
 - `user`: TRL's default. The context is appended to the last user turn via `teacher_prompt_template`
-  (default `"{prompt}\n\n{privileged_context}"`).
+  (TRL's default is `"{prompt}\n\n{privileged_context}"`; `_defaults-SDFT.yaml` uses a wording for its GSM8K
+  reference solutions, so set your own for other data).
 - `system`: the context becomes a system message in front of the conversation, which matches how a deployed
   system prompt is seen. If the prompt already starts with a system message, the context is placed before its
   text in the same message. Needs conversational prompts.
@@ -116,15 +117,15 @@ student prompt. It follows the same placement.
 ## Running it
 
 ```bash
-# Single GPU: GSM8K reference solutions as per-row demonstrations (vLLM colocate shares the GPU with the frozen teacher copy)
-$ python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
+# Single GPU: GSM8K reference solutions as per-row demonstrations, the default
+# (vLLM colocate shares the GPU with the frozen teacher copy)
+$ python sdft.py
 
 # Without vLLM (slower generation through transformers)
-$ python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml --use_vllm false
+$ python sdft.py --use_vllm false
 
 # Multiple GPUs
-$ accelerate launch --config_file accelerate_configs/zero3.yaml --num_processes 4 \
-  sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
+$ accelerate launch --config_file accelerate_configs/zero3.yaml --num_processes 4 sdft.py
 ```
 
 Key options (all documented in `configs/_defaults-SDFT.yaml`):
