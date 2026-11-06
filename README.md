@@ -69,8 +69,7 @@ $ python grpo.py
 # On-Policy Distillation — student completions scored token-wise by a frozen teacher.
 $ python distill.py
 
-# SDFT (Self-Distillation Fine-Tuning): the model, shown a privileged context (e.g. a system prompt),
-# teaches itself to behave that way without it. See docs/sdft.md.
+# SDFT — Self-Distillation Fine-Tuning.
 $ python sdft.py
 ```
 
