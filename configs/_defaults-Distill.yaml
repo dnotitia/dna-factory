@@ -46,6 +46,10 @@ gradient_accumulation_steps: 1  # This value must be carefully checked when trai
 use_vllm: true
 vllm_mode: colocate
 vllm_gpu_memory_utilization: 0.25
+# Prompt + max_completion_length (same as the GRPO defaults); raise it with max_completion_length.
+# Unset, vLLM reserves the model's full context for one request: Qwen3-4B-Thinking-2507's 262144
+# tokens need 36 GiB of KV cache and fail to start in a 0.25-0.3 colocate share.
+vllm_max_model_length: 12480
 
 # Like RL, distillation uses a much smaller learning rate than SFT
 learning_rate: 1e-6
