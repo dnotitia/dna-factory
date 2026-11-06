@@ -83,6 +83,9 @@ report_to:
 save_strategy: "no"  # Step-based saves off; PeriodicCheckpointCallback below is the only checkpoint source
 save_total_limit: 3  # Still applies to periodic checkpoints (rotation handled by the normal save path)
 
+# Intentionally false: TRL's built-in eval loop (loss on an eval split) is not used.
+# dna-factory evaluates real benchmark scores instead — each checkpoint is served with
+# vLLM and scored by Inspect AI (`eval_on_checkpoint`, see docs/checkpoint-eval.md).
 do_eval: false
 
 ########################################################

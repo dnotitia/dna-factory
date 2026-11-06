@@ -39,6 +39,9 @@ save_steps: 50
 save_total_limit: 3
 periodic_save_seconds: 6h
 ignore_data_skip: true
+# Intentionally false: TRL's built-in eval loop (loss on an eval split) is not used.
+# dna-factory evaluates real benchmark scores instead — each checkpoint is served with
+# vLLM and scored by Inspect AI (`eval_on_checkpoint`, see docs/checkpoint-eval.md).
 eval_strategy: 'no'
 do_eval: false
 debug_first_n_batches: 0
