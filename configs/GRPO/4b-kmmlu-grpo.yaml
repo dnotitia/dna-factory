@@ -30,12 +30,12 @@ reward_weights: [1.0, 0.5, 0.5, 0.5]
 # TRAINING ARGUMENTS:
 ########################################################
 # 208522 prompts at ~4 prompts per step (the math run: 7497 prompts -> 1874 steps/epoch with
-# num_iterations 2) = ~52k steps per epoch, far too long. max_steps bounds the run and sets the
-# cosine schedule's length. 20000 steps = ~80k prompts (~38%); at the math run's 46.5 s/step
+# num_iterations 2) = ~52k steps per epoch, far too long. max_steps bounds the run (the LR is
+# constant, so changing it doesn't reshape the schedule). 20000 steps = ~80k prompts (~38%); at the math run's 46.5 s/step
 # (10165 steps in 131 h, mean completion 2.3k -> 1.6k tokens) that is ~11 days. Rescale from this
 # run's step_time once it settles (days = max_steps * step_time / 86400).
 num_train_epochs: 1
-max_steps: 20000
+max_steps: 100000
 
 max_completion_length: 8192  # matches eval_max_tokens and the reward instances above
 
@@ -48,6 +48,11 @@ per_device_train_batch_size: 2
 gradient_accumulation_steps: 16
 
 learning_rate: 2e-6
+# constant after warmup, not the defaults' cosine_with_min_lr: max_steps is a placeholder that will
+# be moved around, and cosine would tie the LR curve to it. warmup_steps is an absolute count, not
+# the defaults' 0.05 ratio, for the same reason. lr_scheduler_kwargs (min_lr_rate) is unused here.
+lr_scheduler_type: constant_with_warmup
+warmup_steps: 100
 
 ########################################################
 # MODEL ARGUMENTS:
