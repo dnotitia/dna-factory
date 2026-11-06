@@ -1,0 +1,53 @@
+########################################################
+# SCRIPT ARGUMENTS:
+########################################################
+run_name: distill-from-32b
+
+# Same prompts as configs/GRPO/4b-kmmlu-grpo.yaml (KMMLU train, 208522 rows, Redux overlap dropped).
+# distill.py keeps only `prompt`; `solution` etc. are unused — the teacher's per-token distribution
+# is the supervision, not the gold letter.
+dataset_name: dnotitia/kmmlu_grpo_data
+
+########################################################
+# TRAINING ARGUMENTS:
+########################################################
+# Teacher must share the student's vocabulary (151936). DNA3.0-27B is Qwen3.5 (248320) and is
+# rejected by the trainer; Qwen3-32B is the same Qwen3 tokenizer. It is a hybrid-thinking model, so
+# it scores the student's "<think>…</think> 해설 … 정답: X" completions in its thinking mode.
+teacher_model_name_or_path: Qwen/Qwen3-32B
+
+beta: 1.0         # reverse KL(student || teacher): on-policy distillation
+temperature: 1.0  # keep the student's sampling on-policy
+
+max_completion_length: 8192  # same as the GRPO run / eval_max_tokens below
+
+# 6 GPUs x 4 x 4 = 96 prompts/step -> ~2170 steps per epoch over 208522 prompts.
+# One completion per prompt (no num_generations), so this is already far more prompts/step than GRPO.
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 4
+num_train_epochs: 1
+max_steps: -1
+
+learning_rate: 1e-6
+warmup_steps: 0.05
+
+# Colocated vLLM shares each GPU with the student and the ZeRO-3-sharded 32B teacher.
+vllm_gpu_memory_utilization: 0.3
+
+########################################################
+# MODEL ARGUMENTS:
+########################################################
+model_name_or_path: dnotitia/Qwen3-4B-Thinking-2507  # student
+
+########################################################
+# DNOTITIA DISTILL TRAINER ARGUMENTS:
+########################################################
+periodic_save_seconds: 1h
+eval_on_checkpoint: true
+eval_tasks:
+  - evals/kmmlu_redux.py
+
+eval_devices: "7"
+# Same eval setup as the GRPO run so the curves are comparable (see 4b-kmmlu-grpo.yaml).
+eval_vllm_args: "--max-model-len 12480 --data-parallel-size 1 --reasoning-parser qwen3"
+eval_max_tokens: 8192
