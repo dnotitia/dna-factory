@@ -123,3 +123,7 @@ This project is made possible thanks to:
 <img width="40%" src="./assets/nipaLogo.png" alt="NIPA 정보통신산업진흥원" />
 
 - NIPA 오픈소스 지원 프로그램 <https://www.nipa.kr>
+
+<img width="40%" src="./assets/ci_01_01.png" alt="NIA 한국지능정보사회진흥원" />
+
+- NIA 한국지능정보사회진흥원 <https://www.nia.or.kr>
