@@ -1,0 +1,76 @@
+name: Release SBOM
+
+# Attach a CycloneDX SBOM (Software Bill of Materials) to every published
+# release: the full list of pinned dependencies, read from uv.lock, so users can
+# audit what a release ships and scan it for known vulnerabilities.
+#
+# Runs on its own when a release is published. Run it by hand with a tag to
+# backfill or regenerate the SBOM of an existing release.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to attach the SBOM to (e.g. v2.5.0)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    name: Generate CycloneDX SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Upload release assets.
+      contents: write
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+
+    steps:
+      - name: Checkout the released tag
+        uses: actions/checkout@v5
+        with:
+          # Catalog the source of the released tag, not the triggering branch,
+          # so the SBOM reflects exactly what shipped.
+          ref: ${{ env.TAG }}
+          # This job only reads the source; keep the token out of .git/config.
+          persist-credentials: false
+
+      - name: Check the tag matches the project version
+        run: |
+          set -euo pipefail
+          VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::Tag $TAG does not match pyproject.toml version $VERSION"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Generate SBOM
+        # Pinned by commit (v0.24.3); the action wraps Anchore Syft, whose
+        # uv.lock cataloger records every locked package, extras included.
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom-${{ env.VERSION }}.cyclonedx.json
+          # Pin Syft so the catalog does not drift between releases.
+          syft-version: v1.55.0
+          # The step below names and uploads the asset itself.
+          upload-release-assets: false
+          upload-artifact: false
+
+      - name: Upload SBOM and checksum to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SBOM="sbom-${VERSION}.cyclonedx.json"
+          jq -e '.bomFormat == "CycloneDX" and (.components | length) > 0' "$SBOM" > /dev/null
+          echo "SBOM lists $(jq '.components | length' "$SBOM") components"
+          sha256sum "$SBOM" > "$SBOM.sha256"
+          gh release upload "$TAG" "$SBOM" "$SBOM.sha256" --clobber --repo "$GITHUB_REPOSITORY"
