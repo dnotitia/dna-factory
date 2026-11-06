@@ -26,8 +26,8 @@ and **On-Policy Distillation** where a frozen teacher grades the student's own t
 - Oct/12/2026 - Optional **unsloth** backend (single GPU) for SFT, DPO, GRPO and distillation.
 - Sep/22/2026 - **Checkpoint Evaluation** - Inspect benchmarks on every checkpoint, logged to W&B.
 - Sep/02/2026 - **On-Policy Distillation** support.
-- Jun/05/2026 - **GRPO (Group Relative Policy Optimization)** support.
-- Oct/29/2025 - **DPO (Direct Preference Optimization)** support.
+- Jun/05/2026 - **GRPO** (Group Relative Policy Optimization) support.
+- Oct/29/2025 - **DPO** (Direct Preference Optimization) support.
 - Sep/21/2025 - **DNA Factory** is born! 🎉
 
 <img width="80%" src="https://github.com/user-attachments/assets/f58514c2-004f-46cd-9545-0a9b69e85ecd" />
