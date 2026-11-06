@@ -30,9 +30,10 @@ reward_weights: [1.0, 0.5, 0.5, 0.5]
 # TRAINING ARGUMENTS:
 ########################################################
 # 208522 prompts at ~4 prompts per step (the math run: 7497 prompts -> 1874 steps/epoch with
-# num_iterations 2) = ~52k steps per epoch, far too long. max_steps bounds the run (the LR is
-# constant, so changing it doesn't reshape the schedule). 20000 steps = ~80k prompts (~38%); at the math run's 46.5 s/step
-# (10165 steps in 131 h, mean completion 2.3k -> 1.6k tokens) that is ~11 days. Rescale from this
+# num_iterations 2) = ~52k steps per epoch. max_steps overrides num_train_epochs and bounds the
+# run (the LR is constant, so changing it doesn't reshape the schedule). 100000 steps = ~400k
+# prompts (~1.9 epochs); at the math run's 46.5 s/step (10165 steps in 131 h, mean completion
+# 2.3k -> 1.6k tokens) that is ~54 days, so it is a ceiling, not a target. Rescale from this
 # run's step_time once it settles (days = max_steps * step_time / 86400).
 num_train_epochs: 1
 max_steps: 100000
