@@ -1,4 +1,4 @@
-# On-Policy Distillation
+# OPD: On-Policy Distillation
 
 Guide for `distill.py`. For the method itself, see Thinking Machines' [On-Policy
 Distillation](https://thinkingmachines.ai/blog/on-policy-distillation/) and the
@@ -100,7 +100,7 @@ teacher is prepared with ZeRO-3 inference sharding automatically.
 ### `beta` — which divergence
 
 ```yaml
-beta: 1.0   # reverse KL, KL(student || teacher)  <- on-policy distillation (default)
+beta: 1.0   # reverse KL, KL(student || teacher)  <- OPD (default)
 # beta: 0.0   forward KL, KL(teacher || student)  <- mass-covering
 # beta: 0.5   Jensen-Shannon divergence
 ```
