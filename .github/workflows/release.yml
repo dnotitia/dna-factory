@@ -1,19 +1,22 @@
 name: Release SBOM
 
-# Attach a CycloneDX SBOM (Software Bill of Materials) to every published
-# release: the full list of pinned dependencies, read from uv.lock, so users can
-# audit what a release ships and scan it for known vulnerabilities.
+# Attach a CycloneDX SBOM (Software Bill of Materials) to each release: the full
+# list of pinned dependencies, read from uv.lock, so users can audit what a
+# release ships and scan it for known vulnerabilities.
 #
-# Runs on its own when a release is published. Run it by hand with a tag to
-# backfill or regenerate the SBOM of an existing release.
+# Releases in this repo are immutable: once published, no asset can be added.
+# So the SBOM goes onto a *draft*, and a maintainer publishes it afterwards.
+# Pushing a version tag creates that draft (with generated notes) or fills a
+# draft that already exists for the tag. See docs/release.md.
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Existing release tag to attach the SBOM to (e.g. v2.5.0)"
+        description: "Existing tag whose draft release gets the SBOM (e.g. v2.5.1)"
         required: true
 
 permissions:
@@ -25,18 +28,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      # Upload release assets.
+      # Create the draft release and upload its assets.
       contents: write
     env:
-      TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+      TAG: ${{ inputs.release_tag || github.ref_name }}
 
     steps:
-      - name: Checkout the released tag
+      - name: Checkout the tag
         uses: actions/checkout@v5
         with:
-          # Catalog the source of the released tag, not the triggering branch,
-          # so the SBOM reflects exactly what shipped.
-          ref: ${{ env.TAG }}
+          # Catalog the source of the tag, not a branch, so the SBOM reflects
+          # exactly what ships.
+          ref: refs/tags/${{ env.TAG }}
           # This job only reads the source; keep the token out of .git/config.
           persist-credentials: false
 
@@ -64,7 +67,7 @@ jobs:
           upload-release-assets: false
           upload-artifact: false
 
-      - name: Upload SBOM and checksum to the release
+      - name: Attach SBOM and checksum to the draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -73,4 +76,20 @@ jobs:
           jq -e '.bomFormat == "CycloneDX" and (.components | length) > 0' "$SBOM" > /dev/null
           echo "SBOM lists $(jq '.components | length' "$SBOM") components"
           sha256sum "$SBOM" > "$SBOM.sha256"
-          gh release upload "$TAG" "$SBOM" "$SBOM.sha256" --clobber --repo "$GITHUB_REPOSITORY"
+
+          DRAFT="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo missing)"
+          case "$DRAFT" in
+            missing)
+              gh release create "$TAG" "$SBOM" "$SBOM.sha256" --repo "$GITHUB_REPOSITORY" \
+                --draft --verify-tag --title "$TAG" --generate-notes
+              echo "::notice::Draft release $TAG created with the SBOM. Edit its notes, then publish it."
+              ;;
+            true)
+              gh release upload "$TAG" "$SBOM" "$SBOM.sha256" --clobber --repo "$GITHUB_REPOSITORY"
+              echo "::notice::SBOM attached to draft release $TAG. Publish it when ready."
+              ;;
+            *)
+              echo "::error::Release $TAG is already published, and published releases are immutable: create a new version."
+              exit 1
+              ;;
+          esac

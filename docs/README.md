@@ -23,6 +23,12 @@ Guides for the training scripts and the features around them. Setup and the SFT 
 | [checkpoint-eval.md](checkpoint-eval.md) | `eval_on_checkpoint`: serving each checkpoint with vLLM, running Inspect tasks, and logging scores to the same W&B run |
 | [multi-nodes.md](multi-nodes.md) | Two-node training with `accelerate launch` |
 
+## Project
+
+| Guide | Covers |
+|---|---|
+| [release.md](release.md) | Cutting a release: version bump, tag push, the draft that gets the CycloneDX SBOM, and publishing under immutable releases |
+
 ## Models
 
 | Guide | Covers |
