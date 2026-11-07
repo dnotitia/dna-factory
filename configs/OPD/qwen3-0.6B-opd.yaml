@@ -2,7 +2,7 @@ model_name_or_path: dnotitia/Qwen3-0.6B          # student
 teacher_model_name_or_path: dnotitia/Qwen3-1.7B  # teacher (must share the student's vocabulary)
 dataset_name: trl-lib/ultrafeedback-prompt
 
-run_name: qwen3-0.6B-distill
+run_name: qwen3-0.6B-opd
 
 beta: 1.0  # reverse KL — the on-policy distillation objective
 

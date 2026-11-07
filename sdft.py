@@ -279,7 +279,6 @@ def extra_trainer_kwargs(
 SPEC = TrainingSpec(
     name="SDFT",
     output_dir_tag="SDFT",
-    trainer_type="SDFT",
     trainer_module="dna_factory.dnotitia_sdft_trainer",
     script_file=__file__,
     defaults_yaml="configs/_defaults-SDFT.yaml",

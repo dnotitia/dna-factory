@@ -1,6 +1,6 @@
-"""Shared training skeleton for SFT / DPO / GRPO / Distillation entry points.
+"""Shared training skeleton for SFT / DPO / GRPO / OPD / SDFT entry points.
 
-Each script (sft.py, dpo.py, grpo.py, distill.py) keeps only its method-specific
+Each script (sft.py, dpo.py, grpo.py, opd.py, sdft.py) keeps only its method-specific
 logic — model loading, dataset normalization, trainer construction — and describes
 it as a `TrainingSpec`. `run_training` executes the identical setup/train/save flow
 for all of them; `cli_main` implements the identical `__main__` CLI bootstrap.
@@ -211,7 +211,6 @@ def print_environment_and_arguments(
     dataset_mixture_args,
     dnotitia_args,
     user_specified_args,
-    trainer_type,
 ):
     """Print OS environment variables and all parsed arguments in a formatted way."""
     _logger.info(
@@ -262,7 +261,7 @@ def print_environment_and_arguments(
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
-    _logger.info(f" DNOTITIA {trainer_type} TRAINER ARGUMENTS:")
+    _logger.info(" DNOTITIA TRAINER ARGUMENTS:")
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
@@ -397,9 +396,8 @@ class TrainingSpec:
     """
 
     # Display / naming (each also feeds output_dir auto-naming and arg printing).
-    name: str  # e.g. "SFT", "On-Policy Distillation"
-    output_dir_tag: str  # e.g. "SFT", "DISTILL"
-    trainer_type: str  # e.g. "SFT", "DISTILL"
+    name: str  # e.g. "SFT", "OPD"
+    output_dir_tag: str  # e.g. "SFT", "OPD"
     trainer_module: str  # e.g. "dna_factory.dnotitia_sft_trainer" (for setup_logging)
     script_file: str  # caller __file__ (for the banner pyproject version lookup)
 
@@ -506,7 +504,6 @@ def run_training(
         dataset_mixture_args,
         dnotitia_args,
         user_specified_args,
-        trainer_type=spec.trainer_type,
     )
 
     # Check for last checkpoint

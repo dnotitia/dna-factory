@@ -3,7 +3,7 @@
 Guide for `sdft.py`, built on TRL's experimental `SDFTTrainer` (`trl.experimental.sdft`). The method is
 described in [Self-Distillation Enables Continual Learning](https://huggingface.co/papers/2601.19897)
 (arXiv:2601.19897), the paper TRL cites for this trainer. The loss family is the same
-generalized-divergence distillation that [distillation.md](distillation.md) covers, based on
+generalized-divergence distillation that [opd.md](opd.md) covers, based on
 [On-Policy Distillation of Language Models](https://huggingface.co/papers/2306.13649).
 
 ## What it does
@@ -20,7 +20,7 @@ After training, the model produces without the context what it would have produc
 baking a system prompt into the weights (context distillation) and adding a behavior while staying close to
 the original model, since the targets are the model's own distributions rather than external text.
 
-When to use `sdft.py` rather than `distill.py`: `distill.py` needs a separate (usually larger) teacher;
+When to use `sdft.py` rather than `opd.py`: `opd.py` needs a separate (usually larger) teacher;
 `sdft.py` needs only the model and a context.
 
 ## Data format

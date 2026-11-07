@@ -82,7 +82,7 @@ attn_implementation: kernels-community/flash-attn2
 # https://github.com/huggingface/trl/pull/3791#issuecomment-3177492252
 
 ########################################################
-# DNOTITIA SFT TRAINER ARGUMENTS:
+# DNOTITIA TRAINER ARGUMENTS:
 ########################################################
 # Print debug input values using the overridden compute_loss() function for the first n batches
 debug_first_n_batches: 3

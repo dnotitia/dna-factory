@@ -1,5 +1,5 @@
 """
-unsloth model-loading integration shared by sft.py / dpo.py / grpo.py / distill.py.
+unsloth model-loading integration shared by sft.py / dpo.py / grpo.py / opd.py.
 
 `use_unsloth` is a backend switch: it changes how the model is loaded (unsloth's FastModel, fused
 kernels, optionally unsloth-managed vLLM) and must NOT change training hyperparameters. The
@@ -365,7 +365,7 @@ def validate_unsloth_args(
 
 def resolve_fast_inference(training_args, model_type, logger=None, *, use_peft) -> bool:
     """
-    Decide whether unsloth should own the vLLM engine (GRPO/Distill).
+    Decide whether unsloth should own the vLLM engine (GRPO/OPD).
 
     Returns False when vLLM is off. When unsloth's engine can't be used — full fine-tuning (unsloth's
     fast_inference is LoRA-only and raises with full_finetuning=True) or a model type outside
@@ -420,7 +420,7 @@ def effective_router_aux_loss_coef(model_args, training_args) -> float:
 
 def generation_max_seq_length(model_args, training_args) -> int:
     """
-    Context length to give unsloth/vLLM for GRPO/Distill (the engine is sized at load time).
+    Context length to give unsloth/vLLM for GRPO/OPD (the engine is sized at load time).
 
     Preference: `vllm_max_model_length`, then the model's `max_position_embeddings`, then
     `max_completion_length + 4096` as a conservative fallback.
@@ -482,7 +482,7 @@ def load_unsloth_model(
         )
     else:
         # unsloth's full-finetuning load keeps some weights (e.g. RMSNorm) in fp32 and disables autocast, so
-        # trainers that call the backbone directly (distillation) hit fp32 vs bf16 matmuls. Match the vanilla
+        # trainers that call the backbone directly (OPD) hit fp32 vs bf16 matmuls. Match the vanilla
         # path, where the whole model is in the configured dtype.
         dtype = torch_dtype_from(model_args.dtype)
         if dtype is not None:

@@ -7,7 +7,7 @@ from trl import DistillationTrainer
 logger = logging.getLogger(__name__)
 
 
-class DnotitiaDistillationTrainer(DistillationTrainer):
+class DnotitiaOPDTrainer(DistillationTrainer):
     def __init__(self, *args, debug_first_n_batches: int = 3, **kwargs):
         super().__init__(*args, **kwargs)
         # Maximum number of batches to print debug info for
@@ -17,7 +17,7 @@ class DnotitiaDistillationTrainer(DistillationTrainer):
     def compute_loss(
         self, model, inputs, return_outputs=False, num_items_in_batch=None
     ):
-        # Decode and display prompt/completion ids with mask highlighting. The distillation inputs carry the
+        # Decode and display prompt/completion ids with mask highlighting. The OPD inputs carry the
         # same prompt/completion tensors as GRPO's (the student generated the completions on-policy), minus
         # `advantages`: the supervision here is the teacher's full next-token distribution, not a scalar reward.
         if not hasattr(self, "_debug_count"):

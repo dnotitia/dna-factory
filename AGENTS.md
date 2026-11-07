@@ -17,8 +17,8 @@ python dpo.py --config configs/DPO/qwen3-0.6B-dpo.yaml
 # GRPO (single GPU); --use_vllm false for the slower HF generate path
 python grpo.py --config configs/GRPO/qwen3-0.6B-grpo.yaml
 
-# On-policy distillation (single GPU); teacher is set in YAML via teacher_model_name_or_path
-python distill.py --config configs/Distill/qwen3-0.6B-distill.yaml
+# OPD, On-Policy Distillation (single GPU); teacher is set in YAML via teacher_model_name_or_path
+python opd.py --config configs/OPD/qwen3-0.6B-opd.yaml
 
 # SDFT, Self-Distillation Fine-Tuning (single GPU); the teacher is the model itself
 # shown a per-row `privileged_context` (see docs/sdft.md)
@@ -41,21 +41,21 @@ docs/qwen38-flash-next.md (its `ple_host_table` requires `use_peft`).
 
 ## Layout
 
-- `sft.py` / `dpo.py` / `grpo.py` / `distill.py` / `sdft.py` — thin entry points. Each keeps only
+- `sft.py` / `dpo.py` / `grpo.py` / `opd.py` / `sdft.py` — thin entry points. Each keeps only
   method-specific logic (model loading, dataset normalization, trainer wiring) as a
   `TrainingSpec`; the shared setup/train/save flow lives in
   `dna_factory/training_runner.py` (`run_training` + `cli_main`). Same flow across all
   four; DPO also loads `ref_model`; GRPO is online RL (generates completions and scores
-  them with `reward_funcs`; no `ref_model` unless `beta != 0`); `distill.py` is on-policy
-  distillation (student generates, a frozen `teacher_model` scores every token — no rewards,
+  them with `reward_funcs`; no `ref_model` unless `beta != 0`); `opd.py` is On-Policy
+  Distillation (OPD; student generates, a frozen `teacher_model` scores every token — no rewards,
   no `ref_model`); `sdft.py` is Self-Distillation Fine-Tuning (SDFT; on-policy; the teacher is the model itself, shown a
   per-row `privileged_context` the student does not see; empty context = anchor row).
 - `dna_factory/` — custom trainers and utils (config merging, output-dir naming, colored
   logging). `rewards/` holds the GRPO reward framework (`generative.py` = judge,
   `verifiable.py` = string-match, `reasoning.py` = thinking-model answer checks) and the
   concrete instances (`my_rewards.py`).
-- `configs/` — `_defaults-{SFT,DPO,GRPO,Distill,SDFT}.yaml` (base, **do not edit**) merged with
-  model-specific overrides in `configs/{SFT,DPO,GRPO,Distill,SDFT}/`. GRPO variants (no vLLM,
+- `configs/` — `_defaults-{SFT,DPO,GRPO,OPD,SDFT}.yaml` (base, **do not edit**) merged with
+  model-specific overrides in `configs/{SFT,DPO,GRPO,OPD,SDFT}/`. GRPO variants (no vLLM,
   server mode, DAPO, Dr. GRPO, weighted rewards, judges, unsloth) are documented as
   snippets in docs/grpo.md, not shipped as separate config files.
 - `docs/` — per-feature guides, indexed in docs/README.md.
@@ -64,7 +64,7 @@ docs/qwen38-flash-next.md (its `ple_host_table` requires `use_peft`).
 
 - `output_dir: auto` auto-generates a name from non-default args.
 - Default attn is `kernels-community/flash-attn2` (required by `packing`/`padding_free`, and it has B200/sm100 kernels, unlike `kernels-community/vllm-flash-attn3`); default models are from the `dnotitia/` HF org.
-- Preprocessing copies each message's `thinking` → `reasoning_content` for Qwen3's chat template (SFT/DPO only; GRPO/distillation datasets are prompt-only).
+- Preprocessing copies each message's `thinking` → `reasoning_content` for Qwen3's chat template (SFT/DPO only; GRPO/OPD datasets are prompt-only).
 - DeepSpeed only (no FSDP).
 - AsyncGRPO (`grpo.py` with `grpo_execution: async`) is the one exception to the distributed-training guidance: one training GPU, one separate vLLM GPU, one process, with DeepSpeed, FSDP, evaluation, dynamic sampling, PEFT and quantization all rejected. TRL builds the model with its own tree attention (flash-attn3, flash-attn4 on Blackwell) and ignores `attn_implementation`; do not swap it, since the tree-packed rows rely on it. Leave `token_budget: null` and keep `max_completion_length` under the server's `--max-model-len`, which vLLM enforces with HTTP 400 rather than truncation. See docs/async-grpo.md.
 - GRPO rewards: `reward_funcs:` takes `trl.rewards` names or dotted import paths; a reward that returns `None` excludes that sample instead of scoring it 0 — the mechanism for composing rewards over a mixture, keyed by the per-dataset `label`. `accuracy_reward` needs `math-verify` and a `solution` column. See docs/grpo-rewards.md.
@@ -82,5 +82,5 @@ docs/qwen38-flash-next.md (its `ple_host_table` requires `use_peft`).
   The row also carries `train/global_step` so panels on that X axis still find the points.
   See docs/checkpoint-eval.md.
 - unsloth (`use_unsloth: true`, needs `uv sync --extra unsloth`): single-GPU only, and rejected with AsyncGRPO. unsloth patches TRL's trainers on import, so a bootstrap at the top of each entry script (`dna_factory/unsloth_bootstrap.py`) imports it before trl, only for `model_type` in {qwen3, qwen3_moe, qwen3_5, qwen3_5_moe}; others run the standard path (an unreadable model config.json raises instead; `--use_unsloth` must be spelled in full, a bootstrap/parser mismatch raises). The patched trainers ignore `peft_config`: LoRA goes through `FastModel.get_peft_model` (`dna_factory/unsloth_integration.py`). The extra's `[tool.uv] override-dependencies` keeps `datasets`/`transformers`/`trl` at the core pins (unsloth caps them lower): keep it in sync when bumping them. Besides unsloth's caps it lifts only those listed in `INTENTIONALLY_LIFTED` in `testcase/test_dependency_pins.py` (currently vllm's transformers cap, validated by hand); any other lifted cap fails that test, and so does an entry that no longer lifts anything. See docs/unsloth.md.
-- Distillation: prompt-only datasets (a conversational dataset's last assistant turn is dropped — the student writes the completion). The teacher must share the student's vocabulary or TRL raises. `beta` selects the divergence (1.0 = reverse KL, 0.0 = forward KL, 0.5 = JSD), **not** GRPO's reference-model KL penalty. See docs/distillation.md.
+- OPD: prompt-only datasets (a conversational dataset's last assistant turn is dropped — the student writes the completion). The teacher must share the student's vocabulary or TRL raises. `beta` selects the divergence (1.0 = reverse KL, 0.0 = forward KL, 0.5 = JSD), **not** GRPO's reference-model KL penalty. See docs/opd.md.
 - SDFT: data rows carry `prompt` + optional `privileged_context` (per-dataset in YAML via `privileged_context`/`privileged_context_file`); `teacher_context_placement` is `user` (TRL default) or `system`. `DnotitiaSDFTTrainer` overrides `_compute_self_distillation_loss` so a rank with zero loss tokens still joins TRL's gather (otherwise a multi-GPU NCCL hang). See docs/sdft.md.

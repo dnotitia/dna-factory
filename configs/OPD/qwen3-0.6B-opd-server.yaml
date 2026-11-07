@@ -1,12 +1,12 @@
-# Distill with a SEPARATE vLLM server (vllm_mode: server) instead of colocate. Same student/teacher
-# pair as qwen3-0.6B-distill.yaml — the only thing this demonstrates over that config is the
+# OPD with a SEPARATE vLLM server (vllm_mode: server) instead of colocate. Same student/teacher
+# pair as qwen3-0.6B-opd.yaml — the only thing this demonstrates over that config is the
 # generation backend. The vLLM server serves the *student* (which generates); TRL syncs updated
 # weights into it each step. The teacher stays on the training GPUs.
 #
 #   CUDA_VISIBLE_DEVICES=1 trl vllm-serve --model dnotitia/Qwen3-0.6B --port 8000
-#   CUDA_VISIBLE_DEVICES=0 python distill.py --config configs/Distill/qwen3-0.6B-distill-server.yaml
+#   CUDA_VISIBLE_DEVICES=0 python opd.py --config configs/OPD/qwen3-0.6B-opd-server.yaml
 
-run_name: qwen3-0.6B-distill-server
+run_name: qwen3-0.6B-opd-server
 
 model_name_or_path: dnotitia/Qwen3-0.6B          # student
 teacher_model_name_or_path: dnotitia/Qwen3-4B  # teacher (must share the student's vocabulary)

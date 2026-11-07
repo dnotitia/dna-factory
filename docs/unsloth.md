@@ -2,10 +2,10 @@
 
 This guide covers `use_unsloth: true`. The option loads models through [unsloth](https://github.com/unslothai/unsloth)'s
 `FastModel` and uses unsloth's patched versions of the TRL trainers in all four scripts (`sft.py`, `dpo.py`,
-`grpo.py`, and `distill.py`). It is a backend switch: the run follows the same configuration as with
+`grpo.py`, and `opd.py`). It is a backend switch: the run follows the same configuration as with
 `use_unsloth: false` (hyperparameters, model, which parameters train, LoRA rank and alpha, `max_length`, loss type),
 and a setting unsloth cannot honour stops the run with an error or prints a warning instead of being changed
-silently. How the work is computed does differ (kernels, packing groups, unsloth's own GRPO/distillation loss
+silently. How the work is computed does differ (kernels, packing groups, unsloth's own GRPO/OPD loss
 code), so results match the standard path in what is trained, not bit for bit. See
 [Known differences](#known-differences).
 
@@ -21,7 +21,7 @@ $ python grpo.py --config grpo-unsloth.yaml  # saved from the example GRPO confi
 
 # Or switch it on for any config
 $ python dpo.py --config configs/DPO/qwen3-0.6B-dpo.yaml --use_unsloth true --use_peft true --lora_dropout 0.0
-$ python distill.py --use_unsloth true --use_peft true --lora_dropout 0.0
+$ python opd.py --use_unsloth true --use_peft true --lora_dropout 0.0
 ```
 
 unsloth officially caps `datasets`, `transformers`, and `trl` below this repo's pins. `pyproject.toml` keeps the
@@ -68,7 +68,7 @@ vllm_max_model_length: 8192
 
 The switch is selected from the checkpoint's `config.json` `model_type`:
 
-| `model_type` | Checkpoints | vLLM generation (GRPO / distillation) |
+| `model_type` | Checkpoints | vLLM generation (GRPO / OPD) |
 |---|---|---|
 | `qwen3` | Qwen3 dense (`dnotitia/Qwen3-*`, `Qwen/Qwen3-*`) | unsloth's engine |
 | `qwen3_moe` | Qwen3-30B-A3B, Qwen3-235B-A22B | HF generate (slower) |
@@ -94,26 +94,26 @@ These measurements use one B200 and this repo's defaults (FlashAttention-2 and L
 | DPO LoRA, Qwen3-8B, 2k | 2.75 s/step, 34.5 GiB ³ | 2.50 s/step, 17.5 GiB | about the same | **−49%** |
 | SFT full fine-tuning, Qwen3-4B, 4k | 0.24 s/step, 31.0 GiB | 0.24 s/step, 30.9 GiB | same | same |
 | GRPO LoRA + vLLM, Qwen3-4B, 8×1024 tokens | 4.14 s/step, 72.8 GiB ² | 7.14 s/step, 64.9 GiB ² | 72% slower | −11% |
-| Distillation LoRA + vLLM, Qwen3-0.6B ← 1.7B | 0.78 s/step, 49.5 GiB ² | 0.89 s/step, 48.2 GiB ² | 14% slower | −3% |
+| OPD LoRA + vLLM, Qwen3-0.6B ← 1.7B | 0.78 s/step, 49.5 GiB ² | 0.89 s/step, 48.2 GiB ² | 14% slower | −3% |
 
 ¹ The default config crashes on this model because Liger's MoE SwiGLU kernel and LoRA on expert weights do not
 mix. The baseline therefore uses `use_liger_kernel: false`; the unsloth default works as is.
-² Includes the colocated vLLM engine (`vllm_gpu_memory_utilization` 0.35 for GRPO, 0.25 for distillation).
+² Includes the colocated vLLM engine (`vllm_gpu_memory_utilization` 0.35 for GRPO, 0.25 for OPD).
 ³ The standard path loads a second full model for the DPO reference, even with LoRA. The unsloth path uses the
 policy with its fresh adapter disabled, so it uses the same weights and saves most of that memory.
 
 Step times exclude the first three steps. Memory is peak allocated memory from single runs. All runs use `lora_r: 16`
 on all linear layers (`lora_r: 8` for the MoE), `lora_dropout: 0.0`, and gradient checkpointing.
 
-Why GRPO and distillation are slower: in both workloads, the two paths generated the same number of tokens.
+Why GRPO and OPD are slower: in both workloads, the two paths generated the same number of tokens.
 unsloth's vLLM engine shares weights with the trained model and decodes with the LoRA adapter applied. The
 standard path merges the adapter into the weights before each generation. Decoding is 32% slower for GRPO and 42%
-slower for distillation, measured in tokens per second; this accounts for all of distillation's slowdown. For
+slower for OPD, measured in tokens per second; this accounts for all of OPD's slowdown. For
 GRPO it accounts for half of the slowdown (+1.4 s/step). The other half is training: the backward pass takes
 1.5 s instead of 0.4 s.
 
 Use unsloth for LoRA/QLoRA fine-tuning (SFT and DPO), MoE LoRA, and runs limited by memory. Full fine-tuning does
-not benefit. For GRPO and distillation, it saves memory but is slower, so leave it off when throughput matters.
+not benefit. For GRPO and OPD, it saves memory but is slower, so leave it off when throughput matters.
 
 ## What it changes, and what it keeps
 
@@ -173,7 +173,7 @@ The configuration is honoured on both paths; these are the ways the computation 
 - **SFT packing.** Packed rows are grouped differently (0.25% fewer on Capybara, same trained tokens), and
   Qwen3.5-architecture models are not packed at all (more steps per epoch). Data parity was checked for
   conversational `messages` datasets, the only format `sft.py` accepts.
-- **GRPO and distillation loss.** The loss is computed by unsloth's own implementation of TRL's loss types
+- **GRPO and OPD loss.** The loss is computed by unsloth's own implementation of TRL's loss types
   (`unsloth_zoo`), not by TRL's code. It targets the same objective but was not compared numerically with TRL's.
 - **Generation.** unsloth's vLLM engine decodes with the LoRA adapter applied instead of merging it into the
   weights. This is slower (see [When it helps](#when-it-helps)); rollouts were checked to match HF generate on the
@@ -208,7 +208,7 @@ needs full weights.
   weights with the trained model, and is sized by `vllm_gpu_memory_utilization`. It requires LoRA; full
   fine-tuning falls back to HF generate with a warning, as do model types without engine support (see the table).
   `vllm_mode: server` is not supported. `dynamic_sampling` (`mask` / `resample`) works.
-- **Distillation**: only the student is loaded through unsloth; the teacher remains a plain Hugging Face model.
+- **OPD**: only the student is loaded through unsloth; the teacher remains a plain Hugging Face model.
   Generation uses unsloth's engine as in GRPO, and the student's LoRA weights reach it before each generation
   (checked against HF generate on the live student).
 

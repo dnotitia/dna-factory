@@ -51,7 +51,7 @@ model_name_or_path: dnotitia/Qwen3-4B-Thinking-2507
 # model_name_or_path: dnotitia/Qwen3-1.7B
 
 ########################################################
-# DNOTITIA GRPO TRAINER ARGUMENTS:
+# DNOTITIA TRAINER ARGUMENTS:
 ########################################################
 periodic_save_seconds: 1h 40m
 eval_on_checkpoint: true
