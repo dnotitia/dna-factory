@@ -61,7 +61,7 @@ warmup_steps: 100
 model_name_or_path: dnotitia/Qwen3-4B-Thinking-2507
 
 ########################################################
-# DNOTITIA GRPO TRAINER ARGUMENTS:
+# DNOTITIA TRAINER ARGUMENTS:
 ########################################################
 periodic_save_seconds: 1h
 eval_on_checkpoint: true

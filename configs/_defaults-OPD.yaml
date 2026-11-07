@@ -20,7 +20,7 @@ log_level: info
 
 # The teacher: the model whose next-token distribution the student is trained to match.
 # It MUST share the student's vocabulary — the loss compares full next-token distributions, so training
-# stops with an explicit error on a `vocab_size` mismatch. See docs/distillation.md.
+# stops with an explicit error on a `vocab_size` mismatch. See docs/opd.md.
 teacher_model_name_or_path: dnotitia/Qwen3-4B
 # teacher_model_revision: null  # Branch/tag/commit of the teacher (defaults to its main revision)
 
@@ -29,7 +29,7 @@ teacher_model_name_or_path: dnotitia/Qwen3-4B
 #   0.0 = forward KL, KL(teacher || student)  <- mass-covering
 #   0.5 = Jensen-Shannon divergence
 # NOTE: unlike GRPO's `beta` (a KL-penalty coefficient against a reference model), this selects the loss
-# itself. There is no reference model in distillation.
+# itself. There is no reference model in OPD.
 beta: 1.0
 
 # Sampling temperature for the student's on-policy generation; it also softens the distributions the
@@ -41,7 +41,7 @@ max_completion_length: 512
 per_device_train_batch_size: 8
 gradient_accumulation_steps: 1  # This value must be carefully checked when training with DeepSpeed
 
-# vLLM generation acceleration (colocate mode shares the training GPUs). Distillation keeps the *teacher*
+# vLLM generation acceleration (colocate mode shares the training GPUs). OPD keeps the *teacher*
 # resident on the same GPUs as well, so leave more headroom than GRPO does (0.3).
 use_vllm: true
 vllm_mode: colocate
@@ -51,7 +51,7 @@ vllm_gpu_memory_utilization: 0.25
 # tokens need 36 GiB of KV cache and fail to start in a 0.25-0.3 colocate share.
 vllm_max_model_length: 12480
 
-# Like RL, distillation uses a much smaller learning rate than SFT
+# Like RL, OPD uses a much smaller learning rate than SFT
 learning_rate: 1e-6
 lr_scheduler_type: cosine_with_min_lr
 lr_scheduler_kwargs:
@@ -115,7 +115,7 @@ trust_remote_code: false
 # https://github.com/huggingface/trl/pull/3791#issuecomment-3177492252
 
 ########################################################
-# DNOTITIA DISTILL TRAINER ARGUMENTS:
+# DNOTITIA TRAINER ARGUMENTS:
 ########################################################
 # Print debug input values using the overridden compute_loss() function for the first n batches
 debug_first_n_batches: 3

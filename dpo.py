@@ -126,7 +126,6 @@ def postprocess_dataset(dataset, ctx, train_logger):
 SPEC = TrainingSpec(
     name="DPO",
     output_dir_tag="DPO",
-    trainer_type="DPO",
     trainer_module="dna_factory.dnotitia_dpo_trainer",
     script_file=__file__,
     defaults_yaml="configs/_defaults-DPO.yaml",

@@ -1,10 +1,10 @@
 """
-On-policy distillation training script for DNA Factory.
+OPD (On-Policy Distillation) training script for DNA Factory.
 
 Method-specific logic only (student + frozen teacher wiring, prompt-only
 dataset mixture, trainer wiring); the shared setup/train/save flow lives in
 dna_factory/training_runner.py.
-Key distillation-specific difference: a frozen teacher scores each token the
+Key OPD-specific difference: a frozen teacher scores each token the
 student generates.
 """
 
@@ -17,7 +17,7 @@ import sys
 if __name__ == "__main__":
     from dna_factory.unsloth_bootstrap import maybe_import_unsloth
 
-    maybe_import_unsloth(sys.argv[1:], "configs/_defaults-Distill.yaml")
+    maybe_import_unsloth(sys.argv[1:], "configs/_defaults-OPD.yaml")
 
 from trl import (
     DistillationConfig,
@@ -31,7 +31,7 @@ from dna_factory.dnotitia_dataset_mixture import (
     WeightedDatasetMixtureConfig,
     resample_by_weight,
 )
-from dna_factory.dnotitia_distillation_trainer import DnotitiaDistillationTrainer
+from dna_factory.dnotitia_opd_trainer import DnotitiaOPDTrainer
 from dna_factory.training_runner import (
     TrainingSpec,
     cli_main,
@@ -47,7 +47,7 @@ from dna_factory.unsloth_integration import (
 logger = logging.getLogger(__name__)
 
 
-def _normalize_dataset_for_distillation(dataset):
+def _normalize_dataset_for_opd(dataset):
     """Normalize one dataset to prompt-only schema (assistant turn discarded)."""
     feats = dataset.features
     if "messages" in feats:
@@ -105,7 +105,7 @@ def get_dataset_with_schema_alignment(mixture_config, seed=42):
         if dataset_config.columns is not None:
             dataset = dataset.select_columns(dataset_config.columns)
 
-        dataset = _normalize_dataset_for_distillation(dataset)
+        dataset = _normalize_dataset_for_opd(dataset)
 
         weight = getattr(dataset_config, "weight", 1.0)
         if weight != 1.0:
@@ -116,7 +116,7 @@ def get_dataset_with_schema_alignment(mixture_config, seed=42):
         datasets_list.append(dataset)
 
     combined = concatenate_datasets(datasets_list)
-    logger.info(f"Created distillation dataset mixture with {len(combined)} examples")
+    logger.info(f"Created OPD dataset mixture with {len(combined)} examples")
     return DatasetDict({"train": combined})
 
 
@@ -190,12 +190,11 @@ def extra_trainer_kwargs(
 
 
 SPEC = TrainingSpec(
-    name="On-Policy Distillation",
-    output_dir_tag="DISTILL",
-    trainer_type="DISTILL",
-    trainer_module="dna_factory.dnotitia_distillation_trainer",
+    name="OPD",
+    output_dir_tag="OPD",
+    trainer_module="dna_factory.dnotitia_opd_trainer",
     script_file=__file__,
-    defaults_yaml="configs/_defaults-Distill.yaml",
+    defaults_yaml="configs/_defaults-OPD.yaml",
     dataclass_types=(
         ScriptArguments,
         DistillationConfig,
@@ -210,7 +209,7 @@ SPEC = TrainingSpec(
     load_models=load_models,
     load_mixture=load_mixture,
     # No thinking -> reasoning_content preprocessing: datasets are prompt-only.
-    trainer_cls=DnotitiaDistillationTrainer,
+    trainer_cls=DnotitiaOPDTrainer,
     extra_trainer_kwargs=extra_trainer_kwargs,
 )
 

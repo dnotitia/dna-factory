@@ -310,7 +310,6 @@ def extra_trainer_kwargs(
 SPEC = TrainingSpec(
     name="GRPO",
     output_dir_tag="GRPO",
-    trainer_type="GRPO",
     trainer_module="dna_factory.dnotitia_grpo_trainer",
     script_file=__file__,
     defaults_yaml="configs/_defaults-GRPO.yaml",
@@ -382,7 +381,6 @@ def get_spec(mode):
         SPEC,
         name="AsyncGRPO",
         output_dir_tag="ASYNCGRPO",
-        trainer_type="AsyncGRPO",
         trainer_module="trl.experimental.async_grpo",
         defaults_yaml="configs/_defaults-AsyncGRPO.yaml",
         dataclass_types=(

@@ -1,5 +1,5 @@
 """
-Dataset validator for prompt-only (GRPO / Distill) datasets.
+Dataset validator for prompt-only (GRPO / OPD) datasets.
 
 Usage:
   Check mode:
@@ -57,7 +57,7 @@ def is_conversational(column):
 def validate_prompt_schema(dataset):
     """
     Validate that the dataset can be normalized into the prompt-only schema
-    used by grpo.py / distill.py.
+    used by grpo.py / opd.py.
 
     Returns (is_valid, message, example).
     """
@@ -166,7 +166,7 @@ def check_mode(dataset_name, config_name, split, require_solution):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Validate a prompt-only (GRPO / Distill) dataset."
+        description="Validate a prompt-only (GRPO / OPD) dataset."
     )
     parser.add_argument(
         "dataset_name",

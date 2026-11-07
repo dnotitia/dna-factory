@@ -42,7 +42,7 @@ python sft.py --config configs/SFT/qwen3-4bexpr.yaml \
 
 `eval_baseline` (default `true`, not in the YAML defaults) controls the step-0 baseline; set it to `false` to evaluate checkpoints only.
 
-All four entry points (`sft.py`, `dpo.py`, `grpo.py`, `distill.py`) get this, because it is wired in the shared runner.
+All four entry points (`sft.py`, `dpo.py`, `grpo.py`, `opd.py`) get this, because it is wired in the shared runner.
 
 `report_to` must include `wandb` for the curves; without it the scores still appear in the training log, and startup warns about it.
 

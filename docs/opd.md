@@ -1,6 +1,6 @@
 # OPD: On-Policy Distillation
 
-Guide for `distill.py`. For the method itself, see Thinking Machines' [On-Policy
+Guide for `opd.py`. For the method itself, see Thinking Machines' [On-Policy
 Distillation](https://thinkingmachines.ai/blog/on-policy-distillation/) and the
 [On-Policy Distillation of Language Models](https://huggingface.co/papers/2306.13649) paper the
 `DistillationTrainer` implements.
@@ -14,7 +14,7 @@ Two models, one dataset of prompts:
    compounds errors from states it was never trained on (exposure bias). Sampling from the student removes
    that mismatch.
 2. **The teacher grades every token of those completions.** Each token gets its own supervision signal.
-   RL, by contrast, collapses a whole trajectory into one scalar reward — which is why distillation buys
+   RL, by contrast, collapses a whole trajectory into one scalar reward — which is why OPD buys
    an order of magnitude in compute efficiency over RL for the same behavior.
 3. **The loss is the per-token reverse KL**, `KL(student ‖ teacher)`. It is *mode-seeking*: the student
    commits to one teacher behavior instead of blurring several together. It is also unhackable — low KL
@@ -27,7 +27,7 @@ Where this fits next to the other trainers in this repo:
 | `sft.py` | fixed reference answers | off-policy (dataset) | per token |
 | `dpo.py` | preference pairs | off-policy (dataset) | per sequence |
 | `grpo.py` | reward functions | on-policy (student) | per sequence (scalar reward) |
-| `distill.py` | a teacher model | on-policy (student) | **per token** |
+| `opd.py` | a teacher model | on-policy (student) | **per token** |
 
 Typical uses: compressing a large teacher into a small student; recovering instruction-following after
 domain mid-training (distill from the *pre-mid-training* checkpoint on chat prompts); and re-teaching a
@@ -39,44 +39,44 @@ Datasets are prompt-only, just like GRPO. The teacher is set in YAML via `teache
 
 ```bash
 # Without vLLM (slower generation through transformers)
-$ python distill.py --use_vllm false
+$ python opd.py --use_vllm false
 ```
 
-Note: `beta` here selects the divergence itself (`1.0` = reverse KL, `0.0` = forward KL, `0.5` = JSD) — unlike GRPO's `beta`, which is a KL-penalty coefficient against a reference model. There is no reference model in distillation.
+Note: `beta` here selects the divergence itself (`1.0` = reverse KL, `0.0` = forward KL, `0.5` = JSD) — unlike GRPO's `beta`, which is a KL-penalty coefficient against a reference model. There is no reference model in OPD.
 
-Full guide: [docs/distillation.md](docs/distillation.md).
+Full guide: [docs/opd.md](docs/opd.md).
 
 ```bash
 # Single GPU (vLLM colocate is on by default; it shares the training GPU with the teacher,
 # so headroom is set via `vllm_gpu_memory_utilization: 0.25`)
-$ python distill.py \
-  --config configs/Distill/qwen3-0.6B-distill.yaml
+$ python opd.py \
+  --config configs/OPD/qwen3-0.6B-opd.yaml
 
 # Without vLLM (slower generation through transformers)
-$ python distill.py \
-  --config configs/Distill/qwen3-0.6B-distill.yaml \
+$ python opd.py \
+  --config configs/OPD/qwen3-0.6B-opd.yaml \
   --use_vllm false
 
 # Multiple GPUs
 $ accelerate launch --config_file accelerate_configs/zero3.yaml \
     --num_processes 4 \
-    distill.py \
-    --config configs/Distill/qwen3-0.6B-distill.yaml
+    opd.py \
+    --config configs/OPD/qwen3-0.6B-opd.yaml
 
 # A larger pair: 1.7B student <- 4B teacher
-$ python distill.py \
-  --config configs/Distill/qwen3-1.7B-distill.yaml
+$ python opd.py \
+  --config configs/OPD/qwen3-1.7B-opd.yaml
 ```
 
-Dedicating separate GPUs to generation works the same way as GRPO (`configs/Distill/qwen3-0.6B-distill-server.yaml`):
+Dedicating separate GPUs to generation works the same way as GRPO (`configs/OPD/qwen3-0.6B-opd-server.yaml`):
 
 ```bash
 # Terminal 1: vLLM server on a dedicated GPU (serves the *student*, which is what generates)
 $ CUDA_VISIBLE_DEVICES=1 trl vllm-serve --model dnotitia/Qwen3-0.6B --port 8000
 
 # Terminal 2: training on the remaining GPUs
-$ CUDA_VISIBLE_DEVICES=0 python distill.py \
-  --config configs/Distill/qwen3-0.6B-distill-server.yaml
+$ CUDA_VISIBLE_DEVICES=0 python opd.py \
+  --config configs/OPD/qwen3-0.6B-opd-server.yaml
 ```
 
 ## Configuration
@@ -171,21 +171,21 @@ loss is computed on, dark gray for masked/padding tokens.
 
 ## Tuning notes
 
-- Start from `learning_rate: 1e-6` (the RL-scale default). Distillation's dense signal tolerates more than
+- Start from `learning_rate: 1e-6` (the RL-scale default). OPD's dense signal tolerates more than
   RL does, but a too-large step shows up immediately as collapsing `entropy`.
 - Prompts can be reused across epochs far more safely than in RL — the per-token teacher signal keeps
   supervising even on a prompt the student has already seen.
 - If the student is already close to the teacher, the loss starts low; judge progress by the *relative*
   drop, and confirm on held-out prompts rather than on the training curve alone.
 
-To confirm on held-out prompts, `utils/measure-distill-kl.py` measures exactly the training
+To confirm on held-out prompts, `utils/measure-opd-kl.py` measures exactly the training
 objective — the student samples its own completions, and the per-token reverse KL against the teacher is
 averaged over them — on a fixed prompt set and seed. Run it on the base student and on the checkpoint:
 
 ```bash
-$ python utils/measure-distill-kl.py \
+$ python utils/measure-opd-kl.py \
     --student dnotitia/Qwen3-0.6B --teacher dnotitia/Qwen3-1.7B
-$ python utils/measure-distill-kl.py \
+$ python utils/measure-opd-kl.py \
     --student ./my-distilled-checkpoint --tokenizer dnotitia/Qwen3-1.7B \
     --teacher dnotitia/Qwen3-1.7B
 ```

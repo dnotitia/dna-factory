@@ -341,8 +341,8 @@ class TestGenerateAutoOutputDir:
         assert "dpo_claude3.5-sonnet_15k_v3" not in result
         assert "dpo-kmmlu-180k-v2" not in result
 
-    def test_distillation_teacher_model(self):
-        """Test the DISTILL training type and the teacher model abbreviation"""
+    def test_opd_teacher_model(self):
+        """Test the OPD training type and the teacher model abbreviation"""
         model_name = "dnotitia/Qwen3-0.6B"
         user_args = {"teacher_model_name_or_path", "beta", "max_completion_length"}
 
@@ -364,14 +364,11 @@ class TestGenerateAutoOutputDir:
             model_args,
             dataset_mixture_args,
             dnotitia_args,
-            "DISTILL",
+            "OPD",
         )
 
         # The '/' in the teacher id is normalized to '-', as for every other value
-        assert (
-            result
-            == "Qwen3-0.6B-DISTILL.teacher-dnotitia-Qwen3-1.7B.maxcl-512.beta-1.0"
-        )
+        assert result == "Qwen3-0.6B-OPD.teacher-dnotitia-Qwen3-1.7B.maxcl-512.beta-1.0"
 
 
 if __name__ == "__main__":

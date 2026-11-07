@@ -66,7 +66,7 @@ use_vllm: true
 vllm_mode: colocate
 vllm_gpu_memory_utilization: 0.25
 
-# Like RL and on-policy distillation, SDFT uses a much smaller learning rate than SFT
+# Like RL and OPD, SDFT uses a much smaller learning rate than SFT
 learning_rate: 1e-5
 lr_scheduler_type: cosine_with_min_lr
 lr_scheduler_kwargs:
@@ -118,7 +118,7 @@ trust_remote_code: false
 #     # privileged_context_file: path/to/system_prompt.txt   # same, read from a file
 
 ########################################################
-# DNOTITIA SDFT TRAINER ARGUMENTS:
+# DNOTITIA TRAINER ARGUMENTS:
 ########################################################
 # Print debug input values (student prompt, teacher prompt, completion) for the first n batches
 debug_first_n_batches: 3
@@ -127,5 +127,5 @@ debug_first_n_batches: 3
 # formatted by `teacher_prompt_template`); `system` puts it in a system message, as a deployed system prompt.
 teacher_context_placement: user
 
-# Wall-clock checkpointing: see _defaults-Distill.yaml. 0/'off' disables it.
+# Wall-clock checkpointing: see _defaults-OPD.yaml. 0/'off' disables it.
 periodic_save_seconds: 6h

@@ -1039,7 +1039,7 @@ class TestScriptHooks:
             calls.append(kwargs)
             return "unsloth-model"
 
-        for name in ("sft", "dpo", "grpo", "distill"):
+        for name in ("sft", "dpo", "grpo", "opd"):
             monkeypatch.setattr(
                 importlib.import_module(name), "load_unsloth_model", fake, raising=False
             )

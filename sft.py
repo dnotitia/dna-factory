@@ -142,7 +142,6 @@ def postprocess_dataset(dataset, ctx, train_logger):
 SPEC = TrainingSpec(
     name="SFT",
     output_dir_tag="SFT",
-    trainer_type="SFT",
     trainer_module="dna_factory.dnotitia_sft_trainer",
     script_file=__file__,
     defaults_yaml="configs/_defaults-SFT.yaml",

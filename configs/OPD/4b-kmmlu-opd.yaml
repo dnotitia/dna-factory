@@ -1,10 +1,10 @@
 ########################################################
 # SCRIPT ARGUMENTS:
 ########################################################
-run_name: distill-from-32b
+run_name: opd-from-32b
 
 # Same prompts as configs/GRPO/4b-kmmlu-grpo.yaml (KMMLU train, 208522 rows, Redux overlap dropped).
-# distill.py keeps only `prompt`; `solution` etc. are unused — the teacher's per-token distribution
+# opd.py keeps only `prompt`; `solution` etc. are unused — the teacher's per-token distribution
 # is the supervision, not the gold letter.
 dataset_name: dnotitia/kmmlu_grpo_data
 
@@ -40,7 +40,7 @@ vllm_gpu_memory_utilization: 0.3
 model_name_or_path: dnotitia/Qwen3-4B-Thinking-2507  # student
 
 ########################################################
-# DNOTITIA DISTILL TRAINER ARGUMENTS:
+# DNOTITIA TRAINER ARGUMENTS:
 ########################################################
 periodic_save_seconds: 1h
 eval_on_checkpoint: true
