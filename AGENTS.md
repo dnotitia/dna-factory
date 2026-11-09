@@ -24,7 +24,7 @@ python opd.py --config configs/OPD/qwen3-0.6B-opd.yaml
 # shown a per-row `privileged_context` (see docs/sdft.md)
 python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
 
-# Multi-GPU (see accelerate_configs/ for multi_gpu, zero1, zero3, zero3_cpuoffload)
+# Multi-GPU (see accelerate_configs/ for multi_gpu, zero1, zero2, zero3, zero3_cpuoffload)
 accelerate launch --config_file accelerate_configs/zero3.yaml --num_processes 4 \
   sft.py --config configs/SFT/qwen3-0.6B-sft.yaml
 ```
