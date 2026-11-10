@@ -55,12 +55,7 @@ logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-DEFAULT_EVAL_TASKS = (
-    "inspect_evals/mmlu_pro",
-    "inspect_evals/gpqa_diamond",
-    "evals/kmmlu_pro.py",
-    "evals/kmmlu_redux.py",
-)
+DEFAULT_EVAL_TASKS = ("inspect_evals/personality_BFI",)
 
 # Name of the staging directory inside `output_dir`.  The leading underscore keeps
 # it out of `push_to_hub` (which ignores `_*`), and the name does not match
@@ -814,7 +809,7 @@ def build_checkpoint_eval_callback(
             ",".join(sorted(overlap)),
         )
 
-    # The defaults pair two devices with --data-parallel-size 2, so overriding one and
+    # The defaults pair one device with --data-parallel-size 1, so overriding one and
     # not the other is an easy mistake -- and one vLLM would otherwise only report at
     # the first checkpoint, hours in.
     vllm_tokens, _ = split_vllm_args(getattr(dnotitia_args, "eval_vllm_args", "") or "")

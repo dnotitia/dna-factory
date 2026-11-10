@@ -129,23 +129,24 @@ class DnotitiaArguments:
         },
     )
     eval_devices: str = field(
-        default="0,1",
+        default="1",
         metadata={
             "help": (
-                "CUDA_VISIBLE_DEVICES for the eval vLLM server. Two GPUs by default, to "
-                "match the --data-parallel-size 2 in eval_vllm_args: change one and change "
+                "CUDA_VISIBLE_DEVICES for the eval vLLM server. One GPU by default, to "
+                "match the --data-parallel-size 1 in eval_vllm_args: change one and change "
                 "the other. Must not overlap the devices training runs on -- training "
                 "already owns its GPUs, and a server sharing them OOMs the run."
             )
         },
     )
     eval_vllm_args: str = field(
-        default=("--max-model-len 32768 --data-parallel-size 2"),
+        default=("--max-model-len 32768 --data-parallel-size 1"),
         metadata={
             "help": (
                 "Extra flags appended to `vllm serve <checkpoint>` for the eval server. "
-                "Data parallel by default: one full replica per GPU, which is what an eval "
-                "wants (many independent samples) -- use --tensor-parallel-size instead for "
+                "One replica on one GPU by default; to add GPUs, raise --data-parallel-size "
+                "(one full replica per GPU, which is what an eval wants: many independent "
+                "samples) -- use --tensor-parallel-size instead for "
                 "a model too big for one GPU. The parallel sizes must multiply out to the "
                 "number of devices in eval_devices. A --port here pins the port; otherwise "
                 "a free one is picked from 8000 up."

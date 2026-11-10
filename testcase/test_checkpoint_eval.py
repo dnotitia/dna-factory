@@ -179,9 +179,9 @@ class TestVllmArgs:
         assert split_vllm_args(None) == ([], None)
 
     def test_reads_the_default_parallel_sizes(self):
-        """The shipped default pairs --data-parallel-size 2 with two eval_devices."""
-        tokens, _ = split_vllm_args("--max-model-len 32768 --data-parallel-size 2")
-        assert parallel_device_count(tokens) == 2
+        """The shipped default pairs --data-parallel-size 1 with one eval_device."""
+        tokens, _ = split_vllm_args("--max-model-len 32768 --data-parallel-size 1")
+        assert parallel_device_count(tokens) == 1
 
     @pytest.mark.parametrize(
         ("spec", "expected"),

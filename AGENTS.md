@@ -73,9 +73,9 @@ docs/qwen38-flash-next.md (its `ple_host_table` requires `use_peft`).
   `inspect eval`, on rank 0 in a background thread — training never blocks and an eval
   failure is only a warning. `eval_baseline` (default true) also scores the starting
   model at step 0 from `on_train_begin` (skipped on resume) as a baseline. Defaults are ready to use — flipping the switch is the only
-  required change — but `eval_devices` (default `"0,1"`) must not be GPUs training uses,
+  required change — but `eval_devices` (default `"1"`; `"2"` for AsyncGRPO, whose rollout server sits on GPU 1) must not be GPUs training uses,
   and it has to match the parallel sizes in `eval_vllm_args` (default
-  `--data-parallel-size 2`); both are checked at startup. `on_save` hardlinks the checkpoint into
+  `--data-parallel-size 1`); both are checked at startup. `on_save` hardlinks the checkpoint into
   `output_dir/_eval_staging/` first, so `save_total_limit` rotation can't delete it
   mid-eval. Scores go to the live W&B run as `eval/<task>` against an `eval/step` axis
   (`define_metric`), not `log(step=)` — that would be a backwards step and get dropped.

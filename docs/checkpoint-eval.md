@@ -11,7 +11,7 @@ The curve also gets a **step-0 baseline**: as soon as training begins, the start
 ## Configuration
 
 Everything but the switch already has a working default, so turning it on is the whole
-setup — as long as GPUs 0 and 1 are not the ones you train on:
+setup — as long as GPU 1 is not one you train on:
 
 ```bash
 python sft.py --config configs/SFT/qwen3-4bexpr.yaml --eval_on_checkpoint true
@@ -22,22 +22,25 @@ These are the defaults it runs with (`configs/_defaults-*.yaml`):
 ```yaml
 eval_on_checkpoint: false    # master switch — the only one you have to set
 eval_tasks:                  # Inspect registry names, or local task files
-  - inspect_evals/mmlu_pro
-  - inspect_evals/gpqa_diamond
-  - evals/kmmlu_pro.py
-  - evals/kmmlu_redux.py
-eval_devices: "0,1"          # CUDA_VISIBLE_DEVICES for the eval vLLM server
-eval_vllm_args: "--max-model-len 32768 --data-parallel-size 2"
-eval_max_connections: 40     # inspect eval --max-connections
+  - inspect_evals/personality_BFI
+  # - inspect_evals/mmlu_pro
+  # - inspect_evals/gpqa_diamond
+  # - evals/kmmlu_pro.py
+  # - evals/kmmlu_redux.py
+eval_devices: "1"            # CUDA_VISIBLE_DEVICES for the eval vLLM server
+eval_vllm_args: "--max-model-len 32768 --data-parallel-size 1"
+eval_max_connections: 20     # inspect eval --max-connections
 eval_max_tokens: 16000       # inspect eval --max-tokens
 ```
+
+The broader benchmarks stay in the defaults commented out; uncomment them (and see [Cost](#cost)) for a full quality curve. GRPO also has `inspect_evals/math` there and uses `--max-model-len 12480` with `eval_max_tokens: 8192`. AsyncGRPO serves its eval on GPU `"2"`, because its rollout server already sits on GPU 1.
 
 The fields live in `DnotitiaArguments` next to `periodic_save_seconds`, so YAML and CLI override work as everywhere else:
 
 ```bash
 python sft.py --config configs/SFT/qwen3-4bexpr.yaml \
   --eval_on_checkpoint true \
-  --eval_devices 6,7
+  --eval_devices 7
 ```
 
 `eval_baseline` (default `true`, not in the YAML defaults) controls the step-0 baseline; set it to `false` to evaluate checkpoints only.
@@ -51,11 +54,11 @@ All four entry points (`sft.py`, `dpo.py`, `grpo.py`, `opd.py`) get this, becaus
 Per checkpoint, the callback reproduces by hand exactly what used to be done by hand:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 \
+CUDA_VISIBLE_DEVICES=1 \
 vllm serve <output_dir>/_eval_staging/checkpoint-1776 \
   --served-model-name Qwen3-4B-SFT-checkpoint-1776 \
   --port 8000 \
-  --max-model-len 32768 --data-parallel-size 2
+  --max-model-len 32768 --data-parallel-size 1
 
 # then, once /health answers, once per task:
 OPENAI_API_KEY=dna-factory-local \
@@ -63,7 +66,7 @@ inspect eval evals/kmmlu_pro.py \
   --model openai/Qwen3-4B-SFT-checkpoint-1776 \
   --model-base-url http://127.0.0.1:8000/v1 \
   -M responses_api=false \
-  --max-connections 40 --max-tokens 16000 \
+  --max-connections 20 --max-tokens 16000 \
   --log-dir <output_dir>/eval_logs/step-1776/kmmlu_pro
 ```
 
@@ -91,7 +94,7 @@ vllm serve <model_name_or_path> --served-model-name <tag>-checkpoint-0 ...
 Each task becomes one metric, named after the task:
 
 ```
-eval/mmlu_pro   eval/gpqa_diamond   eval/kmmlu_pro   eval/kmmlu_redux
+eval/personality_BFI   (with the commented-out tasks: eval/mmlu_pro   eval/kmmlu_pro ...)
 ```
 
 They are logged against a dedicated `eval/step` x-axis, declared once with `define_metric`:
@@ -110,13 +113,14 @@ The same step is also written as `train/global_step`. A panel or workspace whose
 
 The eval server needs devices of its own. Training already owns its GPUs, and an eval server sharing them is an OOM waiting to happen — several hours in, which is the worst time to find out. So an overlap between `eval_devices` and the training process's `CUDA_VISIBLE_DEVICES` is a loud warning at startup, and an empty `eval_devices` with the switch on is a startup error.
 
-The default is two GPUs, `0,1`, with `--data-parallel-size 2`: one full replica per GPU, round-robining the samples. That is the right shape for an eval, which is many independent requests rather than one large one — use `--tensor-parallel-size` instead when the model doesn't fit on a single GPU. `eval_max_connections` (40) is sized to keep both replicas fed; serving the eval on fewer GPUs is a reason to bring it down too.
+The default is one GPU, `1`, with `--data-parallel-size 1`, and `eval_max_connections` (20) is sized for that single replica. To evaluate faster, add GPUs with `--data-parallel-size`: one full replica per GPU, round-robining the samples. That is the right shape for an eval, which is many independent requests rather than one large one — use `--tensor-parallel-size` instead when the model doesn't fit on a single GPU. More replicas are a reason to raise `eval_max_connections` too, so all of them stay fed.
 
-**`eval_devices` and the parallel sizes have to agree.** vLLM multiplies its parallel dimensions out and expects exactly that many visible devices, so dropping to one eval GPU means dropping `--data-parallel-size` too:
+**`eval_devices` and the parallel sizes have to agree.** vLLM multiplies its parallel dimensions out and expects exactly that many visible devices, so going to two eval GPUs means raising `--data-parallel-size` too:
 
 ```yaml
-eval_devices: "7"
-eval_vllm_args: "--max-model-len 32768"
+eval_devices: "6,7"
+eval_vllm_args: "--max-model-len 32768 --data-parallel-size 2"
+eval_max_connections: 40
 ```
 
 Changing one and not the other is warned about at startup, rather than left for vLLM to reject at the first checkpoint hours later.
@@ -143,4 +147,4 @@ If linking is refused — a staging directory on another filesystem — it falls
 
 ## Cost
 
-Serving is a fresh model load plus CUDA graph capture per checkpoint — minutes before the first sample — and then the tasks themselves. `inspect_evals/mmlu_pro` is ~12k samples; at 6-hour checkpoints, four full tasks per checkpoint is comfortable, but check the first cycle's timings against your interval before assuming it. Cut `eval_tasks` down, or lengthen `periodic_save_seconds`, if the "still evaluating an earlier checkpoint" warning starts showing up.
+Serving is a fresh model load plus CUDA graph capture per checkpoint — minutes before the first sample — and then the tasks themselves. The default `inspect_evals/personality_BFI` is small. If you uncomment the benchmarks, note that `inspect_evals/mmlu_pro` alone is ~12k samples; at 6-hour checkpoints, four full tasks per checkpoint is comfortable, but check the first cycle's timings against your interval before assuming it. Cut `eval_tasks` down, or lengthen `periodic_save_seconds`, if the "still evaluating an earlier checkpoint" warning starts showing up.
