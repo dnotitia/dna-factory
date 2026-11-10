@@ -25,11 +25,12 @@ max_completion_length: 8192  # same as the GRPO run / eval_max_tokens below
 # One completion per prompt (no num_generations), so this is already far more prompts/step than GRPO.
 per_device_train_batch_size: 4
 gradient_accumulation_steps: 4
-num_train_epochs: 1
+num_train_epochs: 5
 max_steps: -1
 
-learning_rate: 1e-6
-warmup_steps: 0.05
+learning_rate: 2e-6
+lr_scheduler_type: constant_with_warmup
+warmup_steps: 100
 
 # Colocated vLLM shares each GPU with the student and the ZeRO-3-sharded 32B teacher.
 vllm_gpu_memory_utilization: 0.3
