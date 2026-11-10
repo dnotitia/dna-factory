@@ -11,7 +11,7 @@ $ source .venv/bin/activate
 
 ```bash
 # SFT / DPO (single GPU)
-python sft.py --config configs/SFT/qwen3-0.6B-sft.yaml
+python sft.py  # defaults only (configs/_defaults-SFT.yaml)
 python dpo.py --config configs/DPO/qwen3-0.6B-dpo.yaml
 
 # GRPO (single GPU); --use_vllm false for the slower HF generate path
@@ -26,7 +26,7 @@ python sdft.py --config configs/SDFT/qwen3-0.6B-sdft.yaml
 
 # Multi-GPU (see accelerate_configs/ for multi_gpu, zero1, zero2, zero3, zero3_cpuoffload)
 accelerate launch --config_file accelerate_configs/zero3.yaml --num_processes 4 \
-  sft.py --config configs/SFT/qwen3-0.6B-sft.yaml
+  sft.py --config configs/SFT/qwen3-0.6B-korean-sft.yaml
 ```
 
 CLI args override YAML. Multi-node flags: see docs/multi-nodes.md.

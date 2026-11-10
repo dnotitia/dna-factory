@@ -86,10 +86,10 @@ $ python sft.py \
   --num_train_epochs 2
 
 $ python sft.py \
-  --config configs/SFT/qwen3-0.6B-sft.yaml
+  --config configs/SFT/qwen3-0.6B-korean-sft.yaml
 
 $ python sft.py \
-  --config configs/SFT/qwen3-0.6B-sft.yaml \
+  --config configs/SFT/qwen3-0.6B-korean-sft.yaml \
   --num_train_epochs 2
 ```
 
@@ -107,7 +107,7 @@ $ accelerate launch \
   --config_file accelerate_configs/zero1.yaml \
   --num_processes 2 \
   sft.py \
-  --config configs/SFT/qwen3-0.6B-sft.yaml
+  --config configs/SFT/qwen3-0.6B-korean-sft.yaml
 ```
 
 ## Multi-Nodes
