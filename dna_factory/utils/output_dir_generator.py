@@ -1,3 +1,9 @@
+import hashlib
+
+_MAX_OUTPUT_DIR_BYTES = 200
+_OUTPUT_DIR_HASH_HEX_LENGTH = 16
+
+
 def generate_auto_output_dir(
     model_name_or_path,
     user_specified_args,
@@ -182,5 +188,15 @@ def generate_auto_output_dir(
         # Fallback if no user args specified
         auto_output_dir = f"{model_name}-{training_type}"
 
-    # Limit the output directory name to 200 characters
-    return auto_output_dir[:200]
+    encoded_name = auto_output_dir.encode("utf-8")
+    if len(encoded_name) <= _MAX_OUTPUT_DIR_BYTES:
+        return auto_output_dir
+
+    # Keep the discarded parameters in a stable fingerprint. Counting bytes
+    # keeps non-ASCII names within the same filesystem component budget.
+    digest = hashlib.sha256(encoded_name).hexdigest()[:_OUTPUT_DIR_HASH_HEX_LENGTH]
+    suffix = f".{digest}"
+    prefix = encoded_name[: _MAX_OUTPUT_DIR_BYTES - len(suffix)].decode(
+        "utf-8", errors="ignore"
+    )
+    return prefix + suffix
