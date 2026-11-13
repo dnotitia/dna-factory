@@ -4,6 +4,7 @@ Test cases for dna_factory/utils/output_dir_generator.py
 This module tests the automatic output directory name generation functionality.
 """
 
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -369,6 +370,90 @@ class TestGenerateAutoOutputDir:
 
         # The '/' in the teacher id is normalized to '-', as for every other value
         assert result == "Qwen3-0.6B-OPD.teacher-dnotitia-Qwen3-1.7B.maxcl-512.beta-1.0"
+
+
+def output_dir_for_run_name(run_name, **overrides):
+    return generate_auto_output_dir(
+        "test/model",
+        {"run_name", *overrides},
+        SimpleNamespace(),
+        SimpleNamespace(run_name=run_name, **overrides),
+        SimpleNamespace(),
+        SimpleNamespace(),
+        SimpleNamespace(),
+        "SFT",
+    )
+
+
+@pytest.mark.parametrize("byte_length", [199, 200, 201])
+def test_output_directory_byte_boundary(byte_length):
+    prefix = "model-SFT.run-"
+    run_name = "a" * (byte_length - len(prefix))
+    result = output_dir_for_run_name(run_name)
+
+    assert len(result.encode("utf-8")) <= 200
+    if byte_length <= 200:
+        assert result == prefix + run_name
+    else:
+        # Shortening must preserve a fingerprint of the complete name.
+        assert result != (prefix + run_name)[:200]
+
+
+@pytest.mark.parametrize("run_name", ["한글실험" * 25, "🚀" * 100])
+def test_long_unicode_name_can_be_created_on_disk(tmp_path, run_name):
+    result = output_dir_for_run_name(run_name)
+    directory = tmp_path / result
+    directory.mkdir()
+
+    assert directory.is_dir()
+    assert len(result.encode("utf-8")) <= 200
+    assert "\ufffd" not in result
+
+
+@pytest.mark.parametrize("character", ["é", "한", "🚀"])
+@pytest.mark.parametrize("padding", range(4))
+def test_shortening_keeps_whole_utf8_characters(character, padding):
+    run_name = "x" * padding + character * 100
+    result = output_dir_for_run_name(run_name)
+    visible_prefix, digest = result.rsplit(".", 1)
+
+    assert len(result.encode("utf-8")) <= 200
+    assert ("model-SFT.run-" + run_name).startswith(visible_prefix)
+    assert len(digest) == 16
+    assert all(char in "0123456789abcdef" for char in digest)
+
+
+def test_shortening_distinguishes_parameters_after_long_common_prefix():
+    run_name = "shared-run-" * 30
+    first = output_dir_for_run_name(run_name, learning_rate=0.001)
+    second = output_dir_for_run_name(run_name, learning_rate=0.002)
+
+    assert first != second
+    assert first.rsplit(".", 1)[0] == second.rsplit(".", 1)[0]
+    assert first == output_dir_for_run_name(run_name, learning_rate=0.001)
+
+
+def test_shortening_is_stable_across_python_processes():
+    expected = output_dir_for_run_name("shared-run-" * 30, learning_rate=0.001)
+    script = (
+        "from types import SimpleNamespace as N; "
+        "from dna_factory.utils.output_dir_generator import generate_auto_output_dir; "
+        "print(generate_auto_output_dir('test/model', {'run_name', 'learning_rate'}, "
+        "N(), N(run_name='shared-run-' * 30, learning_rate=0.001), N(), N(), N(), 'SFT'))"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[1],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.stdout.strip() == expected
+
+
+def test_short_unicode_name_is_unchanged():
+    assert output_dir_for_run_name("한글🚀") == "model-SFT.run-한글🚀"
 
 
 if __name__ == "__main__":

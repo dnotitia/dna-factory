@@ -93,6 +93,13 @@ $ python sft.py \
   --num_train_epochs 2
 ```
 
+With `output_dir: auto`, generated directory names are limited to **200 UTF-8 bytes**.
+Names within this limit are unchanged. Longer names keep a complete Unicode prefix
+and a 16-hex-character SHA-256 suffix of the full generated name, so parameters beyond
+the readable prefix still contribute to the name. Previously truncated names can
+change; to resume a run saved under an older name, set `output_dir` explicitly to
+that existing directory.
+
 ## Multi-GPUs
 
 DDP for speed, DeepSpeed ZeRO to save memory (ZeRO-1 and ZeRO-3 are supported):
