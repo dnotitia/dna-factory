@@ -22,11 +22,10 @@ These are the defaults it runs with (`configs/_defaults-*.yaml`):
 ```yaml
 eval_on_checkpoint: false    # master switch — the only one you have to set
 eval_tasks:                  # Inspect registry names, or local task files
-  - inspect_evals/personality_BFI
   # - inspect_evals/mmlu_pro
   # - inspect_evals/gpqa_diamond
   # - evals/kmmlu_pro.py
-  # - evals/kmmlu_redux.py
+  - evals/kmmlu_redux.py
 eval_devices: "1"            # CUDA_VISIBLE_DEVICES for the eval vLLM server
 eval_vllm_args: "--max-model-len 32768 --data-parallel-size 1"
 eval_max_connections: 20     # inspect eval --max-connections
@@ -94,7 +93,7 @@ vllm serve <model_name_or_path> --served-model-name <tag>-checkpoint-0 ...
 Each task becomes one metric, named after the task:
 
 ```
-eval/personality_BFI   (with the commented-out tasks: eval/mmlu_pro   eval/kmmlu_pro ...)
+eval/kmmlu_redux   (with the commented-out tasks: eval/mmlu_pro   eval/kmmlu_pro ...)
 ```
 
 They are logged against a dedicated `eval/step` x-axis, declared once with `define_metric`:
@@ -147,4 +146,4 @@ If linking is refused — a staging directory on another filesystem — it falls
 
 ## Cost
 
-Serving is a fresh model load plus CUDA graph capture per checkpoint — minutes before the first sample — and then the tasks themselves. The default `inspect_evals/personality_BFI` is small. If you uncomment the benchmarks, note that `inspect_evals/mmlu_pro` alone is ~12k samples; at 6-hour checkpoints, four full tasks per checkpoint is comfortable, but check the first cycle's timings against your interval before assuming it. Cut `eval_tasks` down, or lengthen `periodic_save_seconds`, if the "still evaluating an earlier checkpoint" warning starts showing up.
+Serving is a fresh model load plus CUDA graph capture per checkpoint — minutes before the first sample — and then the tasks themselves. The default `evals/kmmlu_redux.py` is a few thousand samples. If you uncomment the benchmarks, note that `inspect_evals/mmlu_pro` alone is ~12k samples; at 6-hour checkpoints, four full tasks per checkpoint is comfortable, but check the first cycle's timings against your interval before assuming it. Cut `eval_tasks` down, or lengthen `periodic_save_seconds`, if the "still evaluating an earlier checkpoint" warning starts showing up.

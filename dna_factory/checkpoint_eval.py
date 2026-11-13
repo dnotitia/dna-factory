@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-DEFAULT_EVAL_TASKS = ("inspect_evals/personality_BFI",)
+DEFAULT_EVAL_TASKS = ("evals/kmmlu_redux.py",)
 
 # Name of the staging directory inside `output_dir`.  The leading underscore keeps
 # it out of `push_to_hub` (which ignores `_*`), and the name does not match
