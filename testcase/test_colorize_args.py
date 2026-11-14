@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dna_factory.utils.colorize_args import (
     colorize_user_args,
+    find_redundant_args,
     format_args_with_colors,
     parse_user_args,
     parse_yaml_config,
@@ -346,6 +347,70 @@ class TestFormatArgsWithColors:
         assert "42" in result
         assert "True" in result
         assert "None" in result
+
+
+class TestRedundantArgs:
+    """Arguments specified with their default value (issue #31)"""
+
+    def test_equal_values_are_redundant(self):
+        user = {"learning_rate", "max_length", "packing"}
+        user_values = {"learning_rate": 2e-5, "max_length": 512, "packing": True}
+        default_values = {"learning_rate": 2.0e-5, "max_length": 1024, "packing": True}
+
+        assert find_redundant_args(user, user_values, default_values) == {
+            "learning_rate",
+            "packing",
+        }
+
+    def test_nested_values_compare_deeply(self):
+        user = {"lr_scheduler_kwargs", "datasets"}
+        user_values = {
+            "lr_scheduler_kwargs": {"min_lr_rate": 0.1},
+            "datasets": [{"path": "a/b", "split": "train"}],
+        }
+        default_values = {
+            "lr_scheduler_kwargs": {"min_lr_rate": 0.1},
+            "datasets": [{"path": "a/b", "split": "test"}],
+        }
+
+        assert find_redundant_args(user, user_values, default_values) == {
+            "lr_scheduler_kwargs"
+        }
+
+    def test_names_without_a_default_value_are_not_redundant(self):
+        # `config` and nested YAML key paths are user-specified but are not fields
+        user = {"config", "lr_scheduler_kwargs_min_lr_rate", "seed"}
+        user_values = {"seed": 42}
+        default_values = {"seed": 42}
+
+        assert find_redundant_args(user, user_values, default_values) == {"seed"}
+
+    def test_incomparable_values_are_not_redundant(self):
+        class NoTruth:
+            def __eq__(self, other):
+                return self
+
+            def __bool__(self):
+                raise ValueError("ambiguous")
+
+        value = NoTruth()
+        assert find_redundant_args({"x"}, {"x": value}, {"x": value}) == set()
+
+    def test_redundant_lines_are_gray_and_overrides_stay_pink(self):
+        text = "'learning_rate': 2e-05,\n'max_length': 512,\n'seed': 42"
+        result = colorize_user_args(text, {"max_length"}, {"learning_rate"})
+        lines = result.split("\n")
+
+        assert lines[0] == "\033[90m'learning_rate': 2e-05,\033[0m"
+        assert lines[1] == "\033[1;95m'max_length': 512,\033[0m"
+        assert lines[2] == "'seed': 42"
+
+    def test_redundant_args_default_to_none(self):
+        text = "'learning_rate': 2e-05,"
+        assert colorize_user_args(text, set()) == text
+        assert "\033[90m" in format_args_with_colors(
+            {"learning_rate": 2e-5}, set(), {"learning_rate"}
+        )
 
 
 if __name__ == "__main__":
