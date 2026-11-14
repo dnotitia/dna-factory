@@ -25,7 +25,7 @@ def effective(method, defaults):
 def test_training_settings_match_sft_defaults_and_each_other():
     configs = [
         effective("SFT", "SFT"),
-        effective("SamplingSFT", "SFT"),
+        effective("SamplingSFT", "SamplingSFT"),
         effective("SDFT", "SDFT"),
     ]
     defaults = yaml.safe_load((ROOT / "configs/_defaults-SFT.yaml").read_text())
@@ -47,7 +47,7 @@ def test_training_settings_match_sft_defaults_and_each_other():
         assert all(config[key] == defaults[key] for config in configs), key
     assert len({c["model_name_or_path"] for c in configs}) == 1
     assert configs[0]["packing"] is configs[1]["packing"] is False
-    ignored = {"run_name", "datasets"}
+    ignored = {"run_name", "datasets", "dataset_name"}
     assert {k: v for k, v in configs[0].items() if k not in ignored} == {
         k: v for k, v in configs[1].items() if k not in ignored
     }
@@ -62,3 +62,18 @@ def test_sdft_replaces_default_dataset_without_stale_column_mappings():
     assert dataset["columns"] == ["prompt", "privileged_context"]
     assert dataset["prompt_column"] == "prompt"
     assert dataset["privileged_context_column"] == "privileged_context"
+
+
+def test_sampling_defaults_match_sft_except_input_dataset():
+    sft = yaml.safe_load((ROOT / "configs/_defaults-SFT.yaml").read_text())
+    sampling = yaml.safe_load((ROOT / "configs/_defaults-SamplingSFT.yaml").read_text())
+    sft.pop("dataset_name")
+    datasets = sampling.pop("datasets")
+    assert sampling == sft
+    assert datasets == [
+        {
+            "path": "json",
+            "data_files": "data/sampling-sft/sampling_sft.jsonl",
+            "split": "train",
+        }
+    ]

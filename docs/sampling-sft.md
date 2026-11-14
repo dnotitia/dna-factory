@@ -12,8 +12,10 @@ block's refinements. This follows the upstream greedy acceptance rule, not a
 Metropolis–Hastings probability. There is no correctness filter or reward model.
 
 Train ordinary SFT on the resulting question/response pairs. `sampling_sft.py` reuses
-the SFT trainer, model loader, preprocessing, shared runner and `_defaults-SFT.yaml`
-directly: learning rate `2e-5`, cosine scheduler with minimum ratio `0.1`, warmup
+the SFT trainer, model loader, preprocessing and shared runner. Its dedicated
+`configs/_defaults-SamplingSFT.yaml` matches `_defaults-SFT.yaml` for all model and
+training settings; only the input dataset changes to the sampled JSONL file.
+Defaults include learning rate `2e-5`, cosine scheduler with minimum ratio `0.1`, warmup
 `0.05`, two epochs, per-device batch one, accumulation eight, seed 42. No new loss
 or online generation is introduced into the training loop. The original project's
 learning rate `5e-5` and batch 16 are deliberately not adopted.

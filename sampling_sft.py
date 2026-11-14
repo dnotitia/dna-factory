@@ -6,7 +6,7 @@ from dataclasses import replace
 if __name__ == "__main__":
     from dna_factory.unsloth_bootstrap import maybe_import_unsloth
 
-    maybe_import_unsloth(sys.argv[1:], "configs/_defaults-SFT.yaml")
+    maybe_import_unsloth(sys.argv[1:], "configs/_defaults-SamplingSFT.yaml")
 
 from dna_factory.training_runner import cli_main
 from sft import SPEC as SFT_SPEC
@@ -18,6 +18,7 @@ SPEC = replace(
     name="SamplingSFT",
     output_dir_tag="SamplingSFT",
     script_file=__file__,
+    defaults_yaml="configs/_defaults-SamplingSFT.yaml",
 )
 
 if __name__ == "__main__":
