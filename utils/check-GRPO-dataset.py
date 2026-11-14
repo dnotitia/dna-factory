@@ -32,7 +32,12 @@ RESET = "\033[0m"
 
 def load_dataset_any(dataset_name, config_name=None, split="train"):
     """Load a dataset from the Hub or a local directory (mirrors grpo.py)."""
-    if os.path.isdir(dataset_name):
+    # Same rule as `load_dataset_entry` in dna_factory/dnotitia_dataset_mixture.py: only a
+    # `save_to_disk` directory goes through `load_from_disk`.
+    if os.path.isdir(dataset_name) and any(
+        os.path.exists(os.path.join(dataset_name, marker))
+        for marker in ("dataset_dict.json", "state.json")
+    ):
         dataset = load_from_disk(dataset_name)
         if isinstance(dataset, DatasetDict):
             dataset = dataset[split or "train"]

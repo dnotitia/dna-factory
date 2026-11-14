@@ -207,9 +207,8 @@ class TestPerRowContext:
 
 
 def test_loader_passes_data_files_and_reads_a_per_row_column(monkeypatch):
-    import datasets as ds_lib
-
     import sdft
+    from dna_factory import dnotitia_dataset_mixture
 
     seen = {}
 
@@ -222,7 +221,7 @@ def test_loader_passes_data_files_and_reads_a_per_row_column(monkeypatch):
             ]
         )
 
-    monkeypatch.setattr(ds_lib, "load_dataset", fake_load_dataset)
+    monkeypatch.setattr(dnotitia_dataset_mixture, "load_dataset", fake_load_dataset)
     cfg = ContextDatasetMixtureConfig(
         datasets=[{"path": "json", "data_files": "rows.jsonl", "split": "train"}]
     )

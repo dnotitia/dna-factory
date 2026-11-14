@@ -24,8 +24,8 @@ from trl import (
 from dna_factory.dnotitia_arguments import DnotitiaArguments
 from dna_factory.dnotitia_dataset_mixture import (
     WeightedDatasetMixtureConfig,
-    resample_by_weight,
 )
+from dna_factory.dnotitia_dataset_mixture import load_mixture as load_mixture_datasets
 from dna_factory.dnotitia_sft_trainer import DnotitiaSFTTrainer
 from dna_factory.training_runner import (
     TrainingSpec,
@@ -41,49 +41,26 @@ from dna_factory.unsloth_integration import load_unsloth_model
 logger = logging.getLogger(__name__)
 
 
+def _add_empty_thinking(dataset, dataset_config):
+    """Add an empty `thinking` to every message when the `messages` feature lacks it."""
+    # A streaming dataset may not know its nested features (`messages` is then a bare `Json`
+    # feature); `preprocess_thinking_data` already tolerates a missing `thinking`.
+    inner = getattr((dataset.features or {}).get("messages"), "feature", None)
+    if isinstance(inner, dict) and "thinking" not in inner:
+
+        def add_thinking(example):
+            return {
+                "messages": [{**msg, "thinking": ""} for msg in example["messages"]]
+            }
+
+        dataset = dataset.map(add_thinking)
+    return dataset
+
+
 def get_dataset_with_schema_alignment(mixture_config, seed=42):
-    import datasets as ds
-    from datasets import DatasetDict, concatenate_datasets
-
-    datasets_list = []
-    for dataset_config in mixture_config.datasets:
-        logger.info(
-            f"Loading dataset for mixture: {dataset_config.path} (config name: {dataset_config.name})"
-        )
-        dataset = ds.load_dataset(
-            path=dataset_config.path,
-            name=dataset_config.name,
-            split=dataset_config.split,
-        )
-        if dataset_config.columns is not None:
-            dataset = dataset.select_columns(dataset_config.columns)
-
-        # Normalize: add 'thinking' field to messages if missing
-        if "messages" in dataset.features:
-            first_msg_features = dataset.features["messages"].feature
-            if "thinking" not in first_msg_features:
-
-                def add_thinking(example):
-                    return {
-                        "messages": [
-                            {**msg, "thinking": ""} for msg in example["messages"]
-                        ]
-                    }
-
-                dataset = dataset.map(add_thinking)
-
-        # Apply the per-dataset sample weight (size multiplier; 1.0 = no change)
-        weight = getattr(dataset_config, "weight", 1.0)
-        if weight != 1.0:
-            n_before = len(dataset)
-            dataset = resample_by_weight(dataset, weight, seed=seed)
-            logger.info(f"  weight={weight}: {n_before} -> {len(dataset)} examples")
-
-        datasets_list.append(dataset)
-
-    combined = concatenate_datasets(datasets_list)
-    logger.info(f"Created dataset mixture with {len(combined)} examples")
-    return DatasetDict({"train": combined})
+    return load_mixture_datasets(
+        mixture_config, seed=seed, normalize=_add_empty_thinking
+    )
 
 
 def preprocess_thinking_data(example):

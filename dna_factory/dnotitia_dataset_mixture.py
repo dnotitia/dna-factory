@@ -26,9 +26,17 @@ The subsample is seeded so runs are reproducible.
 """
 
 import logging
+import os
 from dataclasses import dataclass, field
 
-from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
+from datasets import (
+    Dataset,
+    DatasetDict,
+    IterableDatasetDict,
+    concatenate_datasets,
+    load_dataset,
+    load_from_disk,
+)
 from trl import DatasetMixtureConfig
 from trl.scripts.utils import DatasetConfig
 
@@ -95,27 +103,58 @@ def resample_by_weight(dataset, weight, seed=42):
     return concatenate_datasets(parts) if len(parts) > 1 else parts[0]
 
 
-def get_weighted_dataset(mixture_config, seed=42):
-    """Load a TRL dataset mixture and apply each entry's size multiplier."""
+def load_dataset_entry(dataset_config, streaming=False):
+    """Load one mixture entry.
+
+    A directory written by `save_to_disk` goes through `load_from_disk`, where only `split`
+    applies (`name`, `data_dir` and `data_files` are not used). Anything else (hub id,
+    builder name such as `json`, or a plain local folder of jsonl/parquet files) goes through
+    `load_dataset`, which honors all of those fields.
+    """
+    path = dataset_config.path
+    if os.path.isdir(path) and any(
+        os.path.exists(os.path.join(path, marker))
+        for marker in ("dataset_dict.json", "state.json")
+    ):
+        dataset = load_from_disk(path)
+        if isinstance(dataset, DatasetDict):
+            dataset = dataset[dataset_config.split or "train"]
+        return dataset.to_iterable_dataset() if streaming else dataset
+    return load_dataset(
+        path=path,
+        name=dataset_config.name,
+        data_dir=dataset_config.data_dir,
+        data_files=dataset_config.data_files,
+        split=dataset_config.split,
+        streaming=streaming,
+    )
+
+
+def load_mixture(mixture_config, seed=42, normalize=None):
+    """Load a TRL dataset mixture into a `DatasetDict`; shared by every entry script.
+
+    Per entry: load, `columns`, optional `normalize(dataset, dataset_config)`, then the size
+    multiplier. Then `fraction`, concatenation and (if set) a `test_split_size` split.
+    """
+    streaming = mixture_config.streaming
+    if streaming and mixture_config.test_split_size is not None:
+        raise ValueError(
+            "Using `test_split_size` is not supported with streaming datasets."
+        )
     datasets_list = []
     for dataset_config in mixture_config.datasets:
         logger.info(
             f"Loading dataset for mixture: {dataset_config.path} "
             f"(config name: {dataset_config.name})"
         )
-        dataset = load_dataset(
-            path=dataset_config.path,
-            name=dataset_config.name,
-            data_dir=dataset_config.data_dir,
-            data_files=dataset_config.data_files,
-            split=dataset_config.split,
-            streaming=mixture_config.streaming,
-        )
+        dataset = load_dataset_entry(dataset_config, streaming=streaming)
         if dataset_config.columns is not None:
             dataset = dataset.select_columns(dataset_config.columns)
-        weight = dataset_config.weight
+        if normalize is not None:
+            dataset = normalize(dataset, dataset_config)
+        weight = getattr(dataset_config, "weight", 1.0)
         if weight != 1.0:
-            if mixture_config.streaming:
+            if streaming:
                 raise ValueError(
                     "Using a dataset `weight` is not supported with streaming datasets."
                 )
@@ -130,7 +169,7 @@ def get_weighted_dataset(mixture_config, seed=42):
             raise ValueError(
                 "`fraction` must be set for either all datasets in the mixture or none of them."
             )
-        if mixture_config.streaming:
+        if streaming:
             raise ValueError(
                 "Using a dataset `fraction` is not supported with streaming datasets."
             )
@@ -147,7 +186,14 @@ def get_weighted_dataset(mixture_config, seed=42):
 
     if not datasets_list:
         raise ValueError("No datasets were loaded from the mixture configuration")
-    combined = concatenate_datasets(datasets_list)
+    try:
+        combined = concatenate_datasets(datasets_list)
+    except Exception as e:
+        raise ValueError(
+            f"Could not align dataset mixture schemas for concatenation ({e}). This usually means two "
+            "datasets define the same column with genuinely incompatible types (not just one of them "
+            "missing it) — check the offending column above."
+        ) from e
     if isinstance(combined, Dataset):
         logger.info(f"Created dataset mixture with {len(combined)} examples")
     if mixture_config.test_split_size is not None:
@@ -156,4 +202,11 @@ def get_weighted_dataset(mixture_config, seed=42):
             f"{mixture_config.test_split_size}"
         )
         return combined.train_test_split(test_size=mixture_config.test_split_size)
+    if streaming:
+        return IterableDatasetDict({"train": combined})
     return DatasetDict({"train": combined})
+
+
+def get_weighted_dataset(mixture_config, seed=42):
+    """Load a TRL dataset mixture and apply each entry's size multiplier (no normalization)."""
+    return load_mixture(mixture_config, seed=seed)
