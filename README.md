@@ -60,7 +60,7 @@ $ source .venv/bin/activate
 $ python sft.py
 ```
 
-Beyond SFT, DPO, GRPO, OPD, and SDFT are also available:
+Beyond SFT, DPO, GRPO, OPD, SDFT, SamplingSFT are also available:
 
 ```bash
 # DPO — preference learning on chosen vs rejected responses.
@@ -74,6 +74,9 @@ $ python opd.py
 
 # SDFT — Self-Distillation Fine-Tuning.
 $ python sdft.py
+
+# Sampling SFT - SFT is Better Than You Think.
+$ python sampling_sft.py
 ```
 
 ## Advanced Usage
