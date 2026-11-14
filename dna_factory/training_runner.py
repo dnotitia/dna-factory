@@ -17,7 +17,7 @@ import os
 import sys
 import tomllib
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Sized
 from dataclasses import dataclass, field
 
 import datasets
@@ -327,7 +327,11 @@ def save_training_results(trainer, train_result, dataset, script_args, training_
     """Save training metrics, model, and related artifacts."""
     # Log and save metrics
     metrics = train_result.metrics
-    metrics["train_samples"] = len(dataset[script_args.dataset_train_split])
+    # A streamed split is an IterableDataset with no `len()`; omit the count instead of crashing
+    # before the final model save.
+    train_split = dataset[script_args.dataset_train_split]
+    if isinstance(train_split, Sized):
+        metrics["train_samples"] = len(train_split)
     # Drop None-valued metrics: TRL reports None for a reward function whose rewards were all
     # NaN/None (e.g. an LLM judge that never produced a parseable score), and
     # `Trainer.log_metrics` crashes formatting None — which would skip the model save below.
