@@ -38,12 +38,16 @@ def test_dpo_applies_per_dataset_weight(monkeypatch):
     assert result["train"]["chosen"] == ["a", "b", "a", "b", "c"]
 
 
-def test_grpo_applies_weight_before_schema_alignment(monkeypatch):
+def test_grpo_applies_per_dataset_weight(monkeypatch):
     sources = {
         "first": datasets.Dataset.from_dict({"prompt": ["a", "b"]}),
         "second": datasets.Dataset.from_dict({"prompt": ["c", "d"]}),
     }
-    monkeypatch.setattr(datasets, "load_dataset", lambda path, **kwargs: sources[path])
+    monkeypatch.setattr(
+        dnotitia_dataset_mixture,
+        "load_dataset",
+        lambda path, **kwargs: sources[path],
+    )
     mixture = grpo.LabeledDatasetMixtureConfig(
         datasets=[
             {"path": "first", "label": "one", "weight": 2.0},

@@ -9,7 +9,6 @@ student generates.
 """
 
 import logging
-import os
 import sys
 
 # unsloth must be imported before trl/transformers/peft, and before the Dnotitia trainers subclass
@@ -29,8 +28,8 @@ from trl import (
 from dna_factory.dnotitia_arguments import DnotitiaArguments
 from dna_factory.dnotitia_dataset_mixture import (
     WeightedDatasetMixtureConfig,
-    resample_by_weight,
 )
+from dna_factory.dnotitia_dataset_mixture import load_mixture as load_mixture_datasets
 from dna_factory.dnotitia_opd_trainer import DnotitiaOPDTrainer
 from dna_factory.training_runner import (
     TrainingSpec,
@@ -84,40 +83,11 @@ def _normalize_dataset_for_opd(dataset):
 
 def get_dataset_with_schema_alignment(mixture_config, seed=42):
     """Load mixture datasets, normalize each to prompt schema, apply weight, and concatenate."""
-    import datasets as ds
-    from datasets import DatasetDict, concatenate_datasets
-
-    datasets_list = []
-    for dataset_config in mixture_config.datasets:
-        path = dataset_config.path
-        logger.info(
-            f"Loading dataset for mixture: {path} (config name: {dataset_config.name})"
-        )
-        if os.path.isdir(path):
-            dataset = ds.load_from_disk(path)
-            if isinstance(dataset, DatasetDict):
-                dataset = dataset[dataset_config.split or "train"]
-        else:
-            dataset = ds.load_dataset(
-                path=path, name=dataset_config.name, split=dataset_config.split
-            )
-
-        if dataset_config.columns is not None:
-            dataset = dataset.select_columns(dataset_config.columns)
-
-        dataset = _normalize_dataset_for_opd(dataset)
-
-        weight = getattr(dataset_config, "weight", 1.0)
-        if weight != 1.0:
-            n_before = len(dataset)
-            dataset = resample_by_weight(dataset, weight, seed=seed)
-            logger.info(f"  weight={weight}: {n_before} -> {len(dataset)} examples")
-
-        datasets_list.append(dataset)
-
-    combined = concatenate_datasets(datasets_list)
-    logger.info(f"Created OPD dataset mixture with {len(combined)} examples")
-    return DatasetDict({"train": combined})
+    return load_mixture_datasets(
+        mixture_config,
+        seed=seed,
+        normalize=lambda dataset, dataset_config: _normalize_dataset_for_opd(dataset),
+    )
 
 
 def setup_training_args(

@@ -8,9 +8,9 @@ that the student does not see, and the student is trained on its own samples to 
 """
 
 import logging
-import os
 from dataclasses import dataclass, field
 
+from datasets import Dataset
 from trl import ModelConfig, ScriptArguments, get_quantization_config
 from trl.experimental.sdft import SDFTConfig
 
@@ -18,8 +18,8 @@ from dna_factory.dnotitia_arguments import DnotitiaArguments
 from dna_factory.dnotitia_dataset_mixture import (
     WeightedDatasetConfig,
     WeightedDatasetMixtureConfig,
-    resample_by_weight,
 )
+from dna_factory.dnotitia_dataset_mixture import load_mixture as load_mixture_datasets
 from dna_factory.dnotitia_sdft_trainer import DnotitiaSDFTTrainer
 from dna_factory.training_runner import (
     TrainingSpec,
@@ -170,62 +170,37 @@ def _resolve_context(dataset_config):
     return dataset_config.privileged_context
 
 
-def get_dataset_with_context(mixture_config, seed=42):
-    """Load mixture datasets, attach each one's privileged context, apply weights, and concatenate."""
-    import datasets as ds
-    from datasets import DatasetDict, concatenate_datasets
-
-    datasets_list = []
-    for dataset_config in mixture_config.datasets:
-        path = dataset_config.path
+def _normalize_entry_for_sdft(dataset, dataset_config):
+    """Resolve the entry's privileged context, bring it to prompt + privileged_context, and log it."""
+    context = _resolve_context(dataset_config)
+    context_column = dataset_config.privileged_context_column
+    per_row = context is None and context_column in dataset.column_names
+    dataset = normalize_dataset_for_sdft(
+        dataset, context, context_column, dataset_config.prompt_column
+    )
+    if context:
         logger.info(
-            f"Loading dataset for mixture: {path} (config name: {dataset_config.name})"
+            f"  privileged context: same text on every row ({len(context)} chars)"
         )
-        if os.path.isdir(path):
-            dataset = ds.load_from_disk(path)
-            if isinstance(dataset, DatasetDict):
-                dataset = dataset[dataset_config.split or "train"]
-        else:
-            dataset = ds.load_dataset(
-                path=path,
-                name=dataset_config.name,
-                data_dir=dataset_config.data_dir,
-                data_files=dataset_config.data_files,
-                split=dataset_config.split,
-            )
-
-        if dataset_config.columns is not None:
-            dataset = dataset.select_columns(dataset_config.columns)
-
-        context = _resolve_context(dataset_config)
-        context_column = dataset_config.privileged_context_column
-        per_row = context is None and context_column in dataset.column_names
-        dataset = normalize_dataset_for_sdft(
-            dataset, context, context_column, dataset_config.prompt_column
-        )
-        if context:
-            logger.info(
-                f"  privileged context: same text on every row ({len(context)} chars)"
-            )
-        elif per_row:
+    elif per_row:
+        if isinstance(dataset, Dataset):  # counting rows needs a materialized dataset
             n_empty = sum(1 for c in dataset["privileged_context"] if not c.strip())
             logger.info(
                 f"  privileged context: per row from column `{context_column}` "
                 f"({n_empty}/{len(dataset)} rows empty = anchor rows)"
             )
         else:
-            logger.info("  privileged context: none (anchor rows)")
+            logger.info(f"  privileged context: per row from column `{context_column}`")
+    else:
+        logger.info("  privileged context: none (anchor rows)")
+    return dataset
 
-        weight = dataset_config.weight
-        if weight != 1.0:
-            n_before = len(dataset)
-            dataset = resample_by_weight(dataset, weight, seed=seed)
-            logger.info(f"  weight={weight}: {n_before} -> {len(dataset)} examples")
-        datasets_list.append(dataset)
 
-    combined = concatenate_datasets(datasets_list)
-    logger.info(f"Created SDFT dataset mixture with {len(combined)} examples")
-    return DatasetDict({"train": combined})
+def get_dataset_with_context(mixture_config, seed=42):
+    """Load mixture datasets, attach each one's privileged context, apply weights, and concatenate."""
+    return load_mixture_datasets(
+        mixture_config, seed=seed, normalize=_normalize_entry_for_sdft
+    )
 
 
 def setup_training_args(
