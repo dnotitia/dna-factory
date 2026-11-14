@@ -213,62 +213,26 @@ def print_environment_and_arguments(
     user_specified_args,
 ):
     """Print OS environment variables and all parsed arguments in a formatted way."""
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
+    separator = "-" * 90
+    _logger.info(separator)
     _logger.info(" OS ENVIRONMENT VARIABLES:")
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
+    _logger.info(separator)
     _logger.info(format_logs_with_colors("CUDA_VISIBLE_DEVICES"))
     _logger.info(format_logs_with_colors("WORLD_SIZE"))
     _logger.info(format_logs_with_colors("RANK"))
     _logger.info(format_logs_with_colors("LOCAL_RANK"))
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
-    _logger.info(" SCRIPT ARGUMENTS:")
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
-    _logger.info(format_args_with_colors(vars(script_args), user_specified_args))
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
-    _logger.info(" TRAINING ARGUMENTS:")
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
-    _logger.info(format_args_with_colors(vars(training_args), user_specified_args))
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
-    _logger.info(" MODEL ARGUMENTS:")
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
-    _logger.info(format_args_with_colors(vars(model_args), user_specified_args))
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
-    _logger.info(" DATASET MIXTURE ARGUMENTS:")
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
-    _logger.info(
-        format_args_with_colors(vars(dataset_mixture_args), user_specified_args)
-    )
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
-    _logger.info(" DNOTITIA TRAINER ARGUMENTS:")
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
-    _logger.info(format_args_with_colors(vars(dnotitia_args), user_specified_args))
-    _logger.info(
-        "------------------------------------------------------------------------------------------"
-    )
+    for title, args in [
+        (" SCRIPT ARGUMENTS:", vars(script_args)),
+        (" TRAINING ARGUMENTS:", vars(training_args)),
+        (" MODEL ARGUMENTS:", vars(model_args)),
+        (" DATASET MIXTURE ARGUMENTS:", vars(dataset_mixture_args)),
+        (" DNOTITIA TRAINER ARGUMENTS:", vars(dnotitia_args)),
+    ]:
+        _logger.info(separator)
+        _logger.info(title)
+        _logger.info(separator)
+        _logger.info(format_args_with_colors(args, user_specified_args))
+    _logger.info(separator)
     _logger.info("")
 
 
