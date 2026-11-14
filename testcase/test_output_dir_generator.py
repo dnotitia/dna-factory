@@ -253,6 +253,49 @@ class TestGenerateAutoOutputDir:
 
         assert "dimensions-256-512" in result
 
+    @staticmethod
+    def _sft_name(user_args, **training_values):
+        return generate_auto_output_dir(
+            "test/model",
+            user_args,
+            SimpleNamespace(),
+            SimpleNamespace(**training_values),
+            SimpleNamespace(),
+            SimpleNamespace(),
+            SimpleNamespace(),
+            "SFT",
+        )
+
+    def test_cli_and_yaml_numbers_give_same_name(self):
+        """argparse yields 2.0 for a float field, YAML keeps int 2: same directory"""
+        user_args = {"num_train_epochs", "save_steps", "learning_rate"}
+
+        from_cli = self._sft_name(
+            user_args, num_train_epochs=2.0, save_steps=100.0, learning_rate=2e-05
+        )
+        from_yaml = self._sft_name(
+            user_args, num_train_epochs=2, save_steps=100, learning_rate=2e-05
+        )
+
+        assert from_cli == from_yaml
+        assert from_cli == "model-SFT.ep-2.lr-2e-05.save_steps-100"
+
+    def test_non_integral_floats_unchanged(self):
+        """Fractions and scientific notation keep their usual spelling"""
+        user_args = {"weight_decay", "learning_rate", "temperature"}
+
+        result = self._sft_name(
+            user_args, weight_decay=0.05, learning_rate=1e-06, temperature=0.7
+        )
+
+        assert result == "model-SFT.temp-0.7.lr-1e-06.weight_decay-0.05"
+
+    def test_bool_not_written_as_integer(self):
+        """bool is an int subclass; it must still be spelled true/false"""
+        result = self._sft_name({"packing", "use_vllm"}, packing=True, use_vllm=False)
+
+        assert result == "model-SFT.pack-true.vllm-false"
+
     def test_complex_output_dir_name(self):
         """Test generating a complex output directory name with many parameters"""
         model_name = "HuggingFace/Qwen3-0.6B"
@@ -368,7 +411,7 @@ class TestGenerateAutoOutputDir:
         )
 
         # The '/' in the teacher id is normalized to '-', as for every other value
-        assert result == "Qwen3-0.6B-OPD.teacher-dnotitia-Qwen3-1.7B.maxcl-512.beta-1.0"
+        assert result == "Qwen3-0.6B-OPD.teacher-dnotitia-Qwen3-1.7B.maxcl-512.beta-1"
 
 
 if __name__ == "__main__":
