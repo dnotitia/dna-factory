@@ -1,3 +1,25 @@
+def _format_value(value):
+    """Spell a parameter value for the directory name.
+
+    A whole-number float is written as an integer, so a value parsed from the CLI
+    (e.g. ``2.0`` for a float field) and the same value from YAML (``2``) give the
+    same name.
+    """
+    if isinstance(value, (list, tuple)):
+        value_str = "-".join(str(v) for v in value)
+    elif isinstance(value, bool):
+        value_str = str(value).lower()
+    elif value is None:
+        value_str = "none"
+    elif isinstance(value, float) and value.is_integer():
+        value_str = str(int(value))
+    else:
+        value_str = str(value)
+
+    # Clean the value string (remove special characters, spaces, but preserve underscores)
+    return value_str.replace("/", "-").replace(" ", "-")
+
+
 def generate_auto_output_dir(
     model_name_or_path,
     user_specified_args,
@@ -69,11 +91,11 @@ def generate_auto_output_dir(
 
     # Get all argument dictionaries
     all_args = [
-        ("script", vars(script_args)),
-        ("training", vars(training_args)),
-        ("model", vars(model_args)),
-        ("dataset", vars(dataset_mixture_args)),
-        ("dnotitia", vars(dnotitia_args)),
+        vars(script_args),
+        vars(training_args),
+        vars(model_args),
+        vars(dataset_mixture_args),
+        vars(dnotitia_args),
     ]
 
     # Arguments that never belong in the name: the name itself, the model (it is
@@ -98,7 +120,7 @@ def generate_auto_output_dir(
 
     # Create a unified dictionary of all user-specified arguments
     user_args_dict = {}
-    for _, args_dict in all_args:
+    for args_dict in all_args:
         for arg_name, arg_value in args_dict.items():
             if arg_name in user_specified_args and arg_name not in EXCLUDED_PARAMS:
                 user_args_dict[arg_name] = arg_value
@@ -107,7 +129,7 @@ def generate_auto_output_dir(
     auto_dir_parts = []
 
     # First, add parameters in the order they appear in PARAM_ABBREVIATIONS
-    for arg_name in PARAM_ABBREVIATIONS:
+    for arg_name, abbreviation in PARAM_ABBREVIATIONS.items():
         if arg_name in user_args_dict:
             arg_value = user_args_dict[arg_name]
 
@@ -138,41 +160,13 @@ def generate_auto_output_dir(
                         auto_dir_parts.append(f"{arg_name}-{dataset_count}ea")
                 continue
 
-            # Convert value to string and handle special cases
-            if isinstance(arg_value, (list, tuple)):
-                value_str = "-".join(str(v) for v in arg_value)
-            elif isinstance(arg_value, bool):
-                value_str = str(arg_value).lower()
-            elif arg_value is None:
-                value_str = "none"
-            else:
-                value_str = str(arg_value)
-
-            # Clean the value string (remove special characters, spaces, but preserve underscores)
-            value_str = value_str.replace("/", "-").replace(" ", "-")
-
-            # Use abbreviation if available, otherwise use full parameter name
-            param_name = PARAM_ABBREVIATIONS.get(arg_name, arg_name)
-            auto_dir_parts.append(f"{param_name}-{value_str}")
+            auto_dir_parts.append(f"{abbreviation}-{_format_value(arg_value)}")
 
     # Then, add any remaining user-specified parameters that are not in PARAM_ABBREVIATIONS
     for arg_name, arg_value in user_args_dict.items():
         if arg_name not in PARAM_ABBREVIATIONS:
-            # Convert value to string and handle special cases
-            if isinstance(arg_value, (list, tuple)):
-                value_str = "-".join(str(v) for v in arg_value)
-            elif isinstance(arg_value, bool):
-                value_str = str(arg_value).lower()
-            elif arg_value is None:
-                value_str = "none"
-            else:
-                value_str = str(arg_value)
-
-            # Clean the value string (remove special characters, spaces, but preserve underscores)
-            value_str = value_str.replace("/", "-").replace(" ", "-")
-
             # Use full parameter name
-            auto_dir_parts.append(f"{arg_name}-{value_str}")
+            auto_dir_parts.append(f"{arg_name}-{_format_value(arg_value)}")
 
     # Generate the auto directory name starting with model name
     # Use '.' as delimiter between parameters
