@@ -46,6 +46,7 @@ context the student never sees, acts as its own teacher.
 1. **Auto-generated output directory** from the model name and CLI args (e.g. `Qwen3-0.6B-SFT-num_train_epochs-2-...`).
 1. **Commented default YAMLs** (`configs/_defaults-*.yaml`), overridable by custom YAML or CLI args.
 1. **Ready-made accelerate configs** for DDP and DeepSpeed ZeRO-1/3 (+ CPU offload).
+1. **Automatic ZeRO selection** for fresh single-node runs — start with ZeRO-1 and retry with ZeRO-3 on startup CUDA OOM, keeping training hyperparameters unchanged; see [docs/auto-zero.md](docs/auto-zero.md).
 1. **Flexible checkpoint interval** — save on a wall-clock schedule (e.g. `6h`) instead of a step count.
 1. **Benchmarks on every checkpoint** — each checkpoint is served with vLLM on a spare GPU, scored with Inspect, and logged to the same W&B run, so eval curves land next to the loss curve while training keeps running; see [docs/checkpoint-eval.md](docs/checkpoint-eval.md).
 
@@ -59,7 +60,7 @@ $ source .venv/bin/activate
 $ python sft.py
 ```
 
-Beyond SFT, DPO, GRPO, OPD, and SDFT are also available:
+Beyond SFT, DPO, GRPO, OPD, SDFT, SamplingSFT are also available:
 
 ```bash
 # DPO — preference learning on chosen vs rejected responses.
@@ -73,6 +74,9 @@ $ python opd.py
 
 # SDFT — Self-Distillation Fine-Tuning.
 $ python sdft.py
+
+# Sampling SFT - SFT is Better Than You Think.
+$ python sampling_sft.py
 ```
 
 ## Advanced Usage
@@ -109,6 +113,49 @@ $ accelerate launch \
   sft.py \
   --config configs/SFT/qwen3-0.6B-korean-sft.yaml
 ```
+
+### Automatic ZeRO Selection
+
+Use `launch.py --zero auto` to choose between ZeRO-1 and ZeRO-3 for a fresh single-node
+training run. The launcher starts with ZeRO-1 to avoid the communication cost of
+parameter sharding. If training raises a CUDA out-of-memory error **before any rank
+completes its first optimizer step**, it stops the workers and retries once with
+ZeRO-3. Selection uses the actual training attempt rather than a memory estimate;
+ZeRO-1 is not guaranteed to be the fastest option for every workload.
+
+```bash
+# SFT
+python launch.py --zero auto --num-processes 4 \
+  sft.py --config configs/SFT/qwen3-0.6B-korean-sft.yaml
+
+# Sampling SFT (prepare the sampled dataset first; see docs/sampling-sft.md)
+python launch.py --zero auto --num-processes 4 \
+  sampling_sft.py --config configs/SamplingSFT/qwen3-0.6B-sampling-comparison.yaml
+
+# Preview candidate commands without starting training
+python launch.py --zero auto --num-processes 4 --dry-run \
+  sft.py --config configs/SFT/qwen3-0.6B-korean-sft.yaml
+
+# Select a fixed stage without automatic fallback
+python launch.py --zero 3 --num-processes 4 \
+  sft.py --config configs/SFT/qwen3-0.6B-korean-sft.yaml
+```
+
+Run these commands from the repository root. Put launcher options before the script
+name and training options after it. Learning rate, batch size, gradient accumulation,
+seed and other training arguments stay unchanged during fallback. The launcher supports
+SFT, Sampling SFT, SDFT, DPO, synchronous GRPO and OPD. Qwen3 MoE and Qwen3.5 MoE
+start directly with their dedicated ZeRO-3 configs.
+
+Automatic selection is limited to fresh single-node runs. Checkpoint resume requires
+an explicit stage matching the checkpoint. OOM after a completed optimizer step,
+non-CUDA failures and ZeRO-3 OOM stop the job without another retry; CPU offload is
+not selected automatically. Unsloth and AsyncGRPO use their existing launch paths.
+Failed attempts may leave logs and W&B runs. Use `CUDA_VISIBLE_DEVICES` to select
+training GPUs, keeping checkpoint-evaluation GPUs separate.
+
+`auto` is a DNA Factory launcher option, not an Accelerate YAML `zero_stage` value.
+See [automatic ZeRO selection](docs/auto-zero.md) for full behavior and limitations.
 
 ## Multi-Nodes
 

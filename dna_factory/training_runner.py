@@ -30,10 +30,15 @@ from transformers import (
     AutoTokenizer,
     set_seed,
 )
-from transformers.trainer_callback import PrinterCallback, ProgressCallback
+from transformers.trainer_callback import (
+    PrinterCallback,
+    ProgressCallback,
+    TrainerCallback,
+)
 from transformers.trainer_utils import get_last_checkpoint
 from trl import TrlParser, get_peft_config, get_quantization_config
 
+from dna_factory.auto_zero import STATUS_ENV, is_cuda_oom, signal_status
 from dna_factory.checkpoint_eval import build_checkpoint_eval_callback
 from dna_factory.periodic_checkpoint import (
     PeriodicCheckpointCallback,
@@ -51,6 +56,20 @@ from dna_factory.utils.config_merger import merge_config_files
 from dna_factory.utils.output_dir_generator import generate_auto_output_dir
 
 logger = logging.getLogger(__name__)
+
+
+class AutoZeroProgressCallback(TrainerCallback):
+    """Never restart a run after any rank has completed an optimizer step."""
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        if state.global_step > 0:
+            signal_status("progress")
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if not getattr(self, "_marked", False):
+            signal_status("progress")
+            self._marked = True
+
 
 # accelerate's `gather` (called by TRL every step) still uses this deprecated torch
 # collective; filter mutations elsewhere reset the once-per-location registry, so
@@ -510,6 +529,13 @@ def run_training(
     last_checkpoint = None
     if os.path.isdir(training_args.output_dir):
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
+    if os.environ.get(STATUS_ENV) and (
+        last_checkpoint is not None or training_args.resume_from_checkpoint
+    ):
+        raise ValueError(
+            "Automatic ZeRO selection cannot resume an existing checkpoint; "
+            "launch with the checkpoint's original --zero stage explicitly."
+        )
     if last_checkpoint is not None and training_args.resume_from_checkpoint is None:
         train_logger.info(
             f"Checkpoint detected, resuming training at {last_checkpoint=}."
@@ -580,6 +606,8 @@ def run_training(
     except ValueError as e:
         raise ValueError(f"Invalid `periodic_save_seconds` value: {e}") from e
     callbacks = []
+    if os.environ.get(STATUS_ENV):
+        callbacks.append(AutoZeroProgressCallback())
     if periodic_seconds > 0:
         train_logger.info(
             f"Enabling wall-clock checkpointing every {periodic_seconds:g}s "
@@ -702,12 +730,17 @@ def cli_main(spec, argv=None):
             )
 
     # Run the main function
-    return run_training(
-        spec,
-        script_args,
-        training_args,
-        model_args,
-        dataset_mixture_args,
-        dnotitia_args,
-        user_specified_args,
-    )
+    try:
+        return run_training(
+            spec,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            user_specified_args,
+        )
+    except Exception as error:
+        if is_cuda_oom(error):
+            signal_status("oom")
+        raise

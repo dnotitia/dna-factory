@@ -1,0 +1,24 @@
+# Matched comparison: shared optimization settings follow _defaults-SFT.yaml.
+model_name_or_path: dnotitia/Qwen3-0.6B
+seed: 42
+learning_rate: 2e-5
+lr_scheduler_type: cosine_with_min_lr
+lr_scheduler_kwargs:
+  min_lr_rate: 0.1
+warmup_steps: 0.05
+num_train_epochs: 2
+max_steps: -1
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+bf16: true
+tf32: false
+gradient_checkpointing: true
+attn_implementation: kernels-community/flash-attn2
+# Packing changes rows per optimizer update; disable for the matched comparison.
+run_name: qwen3-0.6B-sampling_sft-comparison
+max_length: 1024
+packing: false
+datasets:
+  - path: json
+    data_files: data/sampling-sft/sampling_sft.jsonl
+    split: train
