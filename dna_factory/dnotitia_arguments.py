@@ -166,6 +166,33 @@ class DnotitiaArguments:
         default=16000,
         metadata={"help": "`inspect eval --max-tokens`: generation cap per sample."},
     )
+    measure_serving_perf: bool = field(
+        default=False,
+        metadata={
+            "help": (
+                "With eval_on_checkpoint, also probe the idle eval vLLM server for serving "
+                "performance (TTFT and output throughput) just before the Inspect tasks, "
+                "and log it as eval/perf/*. A relative regression signal from a fixed "
+                "workload, not an SLA number. See perf_once below."
+            )
+        },
+    )
+    perf_once: bool = field(
+        default=True,
+        metadata={
+            "help": (
+                "Measure serving performance only on the first evaluation instead of every "
+                "checkpoint. Plain decode speed does not depend on the weights, so one "
+                "measurement is enough; set this false only when the serving config makes "
+                "speed depend on training, i.e. speculative decoding / MTP, where the "
+                "draft acceptance rate rises as the model trains."
+            )
+        },
+    )
+    perf_concurrency: int = field(
+        default=8,
+        metadata={"help": "Serving-perf probe: number of concurrent requests."},
+    )
     ple_host_table: str | None = field(
         default=None,
         metadata={

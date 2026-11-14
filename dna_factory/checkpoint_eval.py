@@ -35,6 +35,7 @@ docs/checkpoint-eval.md.
 
 import atexit
 import fnmatch
+import json
 import logging
 import os
 import re
@@ -42,9 +43,11 @@ import shlex
 import shutil
 import signal
 import socket
+import statistics
 import subprocess
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
@@ -358,6 +361,98 @@ def read_eval_score(log_dir):
     return extract_score(read_eval_log(infos[0], header_only=True))
 
 
+def _percentile(sorted_values, q):
+    """The q-th percentile (0-100) of an already-sorted, non-empty list."""
+    if len(sorted_values) == 1:
+        return sorted_values[0]
+    return statistics.quantiles(sorted_values, n=100)[q - 1]
+
+
+def _stream_one_request(base_url, model, prompt, max_tokens, timeout):
+    """Stream one chat completion; return (ttft_s, output_tokens) or None.
+
+    TTFT is the time to the first content chunk; output_tokens prefers the server's
+    own `usage.completion_tokens` and falls back to counting content deltas.
+    """
+    url = base_url.rstrip("/") + "/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        "temperature": 0.0,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+    start = time.perf_counter()
+    ttft = None
+    usage_tokens = None
+    delta_count = 0
+    with requests.post(url, json=payload, stream=True, timeout=timeout) as response:
+        response.raise_for_status()
+        for line in response.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data: "):
+                continue
+            data = line[len("data: ") :]
+            if data == "[DONE]":
+                break
+            chunk = json.loads(data)
+            choices = chunk.get("choices") or []
+            if choices and choices[0].get("delta", {}).get("content"):
+                if ttft is None:
+                    ttft = time.perf_counter() - start
+                delta_count += 1
+            if chunk.get("usage"):
+                usage_tokens = chunk["usage"].get("completion_tokens")
+    if ttft is None:
+        return None
+    return ttft, (usage_tokens if usage_tokens is not None else delta_count)
+
+
+def measure_serving_perf(
+    base_url,
+    model,
+    concurrency=8,
+    num_requests=32,
+    input_len=512,
+    output_len=128,
+    timeout=300,
+):
+    """Probe an OpenAI-compatible server for a fixed-workload serving-perf snapshot.
+
+    Returns `eval/perf/ttft_p50_ms` and `eval/perf/output_throughput_tok_s` (plus a
+    `failures` count). This is a relative regression signal for the same workload across
+    checkpoints, not a production benchmark. Uses only `requests`; TTFT comes from the
+    first streamed content chunk.
+    """
+    # A fixed, deterministic prompt of roughly `input_len` tokens (~0.75 word/token).
+    filler = ("benchmark " * max(1, int(input_len / 0.75))).strip()
+    prompt = f"Repeat and continue the following text.\n{filler}"
+
+    def run(_):
+        # A single failed request counts as a failure, not a crash of the whole probe.
+        try:
+            return _stream_one_request(base_url, model, prompt, output_len, timeout)
+        except Exception:  # noqa: BLE001
+            return None
+
+    wall_start = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        results = list(pool.map(run, range(num_requests)))
+    wall = time.perf_counter() - wall_start
+
+    ok = [r for r in results if r is not None]
+    if not ok:
+        return {"eval/perf/failures": num_requests}
+
+    ttfts = sorted(r[0] for r in ok)
+    total_out = sum(r[1] for r in ok)
+    return {
+        "eval/perf/ttft_p50_ms": _percentile(ttfts, 50) * 1000,
+        "eval/perf/output_throughput_tok_s": total_out / wall if wall > 0 else 0.0,
+        "eval/perf/failures": num_requests - len(ok),
+    }
+
+
 class VllmEvalServer:
     """A `vllm serve` subprocess pinned to the eval GPUs.
 
@@ -463,6 +558,9 @@ class CheckpointEvalCallback(TrainerCallback):
         max_tokens=16000,
         model_tag="model",
         base_model=None,
+        measure_perf=False,
+        perf_once=True,
+        perf_concurrency=8,
         repo_root=REPO_ROOT,
         train_logger=None,
     ):
@@ -472,6 +570,10 @@ class CheckpointEvalCallback(TrainerCallback):
         self.max_connections = max_connections
         self.max_tokens = max_tokens
         self.model_tag = model_tag
+        self.measure_perf = measure_perf
+        self.perf_once = perf_once
+        self.perf_concurrency = perf_concurrency
+        self._perf_measured = False
         # The model training starts from, scored as step 0 by `on_train_begin`;
         # `None` skips the baseline.
         self.base_model = base_model
@@ -633,6 +735,31 @@ class CheckpointEvalCallback(TrainerCallback):
             server.wait_until_ready()
 
             metrics = {}
+
+            # Serving-performance probe, while the server is idle and before the Inspect
+            # tasks saturate it. With perf_once (the default) it runs only on the first
+            # evaluation, since plain decode speed does not depend on the weights; set
+            # perf_once false for speculative decoding / MTP, where acceptance rate (and
+            # so throughput) changes as the model trains. Never fails the eval.
+            if self.measure_perf and not (self.perf_once and self._perf_measured):
+                try:
+                    perf = measure_serving_perf(
+                        server.base_url,
+                        served_name,
+                        concurrency=self.perf_concurrency,
+                    )
+                    metrics.update(perf)
+                    self._perf_measured = True
+                    self.logger.info(
+                        "Checkpoint eval: step %d serving perf %s", global_step, perf
+                    )
+                except Exception as error:  # noqa: BLE001 - perf must never fail eval
+                    self.logger.warning(
+                        "Checkpoint eval: serving-perf probe failed at step %d: %s",
+                        global_step,
+                        error,
+                    )
+
             for task in self.tasks:
                 name = derive_task_name(task)
                 try:
@@ -844,6 +971,9 @@ def build_checkpoint_eval_callback(
             if getattr(dnotitia_args, "eval_baseline", True)
             else None
         ),
+        measure_perf=getattr(dnotitia_args, "measure_serving_perf", False),
+        perf_once=getattr(dnotitia_args, "perf_once", True),
+        perf_concurrency=getattr(dnotitia_args, "perf_concurrency", 8),
         train_logger=train_logger,
     )
     train_logger.info(
