@@ -1039,21 +1039,11 @@ class TestScriptHooks:
             calls.append(kwargs)
             return "unsloth-model"
 
-        for name in ("sft", "dpo", "grpo", "opd"):
+        for name in ("sft", "grpo", "opd"):
             monkeypatch.setattr(
                 importlib.import_module(name), "load_unsloth_model", fake, raising=False
             )
         return calls
-
-    def test_dpo_lora_uses_adapter_reference(self, model_args, fake_loader):
-        import dpo
-
-        model_args.use_peft = True
-        ctx = {"use_unsloth": True, "unsloth_model_type": "qwen3"}
-        out = dpo.load_models(
-            None, trl.DPOConfig(output_dir="x", bf16=False), model_args, None, ctx, None
-        )
-        assert out == {"model": "unsloth-model", "ref_model": None}
 
     def test_grpo_moe_router_aux_loss_rejected(
         self, model_args, grpo_args, fake_loader

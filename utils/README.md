@@ -1,6 +1,6 @@
 # Utils
 
-Dataset validation/conversion for SFT and DPO, a vLLM compatibility check for GRPO, and a held-out reverse-KL probe for OPD (on-policy distillation).
+Dataset validation/conversion for SFT, a vLLM compatibility check for GRPO, and a held-out reverse-KL probe for OPD (on-policy distillation).
 
 ## check-SFT-dataset.py
 
@@ -18,22 +18,6 @@ Conversion types:
 
 - `type1`: source `messages` (role/content). Extracts `<think>...</think>` into `thinking`, strips `<answer>` tags, removes `/think`/`/no_think` suffixes from prompts.
 - `type2`: source `conversations` (ShareGPT from/value). Same cleanup as type1, plus `from`→`role`, `value`→`content`.
-
-## check-DPO-dataset.py
-
-Target format: `{chosen: [...], rejected: [...]}` — both start with the same user message, assistant responses differ.
-
-```bash
-# Validate
-python check-DPO-dataset.py <dataset_name>
-
-# Convert legacy format and upload to Hub (requires `huggingface-cli login`)
-python check-DPO-dataset.py <source_dataset> <target_dataset> <type>
-```
-
-Conversion types:
-
-- `type1`: source `{prompt, chosen, rejected}` (plain strings) → message-based format.
 
 ## check-GRPO-dataset.py
 

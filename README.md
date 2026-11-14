@@ -6,8 +6,8 @@
 *"It Just Works!"*
 
 A lightweight, opinionated stack for LLM Post-Training on Hugging Face TRL + DeepSpeed.
-Five trainers share one setup/train/save path: **SFT** on instruction or conversation data,
-**DPO** on chosen vs rejected pairs, **GRPO** as online RL scored by reward functions,
+Four trainers share one setup/train/save path: **SFT** on instruction or conversation data,
+**GRPO** as online RL scored by reward functions,
 **OPD** (On-Policy Distillation) where a frozen teacher grades the student's own tokens,
 and **SDFT** (Self-Distillation Fine-Tuning) where the model itself, shown a privileged
 context the student never sees, acts as its own teacher.
@@ -23,6 +23,7 @@ context the student never sees, acts as its own teacher.
 
 # News
 
+- Nov/14/2026 - **DPO** support removed to keep the codebase lean (SFT, GRPO, OPD and SDFT cover the training workflows). If you rely on `dpo.py`, pin [v2.7.0](https://github.com/dnotitia/dna-factory/releases/tag/v2.7.0), the last release that ships it.
 - Nov/03/2026 - **SDFT** (Self-Distillation Fine-Tuning) support.
 - Oct/23/2026 - **Qwen3.8-Flash-Next** LoRA SFT support.
 - Oct/12/2026 - Optional **unsloth** backend (single GPU) for SFT, DPO, GRPO and OPD.
@@ -59,12 +60,9 @@ $ source .venv/bin/activate
 $ python sft.py
 ```
 
-Beyond SFT, DPO, GRPO, OPD, and SDFT are also available:
+Beyond SFT, GRPO, OPD, and SDFT are also available:
 
 ```bash
-# DPO — preference learning on chosen vs rejected responses.
-$ python dpo.py
-
 # GRPO — online RL: generate completions and score them with reward functions.
 $ python grpo.py
 
