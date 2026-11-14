@@ -50,12 +50,15 @@ def generate_auto_output_dir(
         "use_vllm": "vllm",
         "vllm_mode": "vmode",
         "num_train_epochs": "ep",
+        "max_steps": "iters",
         "per_device_train_batch_size": "bs",
         "gradient_accumulation_steps": "steps",
         "learning_rate": "lr",
+        "warmup_steps": "warmup",
         "gradient_checkpointing": "gc",
         "use_liger_kernel": "liger",
         "debug_first_n_batches": "debug",
+        "seed": "seed",
     }
 
     # Extract model name from model_name_or_path

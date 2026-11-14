@@ -370,6 +370,75 @@ class TestGenerateAutoOutputDir:
         # The '/' in the teacher id is normalized to '-', as for every other value
         assert result == "Qwen3-0.6B-OPD.teacher-dnotitia-Qwen3-1.7B.maxcl-512.beta-1.0"
 
+    def test_step_and_seed_abbreviations_order(self):
+        """max_steps, warmup_steps and seed are abbreviated and placed next to ep/lr"""
+        model_name = "dnotitia/Qwen3-0.6B-Base"
+        user_args = {
+            "seed",
+            "learning_rate",
+            "gradient_accumulation_steps",
+            "warmup_steps",
+            "per_device_train_batch_size",
+            "max_steps",
+            "num_train_epochs",
+            "gradient_checkpointing",
+        }
+
+        script_args = SimpleNamespace()
+        training_args = SimpleNamespace(
+            seed=7,
+            learning_rate=2e-05,
+            gradient_accumulation_steps=4,
+            warmup_steps=0.05,
+            per_device_train_batch_size=8,
+            max_steps=10,
+            num_train_epochs=2,
+            gradient_checkpointing=True,
+        )
+        model_args = SimpleNamespace()
+        dataset_mixture_args = SimpleNamespace()
+        dnotitia_args = SimpleNamespace()
+
+        result = generate_auto_output_dir(
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "SFT",
+        )
+
+        assert result == (
+            "Qwen3-0.6B-Base-SFT.ep-2.iters-10.bs-8.steps-4.lr-2e-05.warmup-0.05."
+            "gc-true.seed-7"
+        )
+
+    def test_logging_and_save_steps_keep_full_names(self):
+        """logging_steps and save_steps are not abbreviated (yet) and follow the dict args"""
+        model_name = "test/model"
+        user_args = {"logging_steps", "save_steps", "seed"}
+
+        script_args = SimpleNamespace()
+        training_args = SimpleNamespace(logging_steps=1, save_steps=100, seed=7)
+        model_args = SimpleNamespace()
+        dataset_mixture_args = SimpleNamespace()
+        dnotitia_args = SimpleNamespace()
+
+        result = generate_auto_output_dir(
+            model_name,
+            user_args,
+            script_args,
+            training_args,
+            model_args,
+            dataset_mixture_args,
+            dnotitia_args,
+            "SFT",
+        )
+
+        assert result == "model-SFT.seed-7.logging_steps-1.save_steps-100"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
