@@ -9,6 +9,7 @@ import socket
 import sys
 import threading
 import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -985,3 +986,126 @@ class TestBuildCallback:
         training.report_to = ["none"]
         build_checkpoint_eval_callback(training, model, dnotitia, train_logger)
         assert any("report_to does not include wandb" in w for w in warnings)
+
+
+class TestPercentile:
+    def test_single_value(self):
+        assert ce._percentile([42.0], 50) == 42.0
+
+    def test_monotone(self):
+        vals = sorted(float(i) for i in range(1, 11))
+        p50 = ce._percentile(vals, 50)
+        p90 = ce._percentile(vals, 90)
+        assert vals[0] <= p50 <= p90 <= vals[-1]
+
+
+# An in-process stand-in for an OpenAI-compatible server that streams a chat
+# completion over SSE: a few content chunks, then a usage chunk, then [DONE].
+class _SSEHandler(BaseHTTPRequestHandler):
+    n_tokens = 5
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        self.rfile.read(length)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.end_headers()
+
+        def send(obj):
+            self.wfile.write(f"data: {json.dumps(obj)}\n\n".encode())
+            self.wfile.flush()
+
+        for _ in range(self.n_tokens):
+            send({"choices": [{"delta": {"content": "x"}}], "usage": None})
+        send({"choices": [], "usage": {"completion_tokens": self.n_tokens}})
+        self.wfile.write(b"data: [DONE]\n\n")
+        self.wfile.flush()
+
+    def log_message(self, *args):
+        pass
+
+
+class _FailHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        self.send_response(500)
+        self.end_headers()
+
+    def log_message(self, *args):
+        pass
+
+
+class TestMeasureServingPerf:
+    def _serve(self, handler):
+        server = HTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        return server
+
+    def test_measures_ttft_throughput_and_counts_tokens(self):
+        server = self._serve(_SSEHandler)
+        try:
+            base_url = f"http://127.0.0.1:{server.server_address[1]}/v1"
+            m = ce.measure_serving_perf(base_url, "stub", concurrency=4, num_requests=8)
+        finally:
+            server.shutdown()
+
+        assert m["eval/perf/failures"] == 0
+        assert m["eval/perf/ttft_p50_ms"] >= 0
+        # Throughput uses the server's usage token counts (5 per request).
+        assert m["eval/perf/output_throughput_tok_s"] > 0
+
+    def test_all_failures_are_counted_not_raised(self):
+        server = self._serve(_FailHandler)
+        try:
+            base_url = f"http://127.0.0.1:{server.server_address[1]}/v1"
+            m = ce.measure_serving_perf(base_url, "stub", concurrency=2, num_requests=4)
+        finally:
+            server.shutdown()
+
+        assert m == {"eval/perf/failures": 4}
+
+
+class TestPerfGating:
+    """`perf_once` controls whether the probe runs once or on every evaluation."""
+
+    def _run_two_evals(self, tmp_path, monkeypatch, perf_once):
+        _fake_binaries(monkeypatch, tmp_path, vllm=_FAKE_SERVER)
+        calls = []
+        monkeypatch.setattr(
+            ce,
+            "measure_serving_perf",
+            lambda *a, **k: calls.append(1) or {"eval/perf/ttft_p50_ms": 1.0},
+        )
+        callback = CheckpointEvalCallback(
+            tasks=[],  # no Inspect tasks: isolate the perf probe
+            devices="7",
+            vllm_args="--warmup 0",
+            model_tag="Qwen3-0.6B",
+            measure_perf=True,
+            perf_once=perf_once,
+        )
+        logged = []
+        monkeypatch.setattr(
+            callback,
+            "_log_to_wandb",
+            lambda metrics, step: logged.append((dict(metrics), step)),
+        )
+        for step in (100, 200):
+            source = _checkpoint(tmp_path / f"run{step}")
+            staged, _, _ = stage_checkpoint(
+                source, tmp_path / f"run{step}" / "_eval_staging" / f"checkpoint-{step}"
+            )
+            callback._evaluate(staged, step, tmp_path / f"run{step}", remove_after=True)
+        return calls, logged
+
+    def test_perf_once_runs_a_single_time(self, tmp_path, monkeypatch):
+        calls, logged = self._run_two_evals(tmp_path, monkeypatch, perf_once=True)
+        assert len(calls) == 1
+        assert logged[0][0] == {"eval/perf/ttft_p50_ms": 1.0}
+        # Second eval has no tasks and no perf, so nothing is logged.
+        assert len(logged) == 1
+
+    def test_perf_every_checkpoint_when_not_once(self, tmp_path, monkeypatch):
+        calls, logged = self._run_two_evals(tmp_path, monkeypatch, perf_once=False)
+        assert len(calls) == 2
+        assert len(logged) == 2

@@ -116,3 +116,14 @@ eval_devices: "1"          # CUDA_VISIBLE_DEVICES for the eval vLLM server; must
 eval_vllm_args: "--max-model-len 32768 --data-parallel-size 1"  # extra `vllm serve` flags
 eval_max_connections: 20   # inspect eval --max-connections
 eval_max_tokens: 16000     # inspect eval --max-tokens
+
+# Serving performance probe (only with eval_on_checkpoint). Measures TTFT and output
+# throughput against the idle eval server, just before the Inspect tasks, and logs them
+# as `eval/perf/*` on the same axis. A relative regression signal from a fixed workload,
+# not an SLA benchmark.
+measure_serving_perf: false  # master switch
+# true: measure only on the first evaluation (plain decode speed is weight-independent).
+# false: measure every checkpoint -- use for speculative decoding / MTP, where the draft
+# acceptance rate (and so throughput) rises as the model trains.
+perf_once: true
+perf_concurrency: 8          # concurrent requests in the probe
