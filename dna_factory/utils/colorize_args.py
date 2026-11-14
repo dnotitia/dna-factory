@@ -62,33 +62,66 @@ def parse_yaml_config(config_file):
     return yaml_args
 
 
-def colorize_user_args(text, user_specified_args):
-    """Colorize entire lines containing user-specified arguments"""
+def _same_value(a, b):
+    """Whether two parsed argument values are equal; values that cannot be compared are not."""
+    try:
+        return bool(a == b)
+    except Exception:  # noqa: BLE001 - e.g. array-like values with no single truth value
+        return False
+
+
+def find_redundant_args(user_specified_args, user_values, default_values):
+    """
+    Names the user specified with the value they already have by default.
+
+    `user_values` and `default_values` map argument names to their parsed values, for the
+    user's run and for a run with no user config or CLI arguments. Comparing parsed values
+    means `1e-5` and `1.0e-5`, or `true` and `True`, count as the same value; lists and
+    dicts compare element by element. A name missing from either mapping is never redundant.
+    """
+    return {
+        name
+        for name in user_specified_args
+        if name in user_values
+        and name in default_values
+        and _same_value(user_values[name], default_values[name])
+    }
+
+
+def _line_mentions(line, args):
+    """Whether the line shows any of the arguments (quoted or unquoted field name)."""
+    return any(
+        f"'{arg}':" in line or (f"{arg}:" in line and f"'{arg}':" not in line)
+        for arg in args
+    )
+
+
+def colorize_user_args(text, user_specified_args, redundant_args=()):
+    """
+    Colorize entire lines containing user-specified arguments.
+
+    Lines of arguments that differ from the default are pink; lines of arguments the user
+    specified with their default value (`redundant_args`, effectively ignored) are gray.
+    """
     PINK = "\033[1;95m"  # Bold bright magenta/pink color
+    GRAY = "\033[90m"  # Bright black (gray)
     RESET = "\033[0m"
 
     lines = text.split("\n")
     colored_lines = []
 
     for line in lines:
-        # Check if this line contains any user-specified arguments
-        line_contains_user_arg = False
-        for arg in user_specified_args:
-            # Pattern for quoted field names or unquoted field names
-            if f"'{arg}':" in line or (f"{arg}:" in line and f"'{arg}':" not in line):
-                line_contains_user_arg = True
-                break
-
-        # If line contains user argument, color the entire line pink
-        if line_contains_user_arg:
+        if _line_mentions(line, user_specified_args):
             line = f"{PINK}{line}{RESET}"
+        elif _line_mentions(line, redundant_args):
+            line = f"{GRAY}{line}{RESET}"
 
         colored_lines.append(line)
 
     return "\n".join(colored_lines)
 
 
-def format_args_with_colors(args_dict, user_specified_args):
+def format_args_with_colors(args_dict, user_specified_args, redundant_args=()):
     """Format arguments dictionary with colors for user-specified values"""
     formatted = pprint.pformat(args_dict, indent=2, width=80)
-    return colorize_user_args(formatted, user_specified_args)
+    return colorize_user_args(formatted, user_specified_args, redundant_args)

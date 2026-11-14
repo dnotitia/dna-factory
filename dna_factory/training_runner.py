@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 
 import datasets
 import transformers
+import yaml
 from datasets import load_dataset
 from transformers import (
     AutoConfig,
@@ -45,7 +46,11 @@ from dna_factory.unsloth_integration import (
     resolve_use_unsloth,
     revert_unsloth_config_overrides,
 )
-from dna_factory.utils.colorize_args import format_args_with_colors, parse_user_args
+from dna_factory.utils.colorize_args import (
+    find_redundant_args,
+    format_args_with_colors,
+    parse_user_args,
+)
 from dna_factory.utils.colorize_logging import ColoredFormatter, format_logs_with_colors
 from dna_factory.utils.config_merger import merge_config_files
 from dna_factory.utils.output_dir_generator import generate_auto_output_dir
@@ -211,8 +216,13 @@ def print_environment_and_arguments(
     dataset_mixture_args,
     dnotitia_args,
     user_specified_args,
+    redundant_args=(),
 ):
-    """Print OS environment variables and all parsed arguments in a formatted way."""
+    """Print OS environment variables and all parsed arguments in a formatted way.
+
+    Arguments that differ from the default are pink; `redundant_args` (user-specified with
+    their default value) are gray.
+    """
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
@@ -231,7 +241,9 @@ def print_environment_and_arguments(
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
-    _logger.info(format_args_with_colors(vars(script_args), user_specified_args))
+    _logger.info(
+        format_args_with_colors(vars(script_args), user_specified_args, redundant_args)
+    )
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
@@ -239,7 +251,11 @@ def print_environment_and_arguments(
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
-    _logger.info(format_args_with_colors(vars(training_args), user_specified_args))
+    _logger.info(
+        format_args_with_colors(
+            vars(training_args), user_specified_args, redundant_args
+        )
+    )
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
@@ -247,7 +263,9 @@ def print_environment_and_arguments(
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
-    _logger.info(format_args_with_colors(vars(model_args), user_specified_args))
+    _logger.info(
+        format_args_with_colors(vars(model_args), user_specified_args, redundant_args)
+    )
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
@@ -256,7 +274,9 @@ def print_environment_and_arguments(
         "------------------------------------------------------------------------------------------"
     )
     _logger.info(
-        format_args_with_colors(vars(dataset_mixture_args), user_specified_args)
+        format_args_with_colors(
+            vars(dataset_mixture_args), user_specified_args, redundant_args
+        )
     )
     _logger.info(
         "------------------------------------------------------------------------------------------"
@@ -265,7 +285,11 @@ def print_environment_and_arguments(
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
-    _logger.info(format_args_with_colors(vars(dnotitia_args), user_specified_args))
+    _logger.info(
+        format_args_with_colors(
+            vars(dnotitia_args), user_specified_args, redundant_args
+        )
+    )
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
@@ -442,8 +466,14 @@ def run_training(
     dataset_mixture_args,
     dnotitia_args,
     user_specified_args=None,
+    redundant_args=(),
 ):
-    """Execute the shared flow: setup, models, tokenizer, dataset, trainer, train, save."""
+    """Execute the shared flow: setup, models, tokenizer, dataset, trainer, train, save.
+
+    `user_specified_args` are the arguments the user changed from the default (shown in pink
+    and named in `output_dir: auto`); `redundant_args` are the ones the user specified with
+    their default value (shown in gray, left out of the name).
+    """
     for key, value in spec.extra_env.items():
         os.environ.setdefault(key, value)
 
@@ -504,6 +534,7 @@ def run_training(
         dataset_mixture_args,
         dnotitia_args,
         user_specified_args,
+        redundant_args,
     )
 
     # Check for last checkpoint
@@ -657,6 +688,23 @@ def run_training(
     return train_result
 
 
+def parsed_arg_values(dataclass_types, config_path, cli_args):
+    """
+    Argument values as the parser reads them from a YAML config and CLI args, by name.
+
+    Read at the argparse level, before the dataclasses are built, so no `__post_init__`
+    runs (it can need a GPU, e.g. for `bf16`); a fresh parser keeps the config's defaults
+    from leaking into the caller's parser.
+    """
+    parser = TrlParser(dataclass_types)
+    with open(config_path, encoding="utf-8") as f:
+        config = yaml.safe_load(f) or {}
+    config.pop("env", None)
+    parser.set_defaults_with_config(**config)
+    namespace, _ = parser.parse_known_args(cli_args)
+    return vars(namespace)
+
+
 def cli_main(spec, argv=None):
     """Shared `__main__` bootstrap: merge default YAML, parse args, run."""
     parser = TrlParser(spec.dataclass_types)
@@ -701,6 +749,14 @@ def cli_main(spec, argv=None):
                 + ", ".join(f"{k}: {v[0]!r} -> {v[1]!r}" for k, v in restored.items())
             )
 
+    # A key set to the value it already has by default changes nothing: show it apart from
+    # the real overrides and keep it out of the `output_dir: auto` name.
+    redundant_args = find_redundant_args(
+        user_specified_args,
+        parsed_arg_values(spec.dataclass_types, config_path, cli_args),
+        parsed_arg_values(spec.dataclass_types, spec.defaults_yaml, []),
+    )
+
     # Run the main function
     return run_training(
         spec,
@@ -709,5 +765,6 @@ def cli_main(spec, argv=None):
         model_args,
         dataset_mixture_args,
         dnotitia_args,
-        user_specified_args,
+        user_specified_args - redundant_args,
+        redundant_args=redundant_args,
     )
