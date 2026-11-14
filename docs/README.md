@@ -7,6 +7,7 @@ Guides for the training scripts and the features around them. Setup and the SFT 
 
 | Guide | Covers |
 |---|---|
+| [sampling-sft.md](sampling-sft.md) | Offline projection sampling followed by SFT, with matched SFT/SDFT comparison configs |
 | [dpo.md](dpo.md) | DPO: dataset formats, per-dataset `weight`, and single/multi-GPU launch commands |
 | [grpo.md](grpo.md) | GRPO: launch commands and the configuration variants (no vLLM, vLLM server mode, DAPO, Dr. GRPO, weighted rewards, LLM judges) |
 | [grpo-rewards.md](grpo-rewards.md) | GRPO reward functions: the reward contract, `reward_funcs` wiring, labeled dataset mixtures, judge, string-match and shaping rewards, and troubleshooting a flat run |

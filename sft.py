@@ -53,6 +53,8 @@ def get_dataset_with_schema_alignment(mixture_config, seed=42):
         dataset = ds.load_dataset(
             path=dataset_config.path,
             name=dataset_config.name,
+            data_dir=dataset_config.data_dir,
+            data_files=dataset_config.data_files,
             split=dataset_config.split,
         )
         if dataset_config.columns is not None:
