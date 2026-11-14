@@ -59,6 +59,13 @@ $ source .venv/bin/activate
 $ python sft.py
 ```
 
+For a short first run on one GPU, use the [public-data quick start](docs/quickstart.md).
+It trains for just two steps on 32 Capybara conversations, without Hugging Face or W&B login:
+
+```bash
+$ python sft.py --config configs/SFT/qwen3-0.6B-public-smoke.yaml
+```
+
 Beyond SFT, DPO, GRPO, OPD, and SDFT are also available:
 
 ```bash
@@ -92,6 +99,11 @@ $ python sft.py \
   --config configs/SFT/qwen3-0.6B-korean-sft.yaml \
   --num_train_epochs 2
 ```
+
+> **Note:** The `dnotitia/Reasoning_R1_Kor_completion_25k_sharegpt_*` datasets used in these
+> examples are not publicly downloadable; without Hugging Face access to them, `sft.py` fails
+> with `DatasetNotFoundError`. To try the commands without that access, use a public dataset
+> such as `trl-lib/Capybara` or the [public-data quick start](docs/quickstart.md).
 
 ## Multi-GPUs
 

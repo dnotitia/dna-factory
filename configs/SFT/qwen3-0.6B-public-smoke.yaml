@@ -1,0 +1,26 @@
+# A small first run, not a model-quality benchmark. See docs/quickstart.md.
+model_name_or_path: dnotitia/Qwen3-0.6B-Base
+datasets:
+  - path: trl-lib/Capybara
+    split: train[:32]
+    columns:
+      - messages
+
+output_dir: outputs/qwen3-0.6b-public-smoke
+max_steps: 2
+max_length: 256
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 1
+
+# SDPA avoids downloading an additional attention kernel for this first run.
+# Packing needs FlashAttention, so keep it disabled when using SDPA.
+attn_implementation: sdpa
+packing: false
+use_liger_kernel: false
+
+# No external experiment tracker or separate evaluation GPU is needed.
+report_to:
+  - none
+eval_on_checkpoint: false
+periodic_save_seconds: 0
+debug_first_n_batches: 0
