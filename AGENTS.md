@@ -10,9 +10,8 @@ $ source .venv/bin/activate
 ## Running Training
 
 ```bash
-# SFT / DPO (single GPU)
+# SFT (single GPU)
 python sft.py  # defaults only (configs/_defaults-SFT.yaml)
-python dpo.py --config configs/DPO/qwen3-0.6B-dpo.yaml
 
 # GRPO (single GPU); --use_vllm false for the slower HF generate path
 python grpo.py --config configs/GRPO/qwen3-0.6B-grpo.yaml
@@ -41,11 +40,11 @@ docs/qwen38-flash-next.md (its `ple_host_table` requires `use_peft`).
 
 ## Layout
 
-- `sft.py` / `dpo.py` / `grpo.py` / `opd.py` / `sdft.py` — thin entry points. Each keeps only
+- `sft.py` / `grpo.py` / `opd.py` / `sdft.py` — thin entry points. Each keeps only
   method-specific logic (model loading, dataset normalization, trainer wiring) as a
   `TrainingSpec`; the shared setup/train/save flow lives in
   `dna_factory/training_runner.py` (`run_training` + `cli_main`). Same flow across all
-  four; DPO also loads `ref_model`; GRPO is online RL (generates completions and scores
+  four; GRPO is online RL (generates completions and scores
   them with `reward_funcs`; no `ref_model` unless `beta != 0`); `opd.py` is On-Policy
   Distillation (OPD; student generates, a frozen `teacher_model` scores every token — no rewards,
   no `ref_model`); `sdft.py` is Self-Distillation Fine-Tuning (SDFT; on-policy; the teacher is the model itself, shown a
@@ -54,8 +53,8 @@ docs/qwen38-flash-next.md (its `ple_host_table` requires `use_peft`).
   logging). `rewards/` holds the GRPO reward framework (`generative.py` = judge,
   `verifiable.py` = string-match, `reasoning.py` = thinking-model answer checks) and the
   concrete instances (`my_rewards.py`).
-- `configs/` — `_defaults-{SFT,DPO,GRPO,OPD,SDFT}.yaml` (base, **do not edit**) merged with
-  model-specific overrides in `configs/{SFT,DPO,GRPO,OPD,SDFT}/`. GRPO variants (no vLLM,
+- `configs/` — `_defaults-{SFT,GRPO,OPD,SDFT}.yaml` (base, **do not edit**) merged with
+  model-specific overrides in `configs/{SFT,GRPO,OPD,SDFT}/`. GRPO variants (no vLLM,
   server mode, DAPO, Dr. GRPO, weighted rewards, judges, unsloth) are documented as
   snippets in docs/grpo.md, not shipped as separate config files.
 - `docs/` — per-feature guides, indexed in docs/README.md.
@@ -64,7 +63,7 @@ docs/qwen38-flash-next.md (its `ple_host_table` requires `use_peft`).
 
 - `output_dir: auto` auto-generates a name from non-default args.
 - Default attn is `kernels-community/flash-attn2` (required by `packing`/`padding_free`, and it has B200/sm100 kernels, unlike `kernels-community/vllm-flash-attn3`); default models are from the `dnotitia/` HF org.
-- Preprocessing copies each message's `thinking` → `reasoning_content` for Qwen3's chat template (SFT/DPO only; GRPO/OPD datasets are prompt-only).
+- Preprocessing copies each message's `thinking` → `reasoning_content` for Qwen3's chat template (SFT only; GRPO/OPD datasets are prompt-only).
 - DeepSpeed only (no FSDP).
 - AsyncGRPO (`grpo.py` with `grpo_execution: async`) is the one exception to the distributed-training guidance: one training GPU, one separate vLLM GPU, one process, with DeepSpeed, FSDP, evaluation, dynamic sampling, PEFT and quantization all rejected. TRL builds the model with its own tree attention (flash-attn3, flash-attn4 on Blackwell) and ignores `attn_implementation`; do not swap it, since the tree-packed rows rely on it. Leave `token_budget: null` and keep `max_completion_length` under the server's `--max-model-len`, which vLLM enforces with HTTP 400 rather than truncation. See docs/async-grpo.md.
 - GRPO rewards: `reward_funcs:` takes `trl.rewards` names or dotted import paths; a reward that returns `None` excludes that sample instead of scoring it 0 — the mechanism for composing rewards over a mixture, keyed by the per-dataset `label`. `accuracy_reward` needs `math-verify` and a `solution` column. See docs/grpo-rewards.md.

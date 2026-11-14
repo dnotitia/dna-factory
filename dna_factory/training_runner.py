@@ -1,6 +1,6 @@
-"""Shared training skeleton for SFT / DPO / GRPO / OPD / SDFT entry points.
+"""Shared training skeleton for SFT / GRPO / OPD / SDFT entry points.
 
-Each script (sft.py, dpo.py, grpo.py, opd.py, sdft.py) keeps only its method-specific
+Each script (sft.py, grpo.py, opd.py, sdft.py) keeps only its method-specific
 logic — model loading, dataset normalization, trainer construction — and describes
 it as a `TrainingSpec`. `run_training` executes the identical setup/train/save flow
 for all of them; `cli_main` implements the identical `__main__` CLI bootstrap.
@@ -296,8 +296,7 @@ def create_model_kwargs(model_args, training_args, dnotitia_args):
 
     # Qwen3.8-Flash-Next (qwen4_exp) model-code patches. They change classes, not this model's kwargs,
     # and must be in place before from_pretrained builds the model; see docs/qwen38-flash-next.md.
-    # Some callers (e.g. DPO's reference model) pass no DnotitiaArguments.
-    ple_host_table = getattr(dnotitia_args, "ple_host_table", None)
+    ple_host_table = dnotitia_args.ple_host_table
     if ple_host_table:
         if not getattr(model_args, "use_peft", False):
             # The table is then a host lookup, not a parameter: full fine-tuning would neither train it
@@ -315,7 +314,7 @@ def create_model_kwargs(model_args, training_args, dnotitia_args):
             model_dir = snapshot_download(model_dir, revision=model_args.model_revision)
         # Build the flat table on first use; one process per node performs the build.
         enable_ple_host_offload(ple_host_table, model_dir=model_dir)
-    if getattr(dnotitia_args, "qsa_indexer_fast", False):
+    if dnotitia_args.qsa_indexer_fast:
         from dna_factory import qsa_indexer_fast
 
         qsa_indexer_fast.enable()
@@ -417,7 +416,7 @@ class TrainingSpec:
         None  # validate + fill training_args (model_init_kwargs, ...)
     )
     load_models: Callable | None = (
-        None  # -> dict merged into trainer kwargs (model, ref_model, ...)
+        None  # -> dict merged into trainer kwargs (model, ...)
     )
     load_mixture: Callable | None = (
         None  # (dataset_mixture_args, training_args, ctx, logger) -> DatasetDict
@@ -530,7 +529,7 @@ def run_training(
             script_args, training_args, model_args, dnotitia_args, ctx, train_logger
         )
 
-    # Load model(s); the returned dict becomes trainer kwargs (model, ref_model, ...)
+    # Load model(s); the returned dict becomes trainer kwargs (model, ...)
     models_kwargs = _default(
         {},
         spec.load_models,

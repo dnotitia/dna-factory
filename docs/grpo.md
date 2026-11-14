@@ -1,6 +1,6 @@
 # GRPO
 
-Rewards are configured in YAML via `reward_funcs` (built-in names from `trl.rewards`, dotted import paths — including this repo's own judge and string-match rewards in `dna_factory.rewards`) and/or `reward_model_name_or_path`. Dataset entries can combine reward-routing labels with per-dataset size multipliers:
+Rewards are configured in YAML via `reward_funcs` (built-in names from `trl.rewards`, dotted import paths — including this repo's own judge and string-match rewards in `dna_factory.rewards`) and/or `reward_model_name_or_path`. Dataset entries can combine reward-routing labels with per-dataset size multipliers (`weight`, see [dataset-mixture.md](dataset-mixture.md)):
 
 ```yaml
 datasets:

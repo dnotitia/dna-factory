@@ -25,7 +25,6 @@ Where this fits next to the other trainers in this repo:
 | | supervision | trajectories | signal density |
 |---|---|---|---|
 | `sft.py` | fixed reference answers | off-policy (dataset) | per token |
-| `dpo.py` | preference pairs | off-policy (dataset) | per sequence |
 | `grpo.py` | reward functions | on-policy (student) | per sequence (scalar reward) |
 | `opd.py` | a teacher model | on-policy (student) | **per token** |
 
@@ -146,7 +145,7 @@ loader keeps the turns *before* the last assistant turn and discards the referen
 writes the completion and the teacher grades it, so a reference answer is never used. Every other column
 is dropped (there are no reward functions to forward them to).
 
-Mixtures support the same `weight:` size multiplier as `sft.py`:
+Mixtures support the same `weight:` size multiplier as `sft.py` (see [dataset-mixture.md](dataset-mixture.md)):
 
 ```yaml
 datasets:

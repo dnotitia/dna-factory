@@ -311,10 +311,10 @@ class TestGenerateAutoOutputDir:
         user_args = {"datasets"}
 
         # Create mock dataset objects
-        dataset1 = SimpleNamespace(path="dnotitia/dpo_claude3.5-sonnet_15k_v3")
-        dataset2 = SimpleNamespace(path="dnotitia/dpo-kmmlu-180k-v2")
-        dataset3 = SimpleNamespace(path="dnotitia/dpo-law-counsel-v1")
-        dataset4 = SimpleNamespace(path="dnotitia/dpo_ethical_safety_claude35_10k_v1")
+        dataset1 = SimpleNamespace(path="dnotitia/sft_claude3.5-sonnet_15k_v3")
+        dataset2 = SimpleNamespace(path="dnotitia/sft-kmmlu-180k-v2")
+        dataset3 = SimpleNamespace(path="dnotitia/sft-law-counsel-v1")
+        dataset4 = SimpleNamespace(path="dnotitia/sft_ethical_safety_claude35_10k_v1")
 
         script_args = SimpleNamespace()
         training_args = SimpleNamespace()
@@ -332,14 +332,14 @@ class TestGenerateAutoOutputDir:
             model_args,
             dataset_mixture_args,
             dnotitia_args,
-            "DPO",
+            "SFT",
         )
 
         # Should show organization name and count instead of full dataset names
-        assert result == "Qwen3-4B-DPO.datasets-dnotitia-4ea"
+        assert result == "Qwen3-4B-SFT.datasets-dnotitia-4ea"
         # Should NOT contain full dataset names
-        assert "dpo_claude3.5-sonnet_15k_v3" not in result
-        assert "dpo-kmmlu-180k-v2" not in result
+        assert "sft_claude3.5-sonnet_15k_v3" not in result
+        assert "sft-kmmlu-180k-v2" not in result
 
     def test_opd_teacher_model(self):
         """Test the OPD training type and the teacher model abbreviation"""

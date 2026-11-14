@@ -7,7 +7,6 @@ Guides for the training scripts and the features around them. Setup and the SFT 
 
 | Guide | Covers |
 |---|---|
-| [dpo.md](dpo.md) | DPO: dataset formats, per-dataset `weight`, and single/multi-GPU launch commands |
 | [grpo.md](grpo.md) | GRPO: launch commands and the configuration variants (no vLLM, vLLM server mode, DAPO, Dr. GRPO, weighted rewards, LLM judges) |
 | [grpo-rewards.md](grpo-rewards.md) | GRPO reward functions: the reward contract, `reward_funcs` wiring, labeled dataset mixtures, judge, string-match and shaping rewards, and troubleshooting a flat run |
 | [grpo-dynamic-sampling.md](grpo-dynamic-sampling.md) | `dynamic_sampling` (`off` / `mask` / `resample`) for prompt groups with zero advantage |
@@ -21,6 +20,7 @@ Guides for the training scripts and the features around them. Setup and the SFT 
 |---|---|
 | [unsloth.md](unsloth.md) | The optional single-GPU unsloth backend (`use_unsloth: true`): supported models, benchmarks, and differences from the standard path |
 | [checkpoint-eval.md](checkpoint-eval.md) | `eval_on_checkpoint`: serving each checkpoint with vLLM, running Inspect tasks, and logging scores to the same W&B run |
+| [dataset-mixture.md](dataset-mixture.md) | The `datasets:` mixture shared by every trainer: per-dataset `weight` (size multiplier) and the per-method extra keys |
 | [multi-nodes.md](multi-nodes.md) | Two-node training with `accelerate launch` |
 
 ## Project

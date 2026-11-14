@@ -1,8 +1,8 @@
 # unsloth backend (single GPU)
 
 This guide covers `use_unsloth: true`. The option loads models through [unsloth](https://github.com/unslothai/unsloth)'s
-`FastModel` and uses unsloth's patched versions of the TRL trainers in all four scripts (`sft.py`, `dpo.py`,
-`grpo.py`, and `opd.py`). It is a backend switch: the run follows the same configuration as with
+`FastModel` and uses unsloth's patched versions of the TRL trainers in three scripts (`sft.py`, `grpo.py`, and
+`opd.py`). It is a backend switch: the run follows the same configuration as with
 `use_unsloth: false` (hyperparameters, model, which parameters train, LoRA rank and alpha, `max_length`, loss type),
 and a setting unsloth cannot honour stops the run with an error or prints a warning instead of being changed
 silently. How the work is computed does differ (kernels, packing groups, unsloth's own GRPO/OPD loss
@@ -20,7 +20,6 @@ $ python sft.py --config configs/SFT/qwen3-0.6B-sft-unsloth.yaml
 $ python grpo.py --config grpo-unsloth.yaml  # saved from the example GRPO config below
 
 # Or switch it on for any config
-$ python dpo.py --config configs/DPO/qwen3-0.6B-dpo.yaml --use_unsloth true --use_peft true --lora_dropout 0.0
 $ python opd.py --use_unsloth true --use_peft true --lora_dropout 0.0
 ```
 
@@ -28,7 +27,7 @@ unsloth officially caps `datasets`, `transformers`, and `trl` below this repo's 
 core pins through a `[tool.uv] override-dependencies` entry. As a result, `uv sync --extra unsloth` changes none
 of the core pins. The `transformers` override also lifts vllm's cap for every sync, deliberately; see
 `INTENTIONALLY_LIFTED` in `testcase/test_dependency_pins.py`. This combination was validated on GPU with all
-four scripts on unsloth 2026.10.x. When you bump `datasets`, `transformers`, or `trl` in the core dependencies, bump the override too.
+three scripts on unsloth 2026.10.x. When you bump `datasets`, `transformers`, or `trl` in the core dependencies, bump the override too.
 
 Write the flag out in full (`--use_unsloth true`, or `use_unsloth: true` in the YAML). The bootstrap reads it
 before trl is imported and does not recognise abbreviated option names such as `--use_unsl`; the run then stops
@@ -83,7 +82,7 @@ generate because unsloth's vLLM engine cannot serve LoRA on expert weights
 
 ## When it helps
 
-These measurements use one B200 and this repo's defaults (FlashAttention-2 and Liger kernels for SFT/DPO):
+These measurements use one B200 and this repo's defaults (FlashAttention-2 and Liger kernels for SFT):
 
 | Workload (one B200) | `use_unsloth: false` | `use_unsloth: true` | Step time | Peak memory |
 |---|---|---|---|---|
@@ -91,7 +90,6 @@ These measurements use one B200 and this repo's defaults (FlashAttention-2 and L
 | SFT LoRA, Qwen3-8B, 16k | 10.25 s/step, 24.8 GiB | 7.92 s/step, 19.8 GiB | **23% faster** | **−20%** |
 | SFT QLoRA (4-bit), Qwen3-8B, 4k, batch 2 | 0.73 s/step, 10.1 GiB | 0.50 s/step, 8.9 GiB | **32% faster** | **−12%** |
 | SFT LoRA, Qwen3-30B-A3B (MoE), attention + experts, 2k | 0.44 s/step, 63.7 GiB ¹ | 0.33 s/step, 62.3 GiB | **25% faster** | −2% |
-| DPO LoRA, Qwen3-8B, 2k | 2.75 s/step, 34.5 GiB ³ | 2.50 s/step, 17.5 GiB | about the same | **−49%** |
 | SFT full fine-tuning, Qwen3-4B, 4k | 0.24 s/step, 31.0 GiB | 0.24 s/step, 30.9 GiB | same | same |
 | GRPO LoRA + vLLM, Qwen3-4B, 8×1024 tokens | 4.14 s/step, 72.8 GiB ² | 7.14 s/step, 64.9 GiB ² | 72% slower | −11% |
 | OPD LoRA + vLLM, Qwen3-0.6B ← 1.7B | 0.78 s/step, 49.5 GiB ² | 0.89 s/step, 48.2 GiB ² | 14% slower | −3% |
@@ -99,8 +97,6 @@ These measurements use one B200 and this repo's defaults (FlashAttention-2 and L
 ¹ The default config crashes on this model because Liger's MoE SwiGLU kernel and LoRA on expert weights do not
 mix. The baseline therefore uses `use_liger_kernel: false`; the unsloth default works as is.
 ² Includes the colocated vLLM engine (`vllm_gpu_memory_utilization` 0.35 for GRPO, 0.25 for OPD).
-³ The standard path loads a second full model for the DPO reference, even with LoRA. The unsloth path uses the
-policy with its fresh adapter disabled, so it uses the same weights and saves most of that memory.
 
 Step times exclude the first three steps. Memory is peak allocated memory from single runs. All runs use `lora_r: 16`
 on all linear layers (`lora_r: 8` for the MoE), `lora_dropout: 0.0`, and gradient checkpointing.
@@ -112,7 +108,7 @@ slower for OPD, measured in tokens per second; this accounts for all of OPD's sl
 GRPO it accounts for half of the slowdown (+1.4 s/step). The other half is training: the backward pass takes
 1.5 s instead of 0.4 s.
 
-Use unsloth for LoRA/QLoRA fine-tuning (SFT and DPO), MoE LoRA, and runs limited by memory. Full fine-tuning does
+Use unsloth for LoRA/QLoRA fine-tuning (SFT), MoE LoRA, and runs limited by memory. Full fine-tuning does
 not benefit. For GRPO and OPD, it saves memory but is slower, so leave it off when throughput matters.
 
 ## What it changes, and what it keeps
@@ -180,8 +176,6 @@ The configuration is honoured on both paths; these are the ways the computation 
   live model.
 - **`qwen3_moe` gate/up adapter rank.** Half of PEFT's when `gate_proj` and `up_proj` are targeted; a warning is
   printed (see **Model and LoRA** above).
-- **DPO reference with LoRA.** The policy with its adapter disabled instead of a second full model: the same
-  weights, less memory.
 
 ## Not supported with unsloth
 
@@ -202,8 +196,6 @@ needs full weights.
 ## Per-trainer notes
 
 - **SFT**: see above. Resuming from a checkpoint works as usual.
-- **DPO**: with LoRA, the reference model is the policy with its adapter disabled at initialization (TRL's
-  "ref" adapter). With full fine-tuning, a separate plain Hugging Face reference model is loaded, as in TRL.
 - **GRPO**: with `use_vllm: true`, unsloth's own vLLM engine is used (`fast_inference`). It is colocated, shares
   weights with the trained model, and is sized by `vllm_gpu_memory_utilization`. It requires LoRA; full
   fine-tuning falls back to HF generate with a warning, as do model types without engine support (see the table).

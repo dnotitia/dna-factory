@@ -113,7 +113,7 @@ trust_remote_code: false
 #   - path: <hub id or local path>
 #     split: train
 #     columns: [prompt]
-#     weight: 1.0                     # size multiplier (see docs/dpo.md)
+#     weight: 1.0                     # size multiplier (see docs/dataset-mixture.md)
 #     privileged_context: "..."       # what the teacher sees on every row of this dataset (omit = anchor rows)
 #     # privileged_context_file: path/to/system_prompt.txt   # same, read from a file
 

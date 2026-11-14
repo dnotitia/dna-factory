@@ -1,5 +1,5 @@
 """
-unsloth model-loading integration shared by sft.py / dpo.py / grpo.py / opd.py.
+unsloth model-loading integration shared by sft.py / grpo.py / opd.py.
 
 `use_unsloth` is a backend switch: it changes how the model is loaded (unsloth's FastModel, fused
 kernels, optionally unsloth-managed vLLM) and must NOT change training hyperparameters. The
@@ -68,7 +68,7 @@ def revert_unsloth_config_overrides(training_args, full_args) -> dict[str, tuple
     Undo the hyperparameter rewrites that unsloth's patched config classes apply at construction.
 
     After `import unsloth`, `trl.SFTConfig` etc. are `Unsloth*Config` subclasses that rewrite some
-    values in `__post_init__` (e.g. GRPO `loss_type: dapo` -> `epsilon_high=0.28`, SFT/DPO
+    values in `__post_init__` (e.g. GRPO `loss_type: dapo` -> `epsilon_high=0.28`, SFT
     `dataset_num_proc` None -> 8). Since use_unsloth must not change hyperparameters, re-parse the same
     arguments with TRL's original config class and copy back every differing field, except
     `gradient_checkpointing_kwargs` (unsloth's gradient checkpointing needs `use_reentrant=True`).
