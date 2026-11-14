@@ -43,6 +43,77 @@ class DnotitiaArguments:
             "help": "Extra generation rounds allowed by dynamic_sampling='resample'."
         },
     )
+    frontier_curriculum: str = field(
+        default="off",
+        metadata={
+            "help": (
+                "GRPO only. 'mfc': Monotone Frontier Curriculum for rows that carry teacher steps. "
+                "The first g steps are shown as a hint in the user message, g is drawn uniformly "
+                "up to a per-problem frontier, and the frontier drops to g whenever the problem "
+                "is solved with fewer steps than it; it never rises. Makes prompts no rollout "
+                "solves learnable (see docs/grpo-frontier-curriculum.md). 'off': stock GRPO. Not "
+                "with dynamic_sampling='resample', unsloth or AsyncGRPO."
+            )
+        },
+    )
+    frontier_steps_column: str = field(
+        default="steps",
+        metadata={
+            "help": (
+                "Dataset column holding the verified teacher solution as a list of reasoning "
+                "steps (or text with one step per line). Rows where it is empty train as stock "
+                "GRPO. The column itself never reaches the reward functions."
+            )
+        },
+    )
+    frontier_success_reward: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "Name of the reward in reward_funcs that decides whether a rollout solved the "
+                "problem (e.g. 'strict_accuracy_reward'). Must be a 0/1 verified-answer reward: "
+                "only full marks count, so format and length rewards cannot move the frontier."
+            )
+        },
+    )
+    frontier_success_threshold: float = field(
+        default=0.5,
+        metadata={
+            "help": (
+                "tau: share of a group's rollouts that must be solved for a visit to commit a "
+                "lower frontier."
+            )
+        },
+    )
+    frontier_max_hint_ratio: float = field(
+        default=1.0,
+        metadata={
+            "help": (
+                "Initial frontier as a share of the teacher steps (rho_max). 1.0 allows the whole "
+                "trace. 0 never shows a hint: the control run, stock GRPO with the same metrics."
+            )
+        },
+    )
+    frontier_holdout_ratio: float = field(
+        default=0.1,
+        metadata={
+            "help": (
+                "Share of the problems that carry steps to hold out: generated and scored "
+                "without hints every visit, never trained on. Their solve rate "
+                "(frontier/heldout_solve_rate) is the one metric that memorising the training "
+                "problems cannot raise. The same problems are held out in every run. 0 disables it."
+            )
+        },
+    )
+    frontier_hint_template: str | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "Text appended to the last user message when steps are shown; must contain "
+                "`{steps}`. Unset uses the wording of the MFC paper's hint prompt."
+            )
+        },
+    )
     periodic_save_seconds: str = field(
         default="0",
         metadata={

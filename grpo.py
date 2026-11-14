@@ -36,6 +36,7 @@ from dna_factory.dnotitia_dataset_mixture import (
     resample_by_weight,
 )
 from dna_factory.dnotitia_grpo_trainer import DnotitiaGRPOTrainer
+from dna_factory.frontier_curriculum import normalize_mode as frontier_normalize_mode
 from dna_factory.training_runner import (
     TrainingSpec,
     cli_main,
@@ -239,6 +240,15 @@ def setup_training_args(
 ):
     ctx["reward_funcs"] = resolve_reward_funcs(script_args, training_args)
 
+    # Some callers (the unsloth hook tests) pass no Dnotitia arguments at all.
+    frontier_mode = getattr(dnotitia_args, "frontier_curriculum", "off")
+    if ctx.get("use_unsloth") and frontier_normalize_mode(frontier_mode) != "off":
+        # unsloth replaces TRL's generation path, which the curriculum hooks to append the hint.
+        raise ValueError(
+            "frontier_curriculum is not supported with use_unsloth: true. "
+            "Set use_unsloth: false, or frontier_curriculum: 'off'."
+        )
+
     if ctx.get("use_unsloth"):
         # unsloth path: FastModel loads the model (quantization and LoRA included) and the trainer
         # gets the instance, so `model_init_kwargs` and `quantization_config` must be unset.
@@ -303,6 +313,13 @@ def extra_trainer_kwargs(
         "quantization_config": ctx["quantization_config"],
         "dynamic_sampling": dnotitia_args.dynamic_sampling,
         "dynamic_sampling_max_rounds": dnotitia_args.dynamic_sampling_max_rounds,
+        "frontier_curriculum": dnotitia_args.frontier_curriculum,
+        "frontier_steps_column": dnotitia_args.frontier_steps_column,
+        "frontier_success_reward": dnotitia_args.frontier_success_reward,
+        "frontier_success_threshold": dnotitia_args.frontier_success_threshold,
+        "frontier_max_hint_ratio": dnotitia_args.frontier_max_hint_ratio,
+        "frontier_holdout_ratio": dnotitia_args.frontier_holdout_ratio,
+        "frontier_hint_template": dnotitia_args.frontier_hint_template,
         "log_completions_steps": dnotitia_args.log_completions_steps,
     }
 
