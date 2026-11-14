@@ -116,6 +116,8 @@ def validate_async_args(script_args, training_args, model_args, dnotitia_args):
         )
     if dnotitia_args.dynamic_sampling != "off":
         raise ValueError("AsyncGRPO requires dynamic_sampling: 'off'.")
+    if dnotitia_args.frontier_curriculum not in ("off", False, None):
+        raise ValueError("AsyncGRPO requires frontier_curriculum: 'off'.")
     if dnotitia_args.debug_first_n_batches != 0:
         raise ValueError(
             "AsyncGRPO requires debug_first_n_batches: 0; use log_completions instead."

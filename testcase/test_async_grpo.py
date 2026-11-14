@@ -199,6 +199,7 @@ def test_reject_distributed(monkeypatch, env, value):
     "target,key,value,message",
     [
         ("dna", "dynamic_sampling", "resample", "dynamic_sampling"),
+        ("dna", "frontier_curriculum", "mfc", "frontier_curriculum"),
         ("dna", "debug_first_n_batches", 1, "debug_first_n_batches"),
         ("dna", "use_unsloth", True, "use_unsloth"),
         ("model", "use_peft", True, "full finetuning"),

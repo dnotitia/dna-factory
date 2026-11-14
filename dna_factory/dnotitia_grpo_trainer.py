@@ -5,15 +5,18 @@ from functools import wraps
 from trl import GRPOTrainer
 
 from dna_factory.dynamic_sampling import DynamicSamplingMixin
+from dna_factory.frontier_curriculum import FrontierCurriculumMixin
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
 
-class DnotitiaGRPOTrainer(DynamicSamplingMixin, GRPOTrainer):
+class DnotitiaGRPOTrainer(FrontierCurriculumMixin, DynamicSamplingMixin, GRPOTrainer):
     """GRPOTrainer with colored token debug output.
 
     Dynamic sampling comes from DynamicSamplingMixin; see dna_factory/dynamic_sampling.py.
+    The frontier curriculum comes from FrontierCurriculumMixin, which goes first so its hooks
+    wrap dynamic sampling's; see dna_factory/frontier_curriculum.py.
     """
 
     def __init__(

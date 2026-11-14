@@ -11,6 +11,7 @@ Guides for the training scripts and the features around them. Setup and the SFT 
 | [grpo.md](grpo.md) | GRPO: launch commands and the configuration variants (no vLLM, vLLM server mode, DAPO, Dr. GRPO, weighted rewards, LLM judges) |
 | [grpo-rewards.md](grpo-rewards.md) | GRPO reward functions: the reward contract, `reward_funcs` wiring, labeled dataset mixtures, judge, string-match and shaping rewards, and troubleshooting a flat run |
 | [grpo-dynamic-sampling.md](grpo-dynamic-sampling.md) | `dynamic_sampling` (`off` / `mask` / `resample`) for prompt groups with zero advantage |
+| [grpo-frontier-curriculum.md](grpo-frontier-curriculum.md) | `frontier_curriculum` (`off` / `mfc`): teacher steps shown as a hint and withdrawn per problem (Monotone Frontier Curriculum), so prompts no rollout solves become learnable; held-out and stall metrics |
 | [async-grpo.md](async-grpo.md) | AsyncGRPO: generation on a separate vLLM server, token budget, staleness, checkpoints and resume |
 | [opd.md](opd.md) | OPD (On-Policy Distillation) with `opd.py`: teacher setup, divergence (`beta`), generation, LoRA, dataset format, and metrics |
 | [sdft.md](sdft.md) | On-policy self-distillation with `sdft.py`: per-row privileged context, anchor rows, system vs user context placement, and multi-GPU notes |

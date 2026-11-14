@@ -124,6 +124,19 @@ log_completions_steps: 100
 dynamic_sampling: "off"   # quoted: bare off is a YAML 1.1 boolean
 dynamic_sampling_max_rounds: 2
 
+# Frontier curriculum (docs/grpo-frontier-curriculum.md): for rows carrying verified teacher steps,
+# the first g steps are shown as a hint in the user message and that help is only ever
+# withdrawn, so a problem no rollout solves becomes learnable (MFC, arXiv:2609.13997).
+#   off  stock GRPO
+#   mfc  per-problem monotone frontier; not with dynamic_sampling resample
+frontier_curriculum: "off"   # quoted: bare off is a YAML 1.1 boolean
+frontier_steps_column: steps          # list of teacher steps; rows where it is empty train as stock GRPO
+# frontier_success_reward: strict_accuracy_reward  # required with mfc: the 0/1 verified-answer reward in reward_funcs
+frontier_success_threshold: 0.5       # tau: share of a group's rollouts solved for a visit to commit
+frontier_max_hint_ratio: 1.0          # initial frontier as a share of the steps; 0 = control run (never hint)
+frontier_holdout_ratio: 0.1           # problems scored unguided but never trained on (frontier/heldout_solve_rate)
+# frontier_hint_template: null        # text with {steps} appended to the user message; unset = the paper's wording
+
 # Wall-clock checkpointing: the Trainer only saves on step counts, so this sets
 # should_save every interval and the normal save path (save_total_limit rotation
 # included) handles the rest. Human-friendly durations ('6h', '30m', '90s',

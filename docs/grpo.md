@@ -43,6 +43,7 @@ The variants below change only a few keys each, so they are described here inste
 | [Weighted rewards](#weighted-rewards) | `reward_funcs`, `reward_weights` | combine correctness, format and length rewards |
 | [LLM judge with a reference](#llm-judge-with-a-reference) | `reward_funcs` | grade answers that `math_verify` cannot parse |
 | [Per-label judges on a mixture](#per-label-judges-on-a-mixture) | `datasets` with `label`, `reward_funcs` | score each dataset of a mixture with its own judge |
+| [Frontier curriculum](#frontier-curriculum) | `frontier_curriculum: mfc`, a dataset with teacher `steps` | learn problems that no rollout solves, by showing the first teacher steps as a hint and withdrawing them |
 | [unsloth](unsloth.md#example-grpo-config) | `use_unsloth: true`, LoRA | LoRA GRPO on one GPU with less memory |
 
 ### Without vLLM
@@ -157,3 +158,31 @@ reward_funcs:
 ```
 
 The `persona` and `rlvr` datasets need a `messages` column: the loader turns its last assistant turn into `expected_output`, which the two reference-guided judges grade against. Serve a judge and set `JUDGE_BASE_URL` as in the previous section. Each entry also accepts `weight:`, as shown at the top of this page.
+
+### Frontier curriculum
+
+For a dataset whose rows carry a verified teacher solution as a list of `steps`. The first steps are shown as a hint in the user message and withdrawn per problem as the model succeeds with fewer, so a problem none of whose rollouts is correct stops being a dead group. The algorithm, the metrics, and how to tell whether it helped are in [grpo-frontier-curriculum.md](grpo-frontier-curriculum.md).
+
+```yaml
+dataset_name: null
+datasets:
+  - path: data/uns128_frontier   # python utils/build-frontier-grpo-dataset.py --output_dir data/uns128_frontier
+    split: train
+
+reward_funcs:
+  - dna_factory.rewards.strict_accuracy_reward
+  - dna_factory.rewards.answer_format_penalty
+  - dna_factory.rewards.soft_overlong_penalty_8k
+reward_weights: [1.0, 0.5, 0.5]
+
+frontier_curriculum: mfc
+frontier_success_reward: strict_accuracy_reward  # the 0/1 verified reward above
+
+loss_type: dapo
+epsilon_high: 0.28           # clip-higher, as in the MFC paper
+dynamic_sampling: mask       # unguided visits to unsolved problems and held-out rows are dead rows
+vllm_max_model_length: 12480 # prompt + hint + max_completion_length
+num_train_epochs: 100        # each problem needs many visits for its help to come down
+```
+
+Run the same config with `frontier_max_hint_ratio: 0` as the control: no hint is ever shown, and the same `frontier/heldout_solve_rate` is logged for comparison.
