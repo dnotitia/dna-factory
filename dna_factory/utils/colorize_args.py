@@ -62,33 +62,66 @@ def parse_yaml_config(config_file):
     return yaml_args
 
 
-def colorize_user_args(text, user_specified_args):
-    """Colorize entire lines containing user-specified arguments"""
+def parse_arg_values(parser, config_path, args):
+    """
+    Return {name: value} as `parser` (a fresh TrlParser) resolves them from a YAML config and CLI
+    args, like `parse_args_and_config` but before the dataclasses are built: their __post_init__
+    sets process-global state (the distributed process group, DeepSpeed), which a second
+    TrainingArguments must not touch. argparse still converts the values to the field types.
+    """
+    with open(config_path, encoding="utf-8") as f:
+        parser.set_defaults_with_config(**(yaml.safe_load(f) or {}))
+    return vars(parser.parse_known_args(args)[0])
+
+
+def find_redundant_args(user_specified_args, arg_values, default_values):
+    """
+    Return the user-specified args whose value equals the default.
+
+    `arg_values` are parsed from the full config and CLI args, `default_values` from the defaults
+    YAML alone, so "default" is the value the argument would have had without any user config
+    (the `_defaults-*.yaml` value, else the dataclass default). Parsed values are compared
+    (`1e-5` == `1.0e-5`, `true` == `True`, CLI `"2"` == `2`), and `==` compares lists and dicts
+    (e.g. `datasets`) element by element. Names that are not arguments (`config`) never match.
+    """
+    return {
+        name
+        for name in user_specified_args
+        if name in arg_values
+        and name in default_values
+        and arg_values[name] == default_values[name]
+    }
+
+
+def colorize_user_args(text, user_specified_args, redundant_args=()):
+    """Colorize entire lines containing user-specified arguments: pink if they change the
+    default, gray if they are redundant (specified but equal to the default)"""
     PINK = "\033[1;95m"  # Bold bright magenta/pink color
+    GRAY = "\033[90m"  # Dark gray color
     RESET = "\033[0m"
+
+    def line_contains(line, args):
+        # Pattern for quoted field names or unquoted field names
+        return any(
+            f"'{arg}':" in line or (f"{arg}:" in line and f"'{arg}':" not in line)
+            for arg in args
+        )
 
     lines = text.split("\n")
     colored_lines = []
 
     for line in lines:
-        # Check if this line contains any user-specified arguments
-        line_contains_user_arg = False
-        for arg in user_specified_args:
-            # Pattern for quoted field names or unquoted field names
-            if f"'{arg}':" in line or (f"{arg}:" in line and f"'{arg}':" not in line):
-                line_contains_user_arg = True
-                break
-
-        # If line contains user argument, color the entire line pink
-        if line_contains_user_arg:
+        if line_contains(line, user_specified_args):
             line = f"{PINK}{line}{RESET}"
+        elif line_contains(line, redundant_args):
+            line = f"{GRAY}{line}{RESET}"
 
         colored_lines.append(line)
 
     return "\n".join(colored_lines)
 
 
-def format_args_with_colors(args_dict, user_specified_args):
+def format_args_with_colors(args_dict, user_specified_args, redundant_args=()):
     """Format arguments dictionary with colors for user-specified values"""
     formatted = pprint.pformat(args_dict, indent=2, width=80)
-    return colorize_user_args(formatted, user_specified_args)
+    return colorize_user_args(formatted, user_specified_args, redundant_args)

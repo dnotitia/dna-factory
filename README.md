@@ -43,7 +43,7 @@ context the student never sees, acts as its own teacher.
 # Key Features
 
 1. **Color-coded logging** across huggingface_hub, datasets, tokenizers, transformers, torch, accelerate, and trl.
-1. **Auto-generated output directory** from the model name and CLI args (e.g. `Qwen3-0.6B-SFT-num_train_epochs-2-...`).
+1. **Auto-generated output directory** from the model name and the args that differ from the defaults (e.g. `Qwen3-0.6B-Base-SFT.ep-3.lr-1e-05`); the argument dump shows those args in pink, and args set to their default value in gray.
 1. **Commented default YAMLs** (`configs/_defaults-*.yaml`), overridable by custom YAML or CLI args.
 1. **Ready-made accelerate configs** for DDP and DeepSpeed ZeRO-1/3 (+ CPU offload).
 1. **Flexible checkpoint interval** — save on a wall-clock schedule (e.g. `6h`) instead of a step count.

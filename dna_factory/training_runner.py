@@ -45,7 +45,12 @@ from dna_factory.unsloth_integration import (
     resolve_use_unsloth,
     revert_unsloth_config_overrides,
 )
-from dna_factory.utils.colorize_args import format_args_with_colors, parse_user_args
+from dna_factory.utils.colorize_args import (
+    find_redundant_args,
+    format_args_with_colors,
+    parse_arg_values,
+    parse_user_args,
+)
 from dna_factory.utils.colorize_logging import ColoredFormatter, format_logs_with_colors
 from dna_factory.utils.config_merger import merge_config_files
 from dna_factory.utils.output_dir_generator import generate_auto_output_dir
@@ -211,6 +216,7 @@ def print_environment_and_arguments(
     dataset_mixture_args,
     dnotitia_args,
     user_specified_args,
+    redundant_args=(),
 ):
     """Print OS environment variables and all parsed arguments in a formatted way."""
     _logger.info(
@@ -231,7 +237,9 @@ def print_environment_and_arguments(
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
-    _logger.info(format_args_with_colors(vars(script_args), user_specified_args))
+    _logger.info(
+        format_args_with_colors(vars(script_args), user_specified_args, redundant_args)
+    )
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
@@ -239,7 +247,11 @@ def print_environment_and_arguments(
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
-    _logger.info(format_args_with_colors(vars(training_args), user_specified_args))
+    _logger.info(
+        format_args_with_colors(
+            vars(training_args), user_specified_args, redundant_args
+        )
+    )
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
@@ -247,7 +259,9 @@ def print_environment_and_arguments(
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
-    _logger.info(format_args_with_colors(vars(model_args), user_specified_args))
+    _logger.info(
+        format_args_with_colors(vars(model_args), user_specified_args, redundant_args)
+    )
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
@@ -256,7 +270,9 @@ def print_environment_and_arguments(
         "------------------------------------------------------------------------------------------"
     )
     _logger.info(
-        format_args_with_colors(vars(dataset_mixture_args), user_specified_args)
+        format_args_with_colors(
+            vars(dataset_mixture_args), user_specified_args, redundant_args
+        )
     )
     _logger.info(
         "------------------------------------------------------------------------------------------"
@@ -265,7 +281,11 @@ def print_environment_and_arguments(
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
-    _logger.info(format_args_with_colors(vars(dnotitia_args), user_specified_args))
+    _logger.info(
+        format_args_with_colors(
+            vars(dnotitia_args), user_specified_args, redundant_args
+        )
+    )
     _logger.info(
         "------------------------------------------------------------------------------------------"
     )
@@ -442,6 +462,7 @@ def run_training(
     dataset_mixture_args,
     dnotitia_args,
     user_specified_args=None,
+    redundant_args=(),
 ):
     """Execute the shared flow: setup, models, tokenizer, dataset, trainer, train, save."""
     for key, value in spec.extra_env.items():
@@ -504,6 +525,7 @@ def run_training(
         dataset_mixture_args,
         dnotitia_args,
         user_specified_args,
+        redundant_args,
     )
 
     # Check for last checkpoint
@@ -701,6 +723,15 @@ def cli_main(spec, argv=None):
                 + ", ".join(f"{k}: {v[0]!r} -> {v[1]!r}" for k, v in restored.items())
             )
 
+    # Args set to their default value change nothing: keep them out of the pink highlighting and
+    # the auto output_dir name, and print them in gray instead. The default is the value parsed
+    # with no user config at all (a fresh parser each: set_defaults_with_config is sticky).
+    redundant_args = find_redundant_args(
+        user_specified_args,
+        parse_arg_values(TrlParser(spec.dataclass_types), config_path, cli_args),
+        parse_arg_values(TrlParser(spec.dataclass_types), spec.defaults_yaml, []),
+    )
+
     # Run the main function
     return run_training(
         spec,
@@ -709,5 +740,6 @@ def cli_main(spec, argv=None):
         model_args,
         dataset_mixture_args,
         dnotitia_args,
-        user_specified_args,
+        user_specified_args - redundant_args,
+        redundant_args=redundant_args,
     )

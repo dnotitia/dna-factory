@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dna_factory.utils.colorize_args import (
     colorize_user_args,
+    find_redundant_args,
     format_args_with_colors,
     parse_user_args,
     parse_yaml_config,
@@ -224,6 +225,44 @@ class TestParseYamlConfig:
             os.unlink(config_path)
 
 
+DEFAULTS = {
+    "learning_rate": 2e-05,
+    "packing": True,
+    "report_to": ["wandb"],
+    "datasets": [{"path": "org/data", "split": "train"}],
+    "dataset_config": None,
+}
+
+
+class TestFindRedundantArgs:
+    """Test cases for find_redundant_args function"""
+
+    def test_values_equal_to_default_are_redundant(self):
+        """Equal scalars, bools, None, lists and lists of dicts are redundant"""
+        result = find_redundant_args(set(DEFAULTS), dict(DEFAULTS), DEFAULTS)
+        assert result == set(DEFAULTS)
+
+    def test_values_differing_from_default_are_not_redundant(self):
+        """Any difference, including one deep inside a list of dicts, counts"""
+        values = {
+            "learning_rate": 1e-05,
+            "packing": False,
+            "report_to": ["none"],
+            "datasets": [{"path": "org/data", "split": "test"}],
+            "dataset_config": "ko",
+        }
+        assert find_redundant_args(set(DEFAULTS), values, DEFAULTS) == set()
+
+    def test_only_user_specified_args_are_checked(self):
+        """Args the user did not specify are never reported"""
+        assert find_redundant_args({"packing"}, DEFAULTS, DEFAULTS) == {"packing"}
+
+    def test_names_that_are_no_argument_are_not_redundant(self):
+        """`config` and nested YAML keys are no parser argument and stay specified"""
+        names = {"config", "lr_scheduler_kwargs_min_lr_rate"}
+        assert find_redundant_args(names, DEFAULTS, DEFAULTS) == set()
+
+
 class TestColorizeUserArgs:
     """Test cases for colorize_user_args function"""
 
@@ -283,6 +322,16 @@ class TestColorizeUserArgs:
 
         # Should not contain color codes
         assert "\033[1;95m" not in result
+
+    def test_colorize_redundant_args_gray(self):
+        """Redundant args are gray, changed args stay pink, others are uncolored"""
+        text = "'learning_rate': 0.001\n'packing': True\n'epochs': 10"
+        result = colorize_user_args(text, {"learning_rate"}, {"packing"})
+
+        lines = result.split("\n")
+        assert lines[0] == "\033[1;95m'learning_rate': 0.001\033[0m"
+        assert lines[1] == "\033[90m'packing': True\033[0m"
+        assert lines[2] == "'epochs': 10"
 
 
 class TestFormatArgsWithColors:
