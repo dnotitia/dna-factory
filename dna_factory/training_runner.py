@@ -365,11 +365,23 @@ def load_model(model_path, **model_kwargs):
     membership so both round-trip correctly.
     """
     config = AutoConfig.from_pretrained(
-        model_path, trust_remote_code=model_kwargs.get("trust_remote_code", False)
+        model_path,
+        trust_remote_code=model_kwargs.get("trust_remote_code", False),
+        revision=model_kwargs.get("revision"),
     )
     if type(config) in AutoModelForMultimodalLM._model_mapping:
         return AutoModelForMultimodalLM.from_pretrained(model_path, **model_kwargs)
     return AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
+
+
+def load_tokenizer(model_args, training_args):
+    """Load the tokenizer from the same `model_revision` as the weights."""
+    return AutoTokenizer.from_pretrained(
+        model_args.model_name_or_path,
+        trust_remote_code=resolve_trust_remote_code(training_args),
+        revision=model_args.model_revision,
+        use_fast=True,
+    )
 
 
 def set_use_cache(model, value):
@@ -543,11 +555,7 @@ def run_training(
     )
 
     # Create tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_args.model_name_or_path,
-        trust_remote_code=resolve_trust_remote_code(training_args),
-        use_fast=True,
-    )
+    tokenizer = load_tokenizer(model_args, training_args)
     tokenizer = _default(
         tokenizer, spec.postprocess_tokenizer, tokenizer, ctx, train_logger
     )
