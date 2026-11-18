@@ -82,7 +82,7 @@ CLI options, custom YAML, or both (CLI wins):
 ```bash
 $ python sft.py \
   --model_name_or_path Qwen/Qwen3-0.6B \
-  --dataset_name dnotitia/Reasoning_R1_Kor_completion_25k_sharegpt_v1 \
+  --dataset_name HuggingFaceH4/Multilingual-Thinking \
   --num_train_epochs 2
 
 $ python sft.py \
