@@ -51,7 +51,8 @@ use_liger_kernel: false
 # Logging backend; per-step metrics go to Weights & Biases (`- none` to disable)
 logging_steps: 1
 report_to:
-  - wandb
+  - none
+  # - wandb
 
 # Options for checkpoint saving
 save_strategy: steps
