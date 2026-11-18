@@ -220,8 +220,8 @@ def print_environment_and_arguments(
 ):
     """Print OS environment variables and all parsed arguments in a formatted way.
 
-    Arguments that differ from the default are pink; `redundant_args` (user-specified with
-    their default value) are gray.
+    User-specified arguments are pink, except `redundant_args` (user-specified with their
+    default value), which are gray.
     """
     _logger.info(
         "------------------------------------------------------------------------------------------"
@@ -470,9 +470,9 @@ def run_training(
 ):
     """Execute the shared flow: setup, models, tokenizer, dataset, trainer, train, save.
 
-    `user_specified_args` are the arguments the user changed from the default (shown in pink
-    and named in `output_dir: auto`); `redundant_args` are the ones the user specified with
-    their default value (shown in gray, left out of the name).
+    `user_specified_args` are the arguments the user set in the config or on the CLI; all of
+    them are named in `output_dir: auto`, so existing auto names stay stable. `redundant_args`
+    is the subset set to their default value: printed in gray instead of pink.
     """
     for key, value in spec.extra_env.items():
         os.environ.setdefault(key, value)
@@ -749,8 +749,8 @@ def cli_main(spec, argv=None):
                 + ", ".join(f"{k}: {v[0]!r} -> {v[1]!r}" for k, v in restored.items())
             )
 
-    # A key set to the value it already has by default changes nothing: show it apart from
-    # the real overrides and keep it out of the `output_dir: auto` name.
+    # A key set to the value it already has by default changes nothing: print it apart from
+    # the real overrides. It still feeds the `output_dir: auto` name, so names don't change.
     redundant_args = find_redundant_args(
         user_specified_args,
         parsed_arg_values(spec.dataclass_types, config_path, cli_args),
@@ -765,6 +765,6 @@ def cli_main(spec, argv=None):
         model_args,
         dataset_mixture_args,
         dnotitia_args,
-        user_specified_args - redundant_args,
+        user_specified_args,
         redundant_args=redundant_args,
     )

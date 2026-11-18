@@ -100,18 +100,21 @@ def colorize_user_args(text, user_specified_args, redundant_args=()):
     """
     Colorize entire lines containing user-specified arguments.
 
-    Lines of arguments that differ from the default are pink; lines of arguments the user
-    specified with their default value (`redundant_args`, effectively ignored) are gray.
+    Lines of user-specified arguments are pink, except those the user specified with their
+    default value (`redundant_args`, a subset that changes nothing), which are gray.
     """
     PINK = "\033[1;95m"  # Bold bright magenta/pink color
     GRAY = "\033[90m"  # Bright black (gray)
     RESET = "\033[0m"
 
+    redundant_args = set(redundant_args)
+    override_args = set(user_specified_args) - redundant_args
+
     lines = text.split("\n")
     colored_lines = []
 
     for line in lines:
-        if _line_mentions(line, user_specified_args):
+        if _line_mentions(line, override_args):
             line = f"{PINK}{line}{RESET}"
         elif _line_mentions(line, redundant_args):
             line = f"{GRAY}{line}{RESET}"

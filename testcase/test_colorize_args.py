@@ -398,7 +398,10 @@ class TestRedundantArgs:
 
     def test_redundant_lines_are_gray_and_overrides_stay_pink(self):
         text = "'learning_rate': 2e-05,\n'max_length': 512,\n'seed': 42"
-        result = colorize_user_args(text, {"max_length"}, {"learning_rate"})
+        # redundant_args is a subset of user_specified_args
+        result = colorize_user_args(
+            text, {"max_length", "learning_rate"}, {"learning_rate"}
+        )
         lines = result.split("\n")
 
         assert lines[0] == "\033[90m'learning_rate': 2e-05,\033[0m"

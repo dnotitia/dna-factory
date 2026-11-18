@@ -47,10 +47,13 @@ def test_values_equal_to_the_defaults_are_redundant(monkeypatch, tmp_path):
 
     assert {"learning_rate", "packing", "gradient_checkpointing"} <= redundant
     assert {"max_length", "use_cpu", "bf16"} <= user_specified
-    assert not redundant & user_specified
+    assert not {"max_length", "use_cpu", "bf16"} & redundant
+    # Redundant args stay user-specified (they still feed the auto output_dir name).
+    assert redundant <= user_specified
 
 
-def test_redundant_values_stay_out_of_the_auto_output_dir(monkeypatch, tmp_path):
+def test_redundant_values_stay_in_the_auto_output_dir(monkeypatch, tmp_path):
+    # Existing `output_dir: auto` names must not change, or runs stop resuming.
     args, _ = parse_sft(
         monkeypatch, tmp_path, "learning_rate: 2.0e-5\nmax_length: 512\n"
     )
@@ -68,7 +71,7 @@ def test_redundant_values_stay_out_of_the_auto_output_dir(monkeypatch, tmp_path)
     )
 
     assert "max-512" in name
-    assert "lr-" not in name
+    assert "lr-2e-05" in name
 
 
 def test_cli_override_of_a_config_value_back_to_the_default(monkeypatch, tmp_path):
@@ -79,4 +82,4 @@ def test_cli_override_of_a_config_value_back_to_the_default(monkeypatch, tmp_pat
 
     assert args[2].max_length == 1024
     assert "max_length" in redundant
-    assert "max_length" not in args[-1]
+    assert "max_length" in args[-1]
