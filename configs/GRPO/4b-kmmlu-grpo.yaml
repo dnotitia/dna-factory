@@ -55,6 +55,9 @@ learning_rate: 2e-6
 lr_scheduler_type: constant_with_warmup
 warmup_steps: 100
 
+report_to:
+  - wandb
+
 ########################################################
 # MODEL ARGUMENTS:
 ########################################################

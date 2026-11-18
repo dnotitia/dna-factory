@@ -44,6 +44,9 @@ gradient_accumulation_steps: 16
 
 learning_rate: 2e-6
 
+report_to:
+  - wandb
+
 ########################################################
 # MODEL ARGUMENTS:
 ########################################################

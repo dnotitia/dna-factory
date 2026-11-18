@@ -32,6 +32,9 @@ learning_rate: 2e-6
 lr_scheduler_type: constant_with_warmup
 warmup_steps: 100
 
+report_to:
+  - wandb
+
 # Colocated vLLM shares each GPU with the student and the ZeRO-3-sharded 32B teacher.
 vllm_gpu_memory_utilization: 0.3
 
