@@ -33,7 +33,8 @@ from trl import (
 from dna_factory.dnotitia_arguments import DnotitiaArguments
 from dna_factory.dnotitia_dataset_mixture import (
     WeightedDatasetConfig,
-    resample_by_weight,
+    load_dataset_mixture,
+    reject_streaming,
 )
 from dna_factory.dnotitia_grpo_trainer import DnotitiaGRPOTrainer
 from dna_factory.training_runner import (
@@ -150,8 +151,15 @@ def resolve_reward_funcs(script_args, training_args):
     return reward_funcs
 
 
-def _normalize_dataset_for_grpo(dataset, label):
+def _normalize_dataset_for_grpo(dataset, label, path=None):
     """Normalize one dataset to prompt-only schema + `label` column."""
+    # `column_names` is None for a streaming dataset with unknown features: skip the check.
+    if "label" in (dataset.column_names or []):
+        raise ValueError(
+            f"Dataset {path or label!r} already has a `label` column, but GRPO sets `label` "
+            "from the entry's `label:` (default: its `path`). Rename or drop the column "
+            "(e.g. via `columns:`)."
+        )
     feats = dataset.features
     if "messages" in feats:
 
@@ -194,44 +202,17 @@ def _normalize_dataset_for_grpo(dataset, label):
 
 
 def get_dataset_with_schema_alignment(mixture_config, seed=42):
-    """Load mixture datasets, normalize each to prompt schema, and concatenate."""
-    import os
-
-    import datasets as ds
-    from datasets import DatasetDict, concatenate_datasets
-
-    datasets_list = []
-    for dataset_config in mixture_config.datasets:
-        path = dataset_config.path
-        logger.info(
-            f"Loading dataset for mixture: {path} (config name: {dataset_config.name})"
-        )
-        if os.path.isdir(path):
-            dataset = ds.load_from_disk(path)
-            if isinstance(dataset, DatasetDict):
-                dataset = dataset[dataset_config.split or "train"]
-        else:
-            dataset = ds.load_dataset(
-                path=path, name=dataset_config.name, split=dataset_config.split
-            )
-        weight = dataset_config.weight
-        if weight != 1.0:
-            n_before = len(dataset)
-            dataset = resample_by_weight(dataset, weight, seed=seed)
-            logger.info(f"  weight={weight}: {n_before} -> {len(dataset)} examples")
-        label = getattr(dataset_config, "label", None) or path
-        datasets_list.append(_normalize_dataset_for_grpo(dataset, label))
-
-    try:
-        combined = concatenate_datasets(datasets_list)
-    except Exception as e:
-        raise ValueError(
-            f"Could not align dataset mixture schemas for concatenation ({e}). This usually means two "
-            "datasets define the same column with genuinely incompatible types (not just one of them "
-            "missing it) — check the offending column above."
-        ) from e
-    logger.info(f"Created GRPO dataset mixture with {len(combined)} examples")
-    return DatasetDict({"train": combined})
+    """Load mixture datasets, normalize each to prompt schema + label, and concatenate."""
+    reject_streaming(mixture_config, "GRPO")
+    return load_dataset_mixture(
+        mixture_config,
+        seed=seed,
+        normalize=lambda dataset, dataset_config: _normalize_dataset_for_grpo(
+            dataset,
+            dataset_config.label or dataset_config.path,
+            dataset_config.path,
+        ),
+    )
 
 
 def setup_training_args(
@@ -293,6 +274,16 @@ def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
     return get_dataset_with_schema_alignment(
         dataset_mixture_args, seed=training_args.seed
     )
+
+
+def load_async_mixture(dataset_mixture_args, training_args, ctx, train_logger):
+    # Same guard as `validate_async_args` in dna_factory/async_grpo.py: a mixture's own
+    # `streaming: true` must not bypass it.
+    if dataset_mixture_args.streaming:
+        raise ValueError(
+            "This AsyncGRPO draft supports non-streaming datasets only for checkpoint resume."
+        )
+    return load_mixture(dataset_mixture_args, training_args, ctx, train_logger)
 
 
 def extra_trainer_kwargs(
@@ -395,6 +386,7 @@ def get_spec(mode):
         pass_debug_batches=False,
         pass_peft_config=False,
         strict_args=True,
+        load_mixture=load_async_mixture,
         setup_training_args=setup_async_training_args,
         postprocess_tokenizer=postprocess_async_tokenizer,
         trainer_cls=AsyncGRPOTrainer,
