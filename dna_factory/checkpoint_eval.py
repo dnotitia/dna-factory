@@ -366,8 +366,12 @@ class VllmEvalServer:
     `killpg`, without that signal reaching the trainer.
     """
 
-    def __init__(self, model_dir, served_name, devices, extra_args, port, log_path):
+    def __init__(
+        self, model_dir, served_name, devices, extra_args, port, log_path, revision=None
+    ):
         self.model_dir = str(model_dir)
+        # Hub revision of `model_dir`, for the base model only (checkpoints are local).
+        self.revision = revision
         self.served_name = served_name
         self.devices = str(devices)
         self.extra_args = list(extra_args)
@@ -389,6 +393,13 @@ class VllmEvalServer:
             self.served_name,
             "--port",
             str(self.port),
+            # Weights and tokenizer from the same revision, as training loads them.
+            # Before `extra_args`, so an explicit flag in `eval_vllm_args` still wins.
+            *(
+                ["--revision", self.revision, "--tokenizer-revision", self.revision]
+                if self.revision
+                else []
+            ),
             *self.extra_args,
         ]
 
@@ -463,6 +474,7 @@ class CheckpointEvalCallback(TrainerCallback):
         max_tokens=16000,
         model_tag="model",
         base_model=None,
+        base_model_revision=None,
         repo_root=REPO_ROOT,
         train_logger=None,
     ):
@@ -475,6 +487,9 @@ class CheckpointEvalCallback(TrainerCallback):
         # The model training starts from, scored as step 0 by `on_train_begin`;
         # `None` skips the baseline.
         self.base_model = base_model
+        # `model_revision` of the starting model: without it a Hub id would be served
+        # from main, not the revision training loads.
+        self.base_model_revision = base_model_revision
         self.repo_root = Path(repo_root)
         self.logger = train_logger or logger
 
@@ -621,6 +636,9 @@ class CheckpointEvalCallback(TrainerCallback):
                 extra_args=self.vllm_args,
                 port=port,
                 log_path=eval_root / "vllm.log",
+                revision=(
+                    self.base_model_revision if model_dir == self.base_model else None
+                ),
             )
             self._server = server
             server.start()
@@ -844,6 +862,7 @@ def build_checkpoint_eval_callback(
             if getattr(dnotitia_args, "eval_baseline", True)
             else None
         ),
+        base_model_revision=getattr(model_args, "model_revision", None),
         train_logger=train_logger,
     )
     train_logger.info(

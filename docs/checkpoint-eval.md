@@ -84,7 +84,7 @@ With `eval_baseline: true` (the default), `on_train_begin` starts the first eval
 vllm serve <model_name_or_path> --served-model-name <tag>-checkpoint-0 ...
 ```
 
-- **Served in place.** `model_name_or_path` is served directly — a local path or a Hub id, vLLM loads either. Nothing rotates it away, so there is no staging snapshot, and nothing is deleted afterwards. Logs go to `<output_dir>/eval_logs/step-0/`.
+- **Served in place.** `model_name_or_path` is served directly — a local path or a Hub id, vLLM loads either. A `model_revision` is passed as `--revision`/`--tokenizer-revision`, so the baseline scores the same revision training starts from. Nothing rotates it away, so there is no staging snapshot, and nothing is deleted afterwards. Logs go to `<output_dir>/eval_logs/step-0/`.
 - **Skipped on resume.** A run resumed from a checkpoint starts past step 0, and the run it resumes already logged the baseline.
 - **Same one-at-a-time rule.** The baseline is the in-flight eval until it finishes, so a checkpoint saved before then is skipped with the usual warning. With `periodic_save_seconds: 80m` that means the baseline has to finish within 80 minutes, or the first checkpoint's eval is lost.
 

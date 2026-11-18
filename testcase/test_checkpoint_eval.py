@@ -452,7 +452,16 @@ class TestVllmEvalServer:
         )
         assert command[command.index("--port") + 1] == str(server.port)
         assert command[-2:] == ["--warmup", "0"]
+        assert "--revision" not in command
         assert server.base_url == f"http://127.0.0.1:{server.port}/v1"
+
+    def test_command_pins_the_revision_before_extra_args(self, tmp_path):
+        server = self._server(tmp_path)
+        server.revision = "abc123"
+        command = server.command()
+        assert command[command.index("--revision") + 1] == "abc123"
+        assert command[command.index("--tokenizer-revision") + 1] == "abc123"
+        assert command.index("--tokenizer-revision") < command.index("--warmup")
 
     def test_starts_serves_and_stops(self, tmp_path, monkeypatch):
         _fake_binaries(monkeypatch, tmp_path, vllm=_FAKE_SERVER)
@@ -779,6 +788,25 @@ write_eval_log(
         assert (base_model / "model.safetensors").exists()
         assert (run_dir / "eval_logs" / "step-0" / "vllm.log").exists()
 
+    def test_revision_is_served_for_the_base_model_only(self, tmp_path, monkeypatch):
+        revisions = []
+
+        def fake_server(**kwargs):
+            revisions.append(kwargs["revision"])
+            raise RuntimeError("stop after construction")
+
+        monkeypatch.setattr(ce, "VllmEvalServer", fake_server)
+        callback = CheckpointEvalCallback(
+            tasks=["inspect_evals/mmlu_pro"],
+            devices="7",
+            model_tag="test",
+            base_model="org/model",
+            base_model_revision="abc123",
+        )
+        callback._evaluate("org/model", 0, tmp_path, remove_after=False)
+        callback._evaluate(str(tmp_path / "staged"), 100, tmp_path, remove_after=False)
+        assert revisions == ["abc123", None]
+
     def test_one_failing_task_does_not_stop_the_others(self, tmp_path, monkeypatch):
         fake_inspect = f"""
 import sys
@@ -923,6 +951,7 @@ class TestBuildCallback:
         assert callback.devices == "0,1"
         assert callback.model_tag == "run"
         assert callback.base_model == "dnotitia/Qwen3-0.6B-Base"
+        assert callback.base_model_revision is None
         assert callback.vllm_args == [
             "--max-model-len",
             "32768",
