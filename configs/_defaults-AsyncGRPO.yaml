@@ -19,7 +19,7 @@ num_generations: 8
 max_completion_length: 2048
 temperature: 1.0
 epsilon: 0.2
-max_inflight_tasks: -1  # if -1, default value will be `max_staleness × per_device_train_batch_size × gradient_accumulation_steps × num_processes`
+max_concurrent_rollouts: 512  # upper bound only (TRL default); below it, rollouts in flight follow the vLLM server's KV-cache usage and max_staleness
 max_staleness: 4
 weight_sync_steps: 1
 token_budget: null  # if null, default value will be vllm's `--max-model-len`. Recommended to leave it as null

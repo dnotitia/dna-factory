@@ -137,25 +137,11 @@ sample/rollout_queue_size
 
 Discarded stale samples are an inherent cost of decoupling generation from optimization. Their frequency depends on the balance between generation speed and training consumption speed.
 
-Two measured twelve-step runs produced:
+Concurrency is set by `max_concurrent_rollouts` (default 512), an upper bound only. Below it, TRL (>= 1.18) sizes the number of rollouts in flight from the vLLM server's KV-cache capacity, and starts a new group only while the queued and in-flight tokens fit in what the trainer consumes in `max(max_staleness, 1)` steps. Lower `max_concurrent_rollouts` only to protect a resource each rollout holds (tool environments, connections).
 
-| Setting | Stale discards | Share of scored samples |
-| --- | ---: | ---: |
-| 2048-token completions, `max_inflight_tasks: 16` | 22 | 31% |
-| 8192-token completions, `max_inflight_tasks: -1` (32) | 67 | 46% |
+On TRL 1.17, whose fixed `max_inflight_tasks` (default `max_staleness × per_device_train_batch_size × gradient_accumulation_steps × num_processes`) this replaces, two twelve-step runs discarded 31% (2048-token completions, 16 in flight) and 46% (8192-token, 32 in flight) of scored samples as stale: long completions let generation run ahead of consumption. These numbers have not been re-measured with the token-based throttle.
 
-`max_inflight_tasks: -1` resolves to:
-
-```text
-max_staleness
-x per_device_train_batch_size
-x gradient_accumulation_steps
-x num_processes
-```
-
-This formula assumes that an in-flight sample will be consumed within the configured staleness window. Long completions can violate that assumption: generation gets ahead of consumption, and the surplus samples age out before training reaches them.
-
-If stale discards become frequent, increase `max_staleness` rather than reducing concurrency. Lowering concurrency tends to leave the rollout queue emptier without addressing the underlying consumption lag.
+If stale discards are still frequent, increase `max_staleness` rather than reducing concurrency.
 
 ## Zero-advantage groups
 
@@ -178,9 +164,9 @@ Resume itself works correctly: loading `checkpoint-6` from a twelve-step run res
 
 However, `prompt_index` in `rollout_state.json` is a low-water mark, not a count of completed prompts. TRL computes it as the smallest group index absent from the set of groups that have reached the model.
 
-This interacts poorly with stale-sample discards. The stale-discard path does not record the group of the discarded sample. If every sample from a particular group is discarded, that group never enters the completed-group set. A missing low-numbered group can therefore pin `prompt_index` indefinitely even as training continues far beyond it.
+On TRL 1.17 this interacted poorly with stale-sample discards: the stale-discard path did not record the group of the discarded sample, so a group whose every sample was discarded never entered the completed-group set and could pin `prompt_index` indefinitely. TRL 1.18 counts dropped groups as consumed (`_trained_groups | _dropped_groups`), which should remove that pinning; this has not been re-measured here.
 
-This occurred in two runs:
+This occurred in two TRL 1.17 runs:
 
 - one froze at `prompt_index = 3` while the trained-group count increased from 4 to 7;
 - another froze at `prompt_index = 4` while the trained-group count increased from 6 to 11.
@@ -189,7 +175,7 @@ The consequence is duplicated work rather than lost data. Every group below the 
 
 Treat `prompt_index` as a lower bound on training progress, not as a precise progress counter.
 
-This behavior originates upstream in `trl/experimental/async_grpo/async_grpo_trainer.py`; it is not introduced by this repository.
+This behavior originates upstream in TRL's `async_grpo_trainer.py` (`trl/trainer/` since TRL 1.18); it is not introduced by this repository.
 
 After resuming, reconnect to the external vLLM server and transfer the resumed policy weights before requesting new generations.
 

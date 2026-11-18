@@ -5,32 +5,32 @@ description = "LLM Post-Training Platform by Dnotitia Inc."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "accelerate==1.15.0",
+    "accelerate==1.16.0",
     "apache-tvm-ffi==0.1.11",
-    "datasets==5.1.0",
-    "deepspeed==0.19.9",
-    "inspect-ai==0.3.277",
-    "inspect-evals==0.23.0",
+    "datasets==5.2.0",
+    "deepspeed==0.20.0",
+    "inspect-ai==0.3.291",
+    "inspect-evals==0.29.0",
     "kernels==0.17.3",
     "liger-kernel==0.8.5",
     "math-verify==0.9.0",
-    "peft==0.21.2",
+    "peft==0.21.3",
     "pytest==9.2.0",
     "requests==2.34.2",
-    "ruff==0.17.3",
+    "ruff==0.17.5",
     "tilelang==0.1.12",
-    "torch==2.13.0",
+    "torch==2.14.0",
     "transformers==5.22.1",
-    "trl==1.17.1",
-    "vllm==0.32.0",
+    "trl==1.18.1",
+    "vllm==0.33.0",
     "wandb==0.31.0",
 ]
 
 [project.optional-dependencies]
 # Opt-in unsloth backend (`use_unsloth: true`); install with `uv sync --extra unsloth`. See docs/unsloth.md.
 unsloth = [
-    "unsloth==2026.11.2",
-    "unsloth-zoo==2026.11.2",
+    "unsloth==2026.11.6",
+    "unsloth-zoo==2026.11.6",
 ]
 
 [tool.uv]
@@ -41,9 +41,9 @@ package = false
 # sync with the core pins above (testcase/test_dependency_pins.py checks both, and lists the
 # deliberate lifts in INTENTIONALLY_LIFTED).
 override-dependencies = [
-    "datasets==5.1.0",
+    "datasets==5.2.0",
     "transformers==5.22.1",
-    "trl==1.17.1",
+    "trl==1.18.1",
 ]
 
 [tool.ruff]

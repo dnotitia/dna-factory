@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass, field
 
 import requests
-from trl.experimental.async_grpo import AsyncGRPOConfig
+from trl import AsyncGRPOConfig
 
 
 @dataclass
