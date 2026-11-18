@@ -1,7 +1,6 @@
 import logging
 from functools import wraps
 
-import torch
 from trl.experimental.sdft import SDFTTrainer
 from trl.experimental.sdft.sdft_trainer import DemonstrationTeacherContextBuilder
 
@@ -70,19 +69,6 @@ class DnotitiaSDFTTrainer(SDFTTrainer):
         # so it can be swapped afterwards.
         self.teacher_context_builder = PlacementTeacherContextBuilder(
             self, teacher_context_placement
-        )
-
-    def _compute_self_distillation_loss(self, model, inputs, distillation_logits):
-        # TRL returns early, *before* its `accelerator.gather` of the logged loss, when a rank's micro-batch has no
-        # loss tokens (every completion is empty/short, or all masked). Ranks that still have tokens do gather, so
-        # the collectives fall out of step and NCCL hangs until the watchdog fires. Let the empty rank join the same
-        # gather with a zero first, then take TRL's zero-loss path. A no-op in single-process runs.
-        if distillation_logits.loss_mask.sum() == 0:
-            self.accelerator.gather(
-                torch.zeros((), device=distillation_logits.student_logits.device)
-            )
-        return super()._compute_self_distillation_loss(
-            model, inputs, distillation_logits
         )
 
     def _decode_colored(self, ids, mask, color):

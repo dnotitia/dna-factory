@@ -76,7 +76,7 @@ def test_async_parse_and_setup(monkeypatch):
     monkeypatch.setattr(
         async_grpo, "validate_completion_length_against_server", lambda *a, **k: None
     )
-    from trl.experimental.async_grpo import async_grpo_trainer
+    from trl.trainer import async_grpo_trainer
 
     create_model = async_grpo_trainer.create_model_from_path
     ctx = {}

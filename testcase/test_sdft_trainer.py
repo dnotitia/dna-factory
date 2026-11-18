@@ -8,10 +8,8 @@ accelerator, so no model, GPU, or network is needed.
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 import pytest
-import torch
 from datasets import Dataset
 from trl.experimental.sdft import SDFTTrainer
 
@@ -75,43 +73,13 @@ class TestPlacementTeacherContextBuilder:
         assert out[1] == PROMPT
 
 
-def make_loss_inputs(n_loss_tokens):
-    mask = torch.zeros(2, 4, dtype=torch.long)
-    mask.view(-1)[:n_loss_tokens] = 1
-    return SimpleNamespace(loss_mask=mask, student_logits=torch.zeros(2, 4, 8))
-
-
-class TestEmptyRankGather:
-    """A rank with no loss tokens must still join the loss gather, or the other ranks hang in NCCL."""
-
-    def make_trainer(self):
-        trainer = object.__new__(DnotitiaSDFTTrainer)
-        trainer.accelerator = MagicMock()
-        return trainer
-
-    def test_empty_rank_joins_gather_then_delegates(self, monkeypatch):
-        trainer = self.make_trainer()
-        parent = MagicMock(return_value="parent-loss")
-        monkeypatch.setattr(SDFTTrainer, "_compute_self_distillation_loss", parent)
-        logits = make_loss_inputs(0)
-
-        result = trainer._compute_self_distillation_loss("model", {}, logits)
-
-        assert result == "parent-loss"
-        trainer.accelerator.gather.assert_called_once()
-        (arg,) = trainer.accelerator.gather.call_args.args
-        assert arg.shape == () and arg.item() == 0.0
-        parent.assert_called_once_with("model", {}, logits)
-
-    def test_non_empty_rank_adds_no_extra_gather(self, monkeypatch):
-        trainer = self.make_trainer()
-        monkeypatch.setattr(
-            SDFTTrainer, "_compute_self_distillation_loss", MagicMock(return_value=1.0)
-        )
-
-        trainer._compute_self_distillation_loss("model", {}, make_loss_inputs(3))
-
-        trainer.accelerator.gather.assert_not_called()
+def test_loss_is_trl_s_own():
+    """TRL >= 1.18 reduces the logged loss on every rank, empty or not. TRL 1.17 returned early on a rank with no
+    loss tokens, and this trainer used to add a gather there; on 1.18 that extra gather is what would hang NCCL."""
+    assert (
+        DnotitiaSDFTTrainer._compute_self_distillation_loss
+        is SDFTTrainer._compute_self_distillation_loss
+    )
 
 
 class TestDatasetNormalization:

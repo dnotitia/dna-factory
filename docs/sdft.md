@@ -144,10 +144,10 @@ supported.
 
 ## Multi-GPU notes
 
-- Each rank handles its own micro-batch. If a rank's batch has no loss tokens (all completions empty or inside
-  `num_loss_tokens_to_skip`), TRL 1.17.1 returns from the loss before the `accelerator.gather` that the other
-  ranks run, and NCCL hangs until its watchdog timeout. `DnotitiaSDFTTrainer` makes such a rank join the gather
-  with a zero first (see `_compute_self_distillation_loss`).
+- Each rank handles its own micro-batch. A rank whose batch has no loss tokens (all completions empty or inside
+  `num_loss_tokens_to_skip`) still reaches TRL's loss `accelerator.reduce` (TRL >= 1.18), so the ranks stay in
+  step. TRL 1.17 returned early there and hung NCCL; do not reintroduce the old workaround of an extra gather on
+  the empty rank, which would now be the unmatched collective.
 - The frozen teacher copy costs one extra model's memory per GPU (ZeRO-3 shards it). Lower
   `vllm_gpu_memory_utilization` if colocated vLLM runs out of memory.
 

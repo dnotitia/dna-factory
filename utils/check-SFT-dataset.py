@@ -205,7 +205,7 @@ def transform_type1(example):
                 # Ensure 'thinking' field does not exist on user messages
                 if "thinking" in updated:
                     updated.pop("thinking", None)
-            elif role == "assistant":
+            elif role == "assistant":  # noqa: SIM102
                 if "<think>" in content and "</think>" in content:
                     thinking_part = (
                         content.split("<think>")[1].split("</think>")[0].strip()

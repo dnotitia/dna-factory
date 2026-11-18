@@ -373,7 +373,7 @@ def get_spec(mode):
         return SPEC
     if mode != "async":
         raise ValueError(f"Unknown GRPO execution mode: {mode!r}")
-    from trl.experimental.async_grpo import AsyncGRPOTrainer
+    from trl import AsyncGRPOTrainer
 
     from dna_factory.async_grpo import DnotitiaAsyncGRPOConfig
 
@@ -381,7 +381,7 @@ def get_spec(mode):
         SPEC,
         name="AsyncGRPO",
         output_dir_tag="ASYNCGRPO",
-        trainer_module="trl.experimental.async_grpo",
+        trainer_module="trl.trainer.async_grpo_trainer",
         defaults_yaml="configs/_defaults-AsyncGRPO.yaml",
         dataclass_types=(
             GRPOScriptArguments,
@@ -428,10 +428,10 @@ def setup_async_training_args(
         "dtype": model_args.dtype,
     }
     train_logger.info(
-        "AsyncGRPO: single training GPU; server=%s, max_inflight_tasks=%s, "
+        "AsyncGRPO: single training GPU; server=%s, max_concurrent_rollouts=%s, "
         "max_staleness=%s, token_budget=%s",
         training_args.vllm_server_base_url,
-        training_args.max_inflight_tasks,
+        training_args.max_concurrent_rollouts,
         training_args.max_staleness,
         training_args.token_budget,
     )
