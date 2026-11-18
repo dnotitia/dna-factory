@@ -18,8 +18,9 @@ from dna_factory.dnotitia_arguments import DnotitiaArguments
 from dna_factory.dnotitia_dataset_mixture import (
     WeightedDatasetConfig,
     WeightedDatasetMixtureConfig,
+    load_dataset_mixture,
+    reject_streaming,
 )
-from dna_factory.dnotitia_dataset_mixture import load_mixture as load_mixture_datasets
 from dna_factory.dnotitia_sdft_trainer import DnotitiaSDFTTrainer
 from dna_factory.training_runner import (
     TrainingSpec,
@@ -198,7 +199,8 @@ def _normalize_entry_for_sdft(dataset, dataset_config):
 
 def get_dataset_with_context(mixture_config, seed=42):
     """Load mixture datasets, attach each one's privileged context, apply weights, and concatenate."""
-    return load_mixture_datasets(
+    reject_streaming(mixture_config, "SDFT")
+    return load_dataset_mixture(
         mixture_config, seed=seed, normalize=_normalize_entry_for_sdft
     )
 

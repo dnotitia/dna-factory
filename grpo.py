@@ -33,8 +33,9 @@ from trl import (
 from dna_factory.dnotitia_arguments import DnotitiaArguments
 from dna_factory.dnotitia_dataset_mixture import (
     WeightedDatasetConfig,
+    load_dataset_mixture,
+    reject_streaming,
 )
-from dna_factory.dnotitia_dataset_mixture import load_mixture as load_mixture_datasets
 from dna_factory.dnotitia_grpo_trainer import DnotitiaGRPOTrainer
 from dna_factory.training_runner import (
     TrainingSpec,
@@ -197,13 +198,13 @@ def _normalize_dataset_for_grpo(dataset, label, path=None):
             f"Dataset has neither `messages` nor `prompt` (columns: {dataset.column_names}); "
             "cannot build a GRPO prompt-only schema."
         )
-    # `.map` rather than `add_column`, which needs `len()` and so fails on streaming datasets.
-    return dataset.map(lambda _: {"label": label})
+    return dataset.add_column("label", [label] * len(dataset))
 
 
 def get_dataset_with_schema_alignment(mixture_config, seed=42):
     """Load mixture datasets, normalize each to prompt schema + label, and concatenate."""
-    return load_mixture_datasets(
+    reject_streaming(mixture_config, "GRPO")
+    return load_dataset_mixture(
         mixture_config,
         seed=seed,
         normalize=lambda dataset, dataset_config: _normalize_dataset_for_grpo(

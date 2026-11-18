@@ -1,5 +1,5 @@
 """
-The shared mixture loader (dna_factory/dnotitia_dataset_mixture.py::load_mixture) as seen through
+The shared mixture loader (dna_factory/dnotitia_dataset_mixture.py::load_dataset_mixture) as seen through
 each entry script's loader, run against real tiny local datasets.
 """
 
@@ -183,12 +183,22 @@ def test_async_grpo_rejects_streaming_mixture(monkeypatch):
     def boom(*args, **kwargs):
         raise AssertionError("loader must not run")
 
-    monkeypatch.setattr(grpo, "load_mixture_datasets", boom)
+    monkeypatch.setattr(grpo, "load_dataset_mixture", boom)
     mixture = grpo.LabeledDatasetMixtureConfig(
         datasets=[{"path": "json", "data_files": "x", "split": "train"}],
         streaming=True,
     )
     with pytest.raises(ValueError, match="non-streaming datasets only"):
-        grpo.get_spec("async").load_mixture(
-            mixture, SimpleNamespace(seed=1), {}, None
-        )
+        grpo.get_spec("async").load_mixture(mixture, SimpleNamespace(seed=1), {}, None)
+
+
+@pytest.mark.parametrize("name", ["grpo", "opd", "sdft"])
+def test_prompt_normalizing_loaders_reject_streaming(name, tmp_path):
+    loader, config_cls = LOADERS[name]
+    file = _write_jsonl(tmp_path / "rows.jsonl", _rows(2))
+    mixture = config_cls(
+        datasets=[{"path": "json", "data_files": file, "split": "train"}],
+        streaming=True,
+    )
+    with pytest.raises(ValueError, match="does not support streaming datasets"):
+        loader(mixture)

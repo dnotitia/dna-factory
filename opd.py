@@ -28,8 +28,9 @@ from trl import (
 from dna_factory.dnotitia_arguments import DnotitiaArguments
 from dna_factory.dnotitia_dataset_mixture import (
     WeightedDatasetMixtureConfig,
+    load_dataset_mixture,
+    reject_streaming,
 )
-from dna_factory.dnotitia_dataset_mixture import load_mixture as load_mixture_datasets
 from dna_factory.dnotitia_opd_trainer import DnotitiaOPDTrainer
 from dna_factory.training_runner import (
     TrainingSpec,
@@ -83,7 +84,8 @@ def _normalize_dataset_for_opd(dataset):
 
 def get_dataset_with_schema_alignment(mixture_config, seed=42):
     """Load mixture datasets, normalize each to prompt schema, apply weight, and concatenate."""
-    return load_mixture_datasets(
+    reject_streaming(mixture_config, "OPD")
+    return load_dataset_mixture(
         mixture_config,
         seed=seed,
         normalize=lambda dataset, dataset_config: _normalize_dataset_for_opd(dataset),

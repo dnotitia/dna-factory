@@ -130,7 +130,7 @@ def load_dataset_entry(dataset_config, streaming=False):
     )
 
 
-def load_mixture(mixture_config, seed=42, normalize=None):
+def load_dataset_mixture(mixture_config, seed=42, normalize=None):
     """Load a TRL dataset mixture into a `DatasetDict`; shared by every entry script.
 
     Per entry: load, `columns`, optional `normalize(dataset, dataset_config)`, then the size
@@ -207,6 +207,16 @@ def load_mixture(mixture_config, seed=42, normalize=None):
     return DatasetDict({"train": combined})
 
 
+def reject_streaming(mixture_config, method):
+    """Raise for a streamed mixture: `method`'s per-dataset preprocessing reads each
+    dataset's columns up front, which a streamed dataset may not know."""
+    if mixture_config.streaming:
+        raise ValueError(
+            f"{method} does not support streaming datasets (`streaming: true`); "
+            "set `streaming: false`."
+        )
+
+
 def get_weighted_dataset(mixture_config, seed=42):
     """Load a TRL dataset mixture and apply each entry's size multiplier (no normalization)."""
-    return load_mixture(mixture_config, seed=seed)
+    return load_dataset_mixture(mixture_config, seed=seed)

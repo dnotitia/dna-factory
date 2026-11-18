@@ -24,8 +24,8 @@ from trl import (
 from dna_factory.dnotitia_arguments import DnotitiaArguments
 from dna_factory.dnotitia_dataset_mixture import (
     WeightedDatasetMixtureConfig,
+    load_dataset_mixture,
 )
-from dna_factory.dnotitia_dataset_mixture import load_mixture as load_mixture_datasets
 from dna_factory.dnotitia_sft_trainer import DnotitiaSFTTrainer
 from dna_factory.training_runner import (
     TrainingSpec,
@@ -58,7 +58,7 @@ def _add_empty_thinking(dataset, dataset_config):
 
 
 def get_dataset_with_schema_alignment(mixture_config, seed=42):
-    return load_mixture_datasets(
+    return load_dataset_mixture(
         mixture_config, seed=seed, normalize=_add_empty_thinking
     )
 
