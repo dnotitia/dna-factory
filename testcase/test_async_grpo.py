@@ -35,7 +35,7 @@ def _skip_cuda_tf32_probe(monkeypatch):
 
 def parse_async(monkeypatch, extra=()):
     monkeypatch.chdir(Path(__file__).resolve().parents[1])
-    monkeypatch.setattr(training_runner, "run_training", lambda *args: args)
+    monkeypatch.setattr(training_runner, "run_training", lambda *args, **kwargs: args)
     return training_runner.cli_main(
         grpo.get_spec("async"),
         [
@@ -124,7 +124,7 @@ def test_reject_sync_yaml(monkeypatch, tmp_path):
 
 def test_sync_cli_still_uses_grpo_defaults(monkeypatch):
     monkeypatch.chdir(Path(__file__).resolve().parents[1])
-    monkeypatch.setattr(training_runner, "run_training", lambda *args: args)
+    monkeypatch.setattr(training_runner, "run_training", lambda *args, **kwargs: args)
     spec, script, training, _, _, _, _ = training_runner.cli_main(
         grpo.get_spec("sync"), ["--use_cpu", "true", "--bf16", "false"]
     )
@@ -140,7 +140,7 @@ def test_repeated_config_uses_last_value(monkeypatch, tmp_path):
     first.write_text("learning_rate: 1.0e-5\ntemperature: 0.7\n")
     second.write_text("learning_rate: 2.0e-5\n")
     monkeypatch.chdir(Path(__file__).resolve().parents[1])
-    monkeypatch.setattr(training_runner, "run_training", lambda *args: args)
+    monkeypatch.setattr(training_runner, "run_training", lambda *args, **kwargs: args)
 
     _, _, training, _, _, _, user_specified = training_runner.cli_main(
         grpo.get_spec("sync"),
@@ -162,7 +162,7 @@ def test_repeated_config_uses_last_value(monkeypatch, tmp_path):
 
 def test_valueless_config_errors(monkeypatch):
     monkeypatch.chdir(Path(__file__).resolve().parents[1])
-    monkeypatch.setattr(training_runner, "run_training", lambda *args: args)
+    monkeypatch.setattr(training_runner, "run_training", lambda *args, **kwargs: args)
 
     with pytest.raises(SystemExit) as exc_info:
         training_runner.cli_main(
