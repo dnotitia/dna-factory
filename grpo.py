@@ -14,13 +14,6 @@ import os
 import sys
 from dataclasses import dataclass, field, replace
 
-# unsloth must be imported before trl/transformers/peft, and before the Dnotitia trainers subclass
-# TRL's trainers, for its patches to apply, so the use_unsloth decision runs ahead of those imports.
-if __name__ == "__main__":
-    from dna_factory.unsloth_bootstrap import maybe_import_unsloth
-
-    maybe_import_unsloth(sys.argv[1:], "configs/_defaults-GRPO.yaml")
-
 import yaml
 from trl import (
     DatasetMixtureConfig,
@@ -42,12 +35,6 @@ from dna_factory.training_runner import (
     cli_main,
     resolve_trust_remote_code,
     run_training,
-)
-from dna_factory.unsloth_integration import (
-    effective_router_aux_loss_coef,
-    generation_max_seq_length,
-    load_unsloth_model,
-    resolve_fast_inference,
 )
 
 logger = logging.getLogger(__name__)
@@ -220,13 +207,6 @@ def setup_training_args(
 ):
     ctx["reward_funcs"] = resolve_reward_funcs(script_args, training_args)
 
-    if ctx.get("use_unsloth"):
-        # unsloth path: FastModel loads the model (quantization and LoRA included) and the trainer
-        # gets the instance, so `model_init_kwargs` and `quantization_config` must be unset.
-        training_args.model_init_kwargs = None
-        ctx["quantization_config"] = None
-        return
-
     # Model passed as string; init kwargs go through training_args.
     training_args.model_init_kwargs = {
         "revision": model_args.model_revision,
@@ -240,34 +220,7 @@ def setup_training_args(
 def load_models(
     script_args, training_args, model_args, dnotitia_args, ctx, train_logger
 ):
-    if not ctx.get("use_unsloth"):
-        return {"model": model_args.model_name_or_path}
-
-    # With vLLM, unsloth owns the colocated engine and `vllm_gpu_memory_utilization` is forwarded to it.
-    model_type = ctx["unsloth_model_type"]
-    # UnslothGRPOTrainer cannot compute the MoE router auxiliary loss and raises on a non-zero
-    # coefficient (by default TRL takes it from the model config: 0.001 for Qwen3 MoE). Fail before the
-    # slow model load, and don't zero it silently: use_unsloth must not change the objective.
-    if model_type is not None and model_type.endswith("_moe"):
-        coef = effective_router_aux_loss_coef(model_args, training_args)
-        if coef:
-            raise ValueError(
-                f"unsloth GRPO does not compute the MoE router auxiliary loss, so router_aux_loss_coef="
-                f"{coef} cannot be honoured for model_type={model_type!r}. "
-                "Set router_aux_loss_coef=0.0 or use_unsloth=false."
-            )
-    fast_inference = resolve_fast_inference(
-        training_args, model_type, train_logger, use_peft=model_args.use_peft
-    )
-    model = load_unsloth_model(
-        model_args,
-        training_args,
-        model_type=model_type,
-        max_seq_length=generation_max_seq_length(model_args, training_args),
-        fast_inference=fast_inference,
-        logger=train_logger,
-    )
-    return {"model": model}
+    return {"model": model_args.model_name_or_path}
 
 
 def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):

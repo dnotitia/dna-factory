@@ -43,7 +43,6 @@ The variants below change only a few keys each, so they are described here inste
 | [Weighted rewards](#weighted-rewards) | `reward_funcs`, `reward_weights` | combine correctness, format and length rewards |
 | [LLM judge with a reference](#llm-judge-with-a-reference) | `reward_funcs` | grade answers that `math_verify` cannot parse |
 | [Per-label judges on a mixture](#per-label-judges-on-a-mixture) | `datasets` with `label`, `reward_funcs` | score each dataset of a mixture with its own judge |
-| [unsloth](unsloth.md#example-grpo-config) | `use_unsloth: true`, LoRA | LoRA GRPO on one GPU with less memory |
 
 ### Without vLLM
 

@@ -82,17 +82,6 @@ class DnotitiaArguments:
             )
         },
     )
-    use_unsloth: bool = field(
-        default=False,
-        metadata={
-            "help": (
-                "Load the model with unsloth's FastModel (faster, less memory) when the model's "
-                "model_type is supported (qwen3, qwen3_moe, qwen3_5, qwen3_5_moe); unsupported "
-                "models fall back to the standard path with a warning. Single-GPU only; not "
-                "available with grpo_execution: async. Requires `uv sync --extra unsloth`."
-            )
-        },
-    )
     eval_on_checkpoint: bool = field(
         default=False,
         metadata={

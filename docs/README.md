@@ -19,7 +19,6 @@ Guides for the training scripts and the features around them. Setup and the SFT 
 
 | Guide | Covers |
 |---|---|
-| [unsloth.md](unsloth.md) | The optional single-GPU unsloth backend (`use_unsloth: true`): supported models, benchmarks, and differences from the standard path |
 | [checkpoint-eval.md](checkpoint-eval.md) | `eval_on_checkpoint`: serving each checkpoint with vLLM, running Inspect tasks, and logging scores to the same W&B run |
 | [multi-nodes.md](multi-nodes.md) | Two-node training with `accelerate launch` |
 

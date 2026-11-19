@@ -9,5 +9,4 @@ sangpark/
 
 # pytest JUnit report (written by CI)
 pytest.xml
-unsloth_compiled_cache/
 vllm_gen_lora*/

@@ -139,8 +139,7 @@ Key options (all documented in `configs/_defaults-SDFT.yaml`):
 | `num_generations` | Samples per prompt; `generation_batch_size` must be divisible by it |
 | `teacher_context_placement` | `user` or `system`, see above |
 
-LoRA works as in the other scripts (`use_peft: true`); then no second model copy is held. `use_unsloth` is not
-supported.
+LoRA works as in the other scripts (`use_peft: true`); then no second model copy is held.
 
 ## Multi-GPU notes
 

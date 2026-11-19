@@ -40,12 +40,6 @@ from dna_factory.periodic_checkpoint import (
     PeriodicCheckpointCallback,
     parse_duration_to_seconds,
 )
-from dna_factory.unsloth_bootstrap import get_unsloth_decision
-from dna_factory.unsloth_integration import (
-    prepare_training_args_for_unsloth,
-    resolve_use_unsloth,
-    revert_unsloth_config_overrides,
-)
 from dna_factory.utils.colorize_args import (
     find_redundant_args,
     format_args_with_colors,
@@ -495,9 +489,6 @@ def run_training(
 
     ctx = {}
 
-    # Whether to load the model through unsloth (decided by the bootstrap before trl was imported)
-    use_unsloth = resolve_use_unsloth(dnotitia_args)
-
     # Set seed for reproducibility
     set_seed(training_args.seed)
 
@@ -528,9 +519,6 @@ def run_training(
     # Setup logging
     train_logger = setup_logging(training_args, spec.trainer_module)
 
-    if dnotitia_args.use_unsloth:
-        train_logger.info(f"unsloth: {get_unsloth_decision().reason}")
-
     # Print DNA Factory banner
     print_dna_factory_banner(train_logger, spec.script_file)
 
@@ -560,15 +548,6 @@ def run_training(
     if last_checkpoint is not None and training_args.resume_from_checkpoint is None:
         train_logger.info(
             f"Checkpoint detected, resuming training at {last_checkpoint=}."
-        )
-
-    # unsloth path: drop settings that clash with its patching; the hooks read the decision from ctx
-    # (FastModel loads the model and applies LoRA, so `peft_config` is not passed to the trainer).
-    ctx["use_unsloth"] = use_unsloth
-    if use_unsloth:
-        ctx["unsloth_model_type"] = get_unsloth_decision().model_type
-        prepare_training_args_for_unsloth(
-            training_args, train_logger, model_type=ctx["unsloth_model_type"]
         )
 
     # Method-specific training_args preparation (reward funcs, model_init_kwargs, ...)
@@ -666,7 +645,7 @@ def run_training(
         )
     if spec.pass_debug_batches:
         trainer_kwargs["debug_first_n_batches"] = dnotitia_args.debug_first_n_batches
-    if spec.pass_peft_config and not use_unsloth:
+    if spec.pass_peft_config:
         trainer_kwargs["peft_config"] = get_peft_config(model_args)
     trainer_kwargs.update(models_kwargs)
     trainer_kwargs.update(
@@ -749,17 +728,6 @@ def cli_main(spec, argv=None):
     ) = parser.parse_args_and_config(full_args, return_remaining_strings=True)
     if spec.strict_args and remaining:
         raise ValueError(f"Unsupported {spec.name} arguments: {' '.join(remaining)}")
-
-    # unsloth's patched config classes rewrite some hyperparameters at construction; restore TRL's
-    # values (logging is not configured yet, so report with print)
-    decision = get_unsloth_decision()
-    if decision is not None and decision.active:
-        restored = revert_unsloth_config_overrides(training_args, full_args)
-        if restored:
-            print(
-                f"[use_unsloth] restored {len(restored)} config value(s) rewritten by unsloth: "
-                + ", ".join(f"{k}: {v[0]!r} -> {v[1]!r}" for k, v in restored.items())
-            )
 
     # A key set to the value it already has by default changes nothing: print it apart from
     # the real overrides. It still feeds the `output_dir: auto` name, so names don't change.

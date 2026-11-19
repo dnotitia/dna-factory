@@ -25,7 +25,7 @@ context the student never sees, acts as its own teacher.
 
 - Nov/03/2026 - **SDFT** (Self-Distillation Fine-Tuning) support.
 - Oct/23/2026 - **Qwen3.8-Flash-Next** LoRA SFT support.
-- Oct/12/2026 - Optional **unsloth** backend (single GPU) for SFT, DPO, GRPO and OPD.
+- Oct/12/2026 - ~~Optional **unsloth** backend (single GPU) for SFT, DPO, GRPO and OPD.~~
 - Sep/22/2026 - **Checkpoint Evaluation** - Inspect benchmarks on every checkpoint, logged to W&B.
 - Sep/02/2026 - **OPD** (On-Policy Distillation) support.
 - Jun/05/2026 - **GRPO** (Group Relative Policy Optimization) support.

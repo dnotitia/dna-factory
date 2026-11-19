@@ -108,12 +108,6 @@ def validate_async_args(script_args, training_args, model_args, dnotitia_args):
         raise ValueError(
             "AsyncGRPO does not support evaluation; set eval_strategy: 'no' and do_eval: false."
         )
-    if dnotitia_args.use_unsloth:
-        raise ValueError(
-            "use_unsloth is not supported with grpo_execution: async. unsloth patches TRL's "
-            "synchronous trainers and vLLM engine, not AsyncGRPOTrainer or its separate vLLM server. "
-            "Set use_unsloth: false, or use grpo_execution: sync."
-        )
     if dnotitia_args.dynamic_sampling != "off":
         raise ValueError("AsyncGRPO requires dynamic_sampling: 'off'.")
     if dnotitia_args.debug_first_n_batches != 0:

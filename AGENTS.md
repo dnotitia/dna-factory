@@ -56,7 +56,7 @@ docs/qwen38-flash-next.md (its `ple_host_table` requires `use_peft`).
   concrete instances (`my_rewards.py`).
 - `configs/` — `_defaults-{SFT,DPO,GRPO,OPD,SDFT}.yaml` (base, **do not edit**) merged with
   model-specific overrides in `configs/{SFT,DPO,GRPO,OPD,SDFT}/`. GRPO variants (no vLLM,
-  server mode, DAPO, Dr. GRPO, weighted rewards, judges, unsloth) are documented as
+  server mode, DAPO, Dr. GRPO, weighted rewards, judges) are documented as
   snippets in docs/grpo.md, not shipped as separate config files.
 - `docs/` — per-feature guides, indexed in docs/README.md.
 
@@ -81,6 +81,6 @@ docs/qwen38-flash-next.md (its `ple_host_table` requires `use_peft`).
   (`define_metric`), not `log(step=)` — that would be a backwards step and get dropped.
   The row also carries `train/global_step` so panels on that X axis still find the points.
   See docs/checkpoint-eval.md.
-- unsloth (`use_unsloth: true`, needs `uv sync --extra unsloth`): single-GPU only, and rejected with AsyncGRPO. unsloth patches TRL's trainers on import, so a bootstrap at the top of each entry script (`dna_factory/unsloth_bootstrap.py`) imports it before trl, only for `model_type` in {qwen3, qwen3_moe, qwen3_5, qwen3_5_moe}; others run the standard path (an unreadable model config.json raises instead; `--use_unsloth` must be spelled in full, a bootstrap/parser mismatch raises). The patched trainers ignore `peft_config`: LoRA goes through `FastModel.get_peft_model` (`dna_factory/unsloth_integration.py`). The extra's `[tool.uv] override-dependencies` keeps `datasets`/`transformers`/`trl` at the core pins (unsloth caps them lower): keep it in sync when bumping them. Besides unsloth's caps it lifts only those listed in `INTENTIONALLY_LIFTED` in `testcase/test_dependency_pins.py` (currently vllm's transformers cap, validated by hand); any other lifted cap fails that test, and so does an entry that no longer lifts anything. See docs/unsloth.md.
+- `[tool.uv] override-dependencies` in pyproject.toml re-pins `transformers` past vllm's cap; keep it in sync with the core pin when bumping. It may lift only the caps listed in `INTENTIONALLY_LIFTED` in `testcase/test_dependency_pins.py` (validated by hand); any other lifted cap fails that test, and so does an entry that no longer lifts anything.
 - OPD: prompt-only datasets (a conversational dataset's last assistant turn is dropped — the student writes the completion). The teacher must share the student's vocabulary or TRL raises. `beta` selects the divergence (1.0 = reverse KL, 0.0 = forward KL, 0.5 = JSD), **not** GRPO's reference-model KL penalty. See docs/opd.md.
 - SDFT: data rows carry `prompt` + optional `privileged_context` (per-dataset in YAML via `privileged_context`/`privileged_context_file`); `teacher_context_placement` is `user` (TRL default) or `system`. See docs/sdft.md.

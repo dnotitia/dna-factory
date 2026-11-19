@@ -26,24 +26,14 @@ dependencies = [
     "wandb==0.31.0",
 ]
 
-[project.optional-dependencies]
-# Opt-in unsloth backend (`use_unsloth: true`); install with `uv sync --extra unsloth`. See docs/unsloth.md.
-unsloth = [
-    "unsloth==2026.11.6",
-    "unsloth-zoo==2026.11.6",
-]
-
 [tool.uv]
 package = false
-# unsloth caps datasets, transformers and trl below the core pins; keep the core pins so the
-# extra resolves alongside them. The transformers override also lifts vllm's cap (<5.20.0),
-# deliberately and validated by hand; any other cap an override lifts fails the tests. Keep in
-# sync with the core pins above (testcase/test_dependency_pins.py checks both, and lists the
-# deliberate lifts in INTENTIONALLY_LIFTED).
+# vllm caps transformers below the core pin (<5.20.0); the override lifts that cap deliberately,
+# validated by hand. Any other cap an override lifts fails the tests. Keep in sync with the core
+# pins above (testcase/test_dependency_pins.py checks both, and lists the deliberate lifts in
+# INTENTIONALLY_LIFTED).
 override-dependencies = [
-    "datasets==5.2.0",
     "transformers==5.22.1",
-    "trl==1.18.1",
 ]
 
 [tool.ruff]

@@ -208,8 +208,6 @@ def get_dataset_with_context(mixture_config, seed=42):
 def setup_training_args(
     script_args, training_args, model_args, dnotitia_args, ctx, train_logger
 ):
-    if dnotitia_args.use_unsloth:
-        raise ValueError("`use_unsloth` is not supported by sdft.py.")
     # Models passed as strings; init kwargs go through training config.
     training_args.model_init_kwargs = {
         "revision": model_args.model_revision,

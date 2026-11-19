@@ -8,14 +8,6 @@ Key DPO-specific difference: Uses both model and ref_model (reference model).
 """
 
 import logging
-import sys
-
-# unsloth must be imported before trl/transformers/peft, and before the Dnotitia trainers subclass
-# TRL's trainers, for its patches to apply, so the use_unsloth decision runs ahead of those imports.
-if __name__ == "__main__":
-    from dna_factory.unsloth_bootstrap import maybe_import_unsloth
-
-    maybe_import_unsloth(sys.argv[1:], "configs/_defaults-DPO.yaml")
 
 from transformers import AutoModelForCausalLM
 from trl import DPOConfig, ModelConfig, ScriptArguments
@@ -30,10 +22,8 @@ from dna_factory.training_runner import (
     TrainingSpec,
     cli_main,
     create_model_kwargs,
-    load_model,
     run_training,
 )
-from dna_factory.unsloth_integration import load_unsloth_model
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -79,27 +69,6 @@ def load_models(
 ):
     # Model init kwargs
     model_kwargs = create_model_kwargs(model_args, training_args, dnotitia_args)
-
-    if ctx.get("use_unsloth"):
-        # unsloth path: FastModel loads the policy and (with use_peft) applies LoRA itself, because the
-        # patched DPOTrainer ignores `peft_config`.
-        model = load_unsloth_model(
-            model_args,
-            training_args,
-            model_type=ctx["unsloth_model_type"],
-            max_seq_length=training_args.max_length or 0,
-            fast_inference=False,
-            logger=train_logger,
-        )
-        if model_args.use_peft:
-            # ref_model=None makes TRL add a "ref" adapter copy of the freshly (zero-initialised) LoRA
-            # model, i.e. the base weights, so no second full model is loaded.
-            return {"model": model, "ref_model": None}
-        # Full fine-tuning has no adapter to switch off, so load a plain HF frozen reference
-        # (the same thing TRL would build internally from the policy's config).
-        ref_model = load_model(model_args.model_name_or_path, **model_kwargs)
-        ref_model.eval()
-        return {"model": model, "ref_model": ref_model}
 
     # Create model
     model = AutoModelForCausalLM.from_pretrained(

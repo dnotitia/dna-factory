@@ -256,7 +256,7 @@ def take_rows(batch: dict[str, Any], idx: torch.Tensor) -> dict[str, Any]:
             if n is None:
                 n = val.shape[0]
             if val.shape[0] == n:
-                out[key] = val[idx.to(val.device)]  # unsloth keeps some entries on CPU
+                out[key] = val[idx.to(val.device)]
                 continue
         if isinstance(val, list) and n is not None and len(val) == n:
             out[key] = [val[i] for i in idx.tolist()]

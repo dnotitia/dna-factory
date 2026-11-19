@@ -6,14 +6,6 @@ the shared setup/train/save flow lives in dna_factory/training_runner.py.
 """
 
 import logging
-import sys
-
-# unsloth must be imported before trl/transformers/peft, and before the Dnotitia trainers subclass
-# TRL's trainers, for its patches to apply, so the use_unsloth decision runs ahead of those imports.
-if __name__ == "__main__":
-    from dna_factory.unsloth_bootstrap import maybe_import_unsloth
-
-    maybe_import_unsloth(sys.argv[1:], "configs/_defaults-SFT.yaml")
 
 from trl import (
     ModelConfig,
@@ -35,7 +27,6 @@ from dna_factory.training_runner import (
     run_training,
     set_use_cache,
 )
-from dna_factory.unsloth_integration import load_unsloth_model
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -77,19 +68,6 @@ def preprocess_thinking_data(example):
 def load_models(
     script_args, training_args, model_args, dnotitia_args, ctx, train_logger
 ):
-    if ctx.get("use_unsloth"):
-        # unsloth path: FastModel loads the model and (with use_peft) applies LoRA itself, because the
-        # patched SFTTrainer ignores `peft_config`. `max_length` doubles as unsloth's max_seq_length.
-        model = load_unsloth_model(
-            model_args,
-            training_args,
-            model_type=ctx["unsloth_model_type"],
-            max_seq_length=training_args.max_length or 0,
-            fast_inference=False,
-            logger=train_logger,
-        )
-        return {"model": model}
-
     # Model init kwargs
     model_kwargs = create_model_kwargs(model_args, training_args, dnotitia_args)
 

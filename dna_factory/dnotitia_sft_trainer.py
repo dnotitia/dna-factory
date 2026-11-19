@@ -2,14 +2,6 @@ import logging
 from functools import wraps
 
 from trl import SFTTrainer
-from trl.data_utils import get_dataset_column_names
-
-from dna_factory.unsloth_bootstrap import get_unsloth_decision
-from dna_factory.unsloth_integration import (
-    _QWEN3_5_MODEL_TYPES,
-    tokenize_conversational_dataset,
-    truncate_like_trl,
-)
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -43,35 +35,6 @@ class DnotitiaSFTTrainer(SFTTrainer):
             )
         # Maximum number of batches to print debug info for
         self.debug_first_n_batches = debug_first_n_batches
-
-    def _prepare_dataset(
-        self, dataset, processing_class, args, packing, formatting_func, dataset_name
-    ):
-        # unsloth replaces TRL's _prepare_dataset with one that cannot tokenize conversational
-        # (`messages`) datasets, so tokenize those here first; unsloth then folds assistant_masks
-        # into labels and packs. The vanilla path is untouched.
-        decision = get_unsloth_decision()
-        if decision is not None and decision.active:
-            tokenized = tokenize_conversational_dataset(
-                dataset,
-                processing_class,
-                args,
-                getattr(self, "chat_template", None),
-                dataset_name,
-            )
-            # unsloth never truncates pre-tokenized rows; TRL does unless packing (whose chunking truncates).
-            # unsloth does not pack Qwen3.5-architecture models, so those rows stay untruncated as well.
-            was_tokenized = "input_ids" not in get_dataset_column_names(
-                dataset
-            ) and "input_ids" in get_dataset_column_names(tokenized)
-            dataset = tokenized
-            if was_tokenized and (
-                not packing or decision.model_type in _QWEN3_5_MODEL_TYPES
-            ):
-                dataset = truncate_like_trl(dataset, args, dataset_name)
-        return super()._prepare_dataset(
-            dataset, processing_class, args, packing, formatting_func, dataset_name
-        )
 
     @wraps(SFTTrainer.compute_loss)
     def compute_loss(

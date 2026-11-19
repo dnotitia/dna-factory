@@ -1,9 +1,10 @@
 """
 Test cases for the dependency pins in pyproject.toml
 
-`[tool.uv] override-dependencies` re-pins some core packages so the optional `unsloth` extra (which caps
-them lower) resolves. An override silently wins over the core pin in `uv lock`, so bumping only the core pin
-leaves the lock on the old version with no error. These tests keep the two in sync without a GPU or network.
+`[tool.uv] override-dependencies` re-pins some core packages past a dependent's cap (vllm's transformers cap).
+An override silently wins over the core pin in `uv lock`, so bumping only the core pin leaves the lock on the
+old version with no error, and an override can silently lift a cap nobody validated. These tests keep the
+overrides in sync with the core pins and limited to the deliberate lifts, without a GPU or network.
 """
 
 import tomllib
@@ -26,7 +27,7 @@ def find_override_mismatches(pyproject):
     for dep in pyproject.get("tool", {}).get("uv", {}).get("override-dependencies", []):
         req = Requirement(dep)
         name = canonicalize_name(req.name)
-        # Overrides for packages outside the core dependencies (e.g. unsloth-only) are allowed
+        # Overrides for packages outside the core dependencies are allowed
         if name in core and set(core[name]) != set(req.specifier):
             mismatches.append((name, str(core[name]), str(req.specifier)))
     return mismatches
@@ -58,7 +59,7 @@ def test_find_override_mismatches_detects_drift():
                 "override-dependencies": [
                     "transformers==5.19.0",
                     "datasets==5.1.0",
-                    "unsloth==1.0",
+                    "some-transitive-dep==1.0",
                 ]
             }
         },
@@ -71,9 +72,6 @@ def test_find_override_mismatches_detects_drift():
     assert find_override_mismatches(pyproject) == []
 
 
-# The overrides exist for the optional unsloth extra; its own caps are the ones they lift.
-OVERRIDE_ONLY_FOR = {"unsloth", "unsloth-zoo"}
-
 # Caps of other packages the overrides deliberately lift, as (dependent, package): each was validated by hand and
 # must be dropped once the dependent's cap covers the pin again (test_intentional_lifts_are_still_needed).
 # vllm 0.32.0 caps transformers <5.20.0; transformers 5.22.1 was checked with vllm offline generation (Qwen3-0.6B).
@@ -81,8 +79,8 @@ INTENTIONALLY_LIFTED = {("vllm", "transformers")}
 
 
 def find_overridden_requirements(pyproject, distributions):
-    """Return (dependent, requirement, installed version) for every installed package other than unsloth whose
-    requirement on an overridden package the installed version breaks, i.e. that an override silently lifted"""
+    """Return (dependent, requirement, installed version) for every installed package whose requirement on an
+    overridden package the installed version breaks, i.e. that an override silently lifted"""
     overridden = {
         canonicalize_name(Requirement(dep).name)
         for dep in pyproject.get("tool", {})
@@ -95,8 +93,6 @@ def find_overridden_requirements(pyproject, distributions):
     broken = []
     for dist in distributions:
         dependent = canonicalize_name(dist.metadata["Name"])
-        if dependent in OVERRIDE_ONLY_FOR:
-            continue
         for raw in dist.requires or []:
             req = Requirement(raw)
             name = canonicalize_name(req.name)
@@ -117,7 +113,7 @@ def _installed_lifts():
 
 
 def test_overrides_lift_only_allowed_caps():
-    """The core pins must satisfy every installed package's requirements except unsloth's and the ones listed in
+    """The core pins must satisfy every installed package's requirements except the ones listed in
     INTENTIONALLY_LIFTED: an override must not silently force, say, a transformers version past a new cap"""
     broken = [
         (dep, req, ver)
@@ -129,7 +125,7 @@ def test_overrides_lift_only_allowed_caps():
         f"  {dep} requires {req}, installed {ver}" for dep, req, ver in broken
     )
     assert not broken, (
-        "`[tool.uv] override-dependencies` lifts a cap that is neither unsloth's nor in INTENTIONALLY_LIFTED:\n"
+        "`[tool.uv] override-dependencies` lifts a cap that is not in INTENTIONALLY_LIFTED:\n"
         f"{details}\n"
         "Pick core pins that the other packages accept, or validate the combination and add it to "
         "INTENTIONALLY_LIFTED."
@@ -149,7 +145,7 @@ def test_intentional_lifts_are_still_needed():
 
 
 def test_find_overridden_requirements_detects_lifted_cap():
-    """A non-unsloth cap broken by the installed version is reported; unsloth's caps and extras are ignored"""
+    """A cap broken by the installed version is reported; satisfied requirements and extras are ignored"""
 
     class Dist:
         def __init__(self, name, version, requires=()):
@@ -163,7 +159,7 @@ def test_find_overridden_requirements_detects_lifted_cap():
     dists = [
         Dist("transformers", "5.22.1"),
         Dist("vllm", "0.32.0", ["transformers<5.20.0,>=5.16.1"]),
-        Dist("unsloth", "2026.11.2", ["transformers<=5.17.0"]),
+        Dist("liger-kernel", "0.8.5", ["transformers>=4.52.0"]),
         Dist("peft", "0.21.2", ["transformers<5.0; extra == 'dev'", "accelerate>=1.0"]),
     ]
     assert find_overridden_requirements(pyproject, dists) == [

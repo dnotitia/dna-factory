@@ -9,14 +9,6 @@ student generates.
 """
 
 import logging
-import sys
-
-# unsloth must be imported before trl/transformers/peft, and before the Dnotitia trainers subclass
-# TRL's trainers, for its patches to apply, so the use_unsloth decision runs ahead of those imports.
-if __name__ == "__main__":
-    from dna_factory.unsloth_bootstrap import maybe_import_unsloth
-
-    maybe_import_unsloth(sys.argv[1:], "configs/_defaults-OPD.yaml")
 
 from trl import (
     DistillationConfig,
@@ -37,11 +29,6 @@ from dna_factory.training_runner import (
     cli_main,
     resolve_trust_remote_code,
     run_training,
-)
-from dna_factory.unsloth_integration import (
-    generation_max_seq_length,
-    load_unsloth_model,
-    resolve_fast_inference,
 )
 
 logger = logging.getLogger(__name__)
@@ -101,49 +88,25 @@ def setup_training_args(
             "student's vocabulary)."
         )
 
-    if ctx.get("use_unsloth"):
-        # unsloth path: FastModel loads the student (quantization and LoRA included) and the trainer
-        # gets the instance, so `model_init_kwargs` and `quantization_config` must be unset.
-        training_args.model_init_kwargs = None
-    else:
-        # Models passed as strings; init kwargs go through training config.
-        training_args.model_init_kwargs = {
-            "revision": model_args.model_revision,
-            "trust_remote_code": resolve_trust_remote_code(training_args),
-            "attn_implementation": model_args.attn_implementation,
-            "dtype": model_args.dtype,
-        }
-    # The teacher keeps the string path either way (the trainer loads it, never through unsloth).
+    # Models passed as strings; init kwargs go through training config.
+    training_args.model_init_kwargs = {
+        "revision": model_args.model_revision,
+        "trust_remote_code": resolve_trust_remote_code(training_args),
+        "attn_implementation": model_args.attn_implementation,
+        "dtype": model_args.dtype,
+    }
     training_args.teacher_model_init_kwargs = {
         "trust_remote_code": resolve_trust_remote_code(training_args),
         "attn_implementation": model_args.attn_implementation,
         "dtype": model_args.dtype,
     }
-    ctx["quantization_config"] = (
-        None if ctx.get("use_unsloth") else get_quantization_config(model_args)
-    )
+    ctx["quantization_config"] = get_quantization_config(model_args)
 
 
 def load_models(
     script_args, training_args, model_args, dnotitia_args, ctx, train_logger
 ):
-    if not ctx.get("use_unsloth"):
-        return {"model": model_args.model_name_or_path}
-
-    # With vLLM, unsloth owns the colocated engine and `vllm_gpu_memory_utilization` is forwarded to it.
-    model_type = ctx["unsloth_model_type"]
-    fast_inference = resolve_fast_inference(
-        training_args, model_type, train_logger, use_peft=model_args.use_peft
-    )
-    model = load_unsloth_model(
-        model_args,
-        training_args,
-        model_type=model_type,
-        max_seq_length=generation_max_seq_length(model_args, training_args),
-        fast_inference=fast_inference,
-        logger=train_logger,
-    )
-    return {"model": model}
+    return {"model": model_args.model_name_or_path}
 
 
 def load_mixture(dataset_mixture_args, training_args, ctx, train_logger):
