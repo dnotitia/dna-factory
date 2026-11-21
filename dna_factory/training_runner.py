@@ -556,43 +556,6 @@ def run_training(
             script_args, training_args, model_args, dnotitia_args, ctx, train_logger
         )
 
-    # Load model(s); the returned dict becomes trainer kwargs (model, ref_model, ...)
-    models_kwargs = _default(
-        {},
-        spec.load_models,
-        script_args,
-        training_args,
-        model_args,
-        dnotitia_args,
-        ctx,
-        train_logger,
-    )
-
-    # Create tokenizer
-    tokenizer = load_tokenizer(model_args, training_args)
-    tokenizer = _default(
-        tokenizer, spec.postprocess_tokenizer, tokenizer, ctx, train_logger
-    )
-
-    # Load the dataset
-    if dataset_mixture_args.datasets:
-        train_logger.info(
-            "The `datasets` argument will be used to load the "
-            "dataset and `dataset_name` will be ignored."
-        )
-        dataset = spec.load_mixture(
-            dataset_mixture_args, training_args, ctx, train_logger
-        )
-    elif script_args.dataset_name:
-        dataset = load_dataset(
-            script_args.dataset_name,
-            name=script_args.dataset_config,
-            streaming=script_args.dataset_streaming,
-        )
-    else:
-        raise ValueError("Either `datasets` or `dataset_name` must be provided.")
-    dataset = _default(dataset, spec.postprocess_dataset, dataset, ctx, train_logger)
-
     # Wall-clock periodic checkpointing (off when periodic_save_seconds is 0/'off').
     # Accepts human-friendly durations ('6h') or plain seconds ('21600').
     try:
@@ -629,6 +592,43 @@ def run_training(
                 "the starting model is evaluated (eval_baseline)."
             )
         callbacks.append(eval_callback)
+
+    # Load model(s); the returned dict becomes trainer kwargs (model, ref_model, ...)
+    models_kwargs = _default(
+        {},
+        spec.load_models,
+        script_args,
+        training_args,
+        model_args,
+        dnotitia_args,
+        ctx,
+        train_logger,
+    )
+
+    # Create tokenizer
+    tokenizer = load_tokenizer(model_args, training_args)
+    tokenizer = _default(
+        tokenizer, spec.postprocess_tokenizer, tokenizer, ctx, train_logger
+    )
+
+    # Load the dataset
+    if dataset_mixture_args.datasets:
+        train_logger.info(
+            "The `datasets` argument will be used to load the "
+            "dataset and `dataset_name` will be ignored."
+        )
+        dataset = spec.load_mixture(
+            dataset_mixture_args, training_args, ctx, train_logger
+        )
+    elif script_args.dataset_name:
+        dataset = load_dataset(
+            script_args.dataset_name,
+            name=script_args.dataset_config,
+            streaming=script_args.dataset_streaming,
+        )
+    else:
+        raise ValueError("Either `datasets` or `dataset_name` must be provided.")
+    dataset = _default(dataset, spec.postprocess_dataset, dataset, ctx, train_logger)
 
     # Initialize the trainer
     trainer_kwargs = {
